@@ -6,6 +6,42 @@ export const iso = (x: number, y: number) => ({
   x: (x - y) * 32,
   y: (x + y) * 16,
 });
+export interface OccludingPlot {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depth: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+/** A multi-tile building has two front edges, not a single frontmost point.
+ * Keep a traveller in front of either near edge, and behind both far edges.
+ * Screen bounds limit comparisons to artwork that can actually overlap. */
+export function travellerDepth(
+  p: { x: number; y: number },
+  bounds: { left: number; right: number; top: number; bottom: number },
+  plots: readonly OccludingPlot[],
+) {
+  const natural = (p.x + p.y) * 32 + 16;
+  let lower = -Infinity,
+    upper = Infinity;
+  for (const b of plots) {
+    if (
+      bounds.right <= b.left ||
+      bounds.left >= b.right ||
+      bounds.bottom <= b.top ||
+      bounds.top >= b.bottom
+    )
+      continue;
+    if (p.x >= b.x + b.width - 0.5 || p.y >= b.y + b.height - 0.5)
+      lower = Math.max(lower, b.depth + 1);
+    else upper = Math.min(upper, b.depth - 1);
+  }
+  return Math.max(lower, Math.min(upper, natural));
+}
 /** Phaser's default camera zooms about its center, not its top-left corner. */
 export function cameraViewport(c: {
   scrollX: number;

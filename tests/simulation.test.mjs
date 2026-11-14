@@ -8,6 +8,7 @@ import {
   agentPose,
   plotTransform,
   cameraViewport,
+  travellerDepth,
 } from "../.test-dist/rendering.js";
 import { buildingArt } from "../.test-dist/building-art.js";
 import {
@@ -47,6 +48,48 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+
+test("travellers beside both front edges stay in front of multi-tile buildings and behind rear edges", () => {
+  const bounds = { left: -500, right: 500, top: -500, bottom: 500 };
+  for (const [width, height] of [
+    [2, 2],
+    [3, 2],
+    [2, 3],
+    [3, 3],
+  ]) {
+    const b = {
+      x: 5,
+      y: 5,
+      width,
+      height,
+      depth: (10 + width + height - 2) * 32 + 12,
+      ...bounds,
+    };
+    for (const p of [
+      { x: 5 + width - 0.3, y: 5 },
+      { x: 5, y: 5 + height - 0.3 },
+    ]) {
+      assert.ok(
+        travellerDepth(p, bounds, [b]) > b.depth + 0.2,
+        "walkers must cover the near wall and its effects",
+      );
+    }
+    for (const p of [
+      { x: 4.7, y: 5 + height - 1 },
+      { x: 5 + width - 1, y: 4.7 },
+    ]) {
+      assert.ok(
+        travellerDepth(p, bounds, [b]) < b.depth,
+        "rear walkers must be occluded",
+      );
+    }
+    const p = { x: 1, y: 1 };
+    assert.equal(
+      travellerDepth(p, { left: 600, right: 650, top: 600, bottom: 650 }, [b]),
+      80,
+    );
+  }
+});
 
 test("building alerts distinguish missing frontage from an isolated road network", () => {
   const sim = new Simulation();

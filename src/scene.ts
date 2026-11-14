@@ -19,6 +19,8 @@ import {
   iso,
   fitGround,
   agentDistance,
+  travellerDepth,
+  type OccludingPlot,
 } from "./rendering.js";
 import { buildingArt } from "./building-art.js";
 import { PlotArt } from "./plot-art.js";
@@ -106,6 +108,7 @@ export class TownScene extends Phaser.Scene {
   private frontOverlay!: Phaser.GameObjects.Graphics;
   private trees: Phaser.GameObjects.Image[] = [];
   private buildings = new Map<number, Phaser.GameObjects.Image>();
+  private occludingPlots: OccludingPlot[] = [];
   private people = new Map<number, Phaser.GameObjects.Image>();
   private waterEffects!: Phaser.GameObjects.Graphics;
   private waterPoints: Point[] = [];
@@ -439,6 +442,21 @@ export class TownScene extends Phaser.Scene {
         b.enabled ? 1 : 0.55,
       );
     }
+    this.occludingPlots = this.simulation.state.buildings.map((b) => {
+      const s = this.buildings.get(b.id)!,
+        [width, height] = dimensions(b.kind, b.rotation, b.plot);
+      return {
+        x: b.x,
+        y: b.y,
+        width,
+        height,
+        depth: s.depth,
+        left: s.x,
+        right: s.x + s.displayWidth,
+        top: s.y,
+        bottom: s.y + s.displayHeight,
+      };
+    });
     this.drawOverlay();
   }
   private diamond(p: Point, color: number, alpha: number) {
@@ -860,7 +878,18 @@ export class TownScene extends Phaser.Scene {
           bob,
       )
         .setVisible(a.active !== false)
-        .setDepth((p.x + p.y) * 32 + 16)
+        .setDepth(
+          travellerDepth(
+            p,
+            {
+              left: s.x - s.displayWidth * s.originX,
+              right: s.x + s.displayWidth * (1 - s.originX),
+              top: s.y - s.displayHeight * s.originY,
+              bottom: s.y + s.displayHeight * (1 - s.originY),
+            },
+            this.occludingPlots,
+          ),
+        )
         .setFlipX(a.kind === "person" && walk.flip);
       if (a.kind !== "person")
         this.animation.vehicle(
