@@ -32,6 +32,7 @@ import { icon } from "./icons.js";
 import { buildingArt } from "./building-art.js";
 import { alertIcon } from "./building-alerts.js";
 import { cameraViewport } from "./rendering.js";
+import { productionActivity, type GoodsConnection } from "./logistics.js";
 import { CloudSaves, cloudError } from "./cloud.js";
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
@@ -390,7 +391,17 @@ function renderInspector() {
   if (!b) return;
   panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}<div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  if (d.recipe)
+    $("#production-logistics").onclick = (event) => {
+      const link = (event.target as Element).closest<HTMLButtonElement>(
+        "[data-logistics-building]",
+      );
+      if (!link) return;
+      const id = Number(link.dataset.logisticsBuilding);
+      scene.onSelect(id);
+      scene.focusBuilding(id);
+    };
   if (b.kind === "house") {
     const tier = b.houseTier ?? 1;
     if (tier < 3) {
@@ -560,7 +571,42 @@ function updateInspector() {
     $("#toggle-production").textContent = b.enabled
       ? "Pause production"
       : "Resume production";
+  if (d.recipe) updateLogistics(b);
   if (b.kind === "house" && (b.houseTier ?? 1) < 3) updateUpgrade(b);
+}
+function updateLogistics(b: Building) {
+  const view = scene.productionView(b.id);
+  if (!view) return;
+  const activity = productionActivity(simulation, view),
+    recipe = BUILDINGS[b.kind].recipe!;
+  const links = (
+    connections: GoodsConnection[],
+    direction: "input" | "output",
+  ) =>
+    connections
+      .map((link) => {
+        const other = simulation.building(
+          direction === "input" ? link.source : link.target,
+        )!;
+        const state = !link.path
+          ? "No road route"
+          : !other.connected || !b.connected
+            ? "Needs warehouse access"
+            : !other.enabled || !b.enabled
+              ? "Production paused"
+              : "Road connected";
+        return `<button class="goods-link ${direction}" data-logistics-building="${other.id}" aria-label="Inspect ${escapeHtml(buildingName(other))} at ${other.x}, ${other.y}"><span>${escapeHtml(buildingName(other))}</span><small>${other.x}, ${other.y} · ${state}</small>${icon("arrow")}</button>`;
+      })
+      .join("");
+  const workers = simulation.state.residents.filter((r) =>
+    view.workers.includes(r.id),
+  );
+  const visibleWorkers = activity.workers.filter(
+    (a) => a.active !== false,
+  ).length;
+  const html = `<h4>Goods routes</h4><div class="goods-legend"><span class="input">Inputs</span><span class="output">Outputs</span><span class="worker">Workers</span></div><p class="logistics-hint">Arrows follow delivery direction. Rings mark related deliveries and travelling workers.</p><h5>Inputs${recipe.input ? ` · ${RESOURCE_NAMES[recipe.input]}` : ""}</h5>${links(view.inputs, "input") || `<p class="logistics-empty">${recipe.input ? "No supplier built yet." : "Gathered here; no delivered inputs."}</p>`}<h5>Outputs · ${RESOURCE_NAMES[recipe.output]}</h5>${links(view.outputs, "output") || '<p class="logistics-empty">No destination built yet.</p>'}<div class="goods-activity"><span class="input">${activity.incoming.length} incoming ${activity.incoming.length === 1 ? "delivery" : "deliveries"}</span><span class="output">${activity.outgoing.length} outgoing ${activity.outgoing.length === 1 ? "delivery" : "deliveries"}</span></div><p class="goods-workers"><b>${workers.length} assigned · ${visibleWorkers} travelling</b><span>${workers.length ? workers.map((r) => escapeHtml(r.name)).join(", ") : "No assigned workers"}</span></p>`;
+  const panel = $("#production-logistics");
+  if (panel.innerHTML !== html) panel.innerHTML = html;
 }
 function updateUpgrade(b: Building) {
   const next = HOUSE_TIERS[((b.houseTier ?? 1) + 1) as HouseTier];

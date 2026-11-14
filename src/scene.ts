@@ -23,6 +23,11 @@ import {
 import { buildingArt } from "./building-art.js";
 import { PlotArt } from "./plot-art.js";
 import { BuildingAlerts } from "./building-alerts.js";
+import {
+  LogisticsCache,
+  LOGISTICS_COLORS,
+  productionActivity,
+} from "./logistics.js";
 import { TerrainArt } from "./terrain-art.js";
 import { WaterArt } from "./water-art.js";
 import { lanePose, lanePoint, LANE_OFFSET, WALK_OFFSET } from "./traffic.js";
@@ -44,6 +49,7 @@ import {
   DEPOSITS,
   type Point,
   type Building,
+  type Agent,
 } from "./simulation.js";
 export const fromIso = (x: number, y: number) => ({
   x: Math.round(x / 64 + y / 32),
@@ -88,6 +94,12 @@ export class TownScene extends Phaser.Scene {
   private fenceArt!: FenceArt;
   private waterArt!: WaterArt;
   private routeOverlay!: Phaser.GameObjects.Graphics;
+  private logisticsRoutes!: Phaser.GameObjects.Graphics;
+  private deliveryRoutes!: Phaser.GameObjects.Graphics;
+  private deliveryDrawKey = "";
+  private logisticsCache = new LogisticsCache();
+  private logisticsDrawKey = "";
+  private logisticsView: ReturnType<LogisticsCache["get"]> = null;
   private decorationGhost?: Phaser.GameObjects.Image;
   private gridCache!: Phaser.GameObjects.RenderTexture;
   private overlay!: Phaser.GameObjects.Graphics;
@@ -178,6 +190,8 @@ export class TownScene extends Phaser.Scene {
     this.overlay = this.add.graphics().setDepth(5000);
     this.frontOverlay = this.add.graphics().setDepth(5004);
     this.routeOverlay = this.add.graphics().setDepth(4999);
+    this.logisticsRoutes = this.add.graphics().setDepth(4998);
+    this.deliveryRoutes = this.add.graphics().setDepth(4998.5);
     this.waterEffects = this.add.graphics().setDepth(-998);
     this.cameras.main.setBackgroundColor("#a7b9ad");
     this.cameras.main.setRoundPixels(true);
@@ -587,6 +601,7 @@ export class TownScene extends Phaser.Scene {
   }
   private drawAgentRoute() {
     this.routeOverlay.clear();
+    this.drawProductionLogistics();
     const a = this.simulation.state.agents.find(
       (a) => a.id === this.selectedAgent,
     );
@@ -626,6 +641,138 @@ export class TownScene extends Phaser.Scene {
         a.kind === "person" ? 12 : 27,
         8,
       );
+  }
+  productionView(id: number | null = this.selected) {
+    return this.logisticsCache.get(this.simulation, id);
+  }
+  private roadPoint(p: Point) {
+    const v = iso(p.x, p.y);
+    return {
+      x: v.x,
+      y:
+        v.y -
+        roadHeight(
+          this.simulation.roads,
+          p.x,
+          p.y,
+          this.simulation.state.buildings,
+        ),
+    };
+  }
+  private drawGoodsPath(
+    g: Phaser.GameObjects.Graphics,
+    path: Point[],
+    color: number,
+    arrows = true,
+  ) {
+    const zoom = this.cameras.main.zoom;
+    const points = path.map((_, i) =>
+      this.roadPoint(lanePoint(path, i, LANE_OFFSET)),
+    );
+    if (!points.length) return;
+    g.lineStyle(5 / zoom, 0x254c43, 0.65).strokePoints(points, false);
+    g.lineStyle(2.5 / zoom, color, 0.95).strokePoints(points, false);
+    for (let i = 1; arrows && i < points.length; i += 3) {
+      const a = points[i - 1],
+        b = points[i],
+        length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (!length) continue;
+      const dx = (b.x - a.x) / length,
+        dy = (b.y - a.y) / length,
+        x = (a.x + b.x) / 2,
+        y = (a.y + b.y) / 2,
+        size = 5 / zoom;
+      g.fillStyle(color, 1).fillTriangle(
+        x + dx * size,
+        y + dy * size,
+        x - dx * size - dy * size * 0.7,
+        y - dy * size + dx * size * 0.7,
+        x - dx * size + dy * size * 0.7,
+        y - dy * size - dx * size * 0.7,
+      );
+    }
+    g.fillStyle(color, 1);
+    for (const p of [points[0], points[points.length - 1]])
+      g.fillCircle(p.x, p.y, 3 / zoom);
+  }
+  private highlightWorker(a: Agent, color: number) {
+    const s = this.people.get(a.id);
+    if (!s?.visible || a.active === false) return;
+    const zoom = this.cameras.main.zoom,
+      width = a.kind === "person" ? 15 : 32;
+    this.routeOverlay
+      .lineStyle(4 / zoom, 0x254c43, 0.8)
+      .strokeEllipse(s.x, s.y, width, 9);
+    this.routeOverlay
+      .lineStyle(2 / zoom, color, 1)
+      .strokeEllipse(s.x, s.y, width, 9);
+    const y = s.y - s.displayHeight * s.originY - 5 / zoom,
+      size = 4 / zoom;
+    this.routeOverlay
+      .fillStyle(color, 1)
+      .fillTriangle(s.x, y + size, s.x - size, y - size, s.x + size, y - size);
+  }
+  private drawProductionLogistics() {
+    const view = this.tool === "inspect" ? this.productionView() : null;
+    const drawKey = `${this.cameras.main.zoom}`;
+    if (view !== this.logisticsView || drawKey !== this.logisticsDrawKey) {
+      this.logisticsRoutes.clear();
+      this.logisticsView = view;
+      this.logisticsDrawKey = drawKey;
+      if (view)
+        for (const [links, color] of [
+          [view.inputs, LOGISTICS_COLORS.input],
+          [view.outputs, LOGISTICS_COLORS.output],
+        ] as const) {
+          for (const link of links) {
+            if (!link.path) continue;
+            this.drawGoodsPath(this.logisticsRoutes, link.path, color);
+            const other = this.simulation.building(
+              link.source === view.building ? link.target : link.source,
+            );
+            if (!other) continue;
+            const [w, h] = dimensions(other.kind, other.rotation, other.plot);
+            const corners = [
+              [-0.5, -0.5],
+              [w - 0.5, -0.5],
+              [w - 0.5, h - 0.5],
+              [-0.5, h - 0.5],
+            ].map(([x, y]) => iso(other.x + x, other.y + y));
+            this.logisticsRoutes
+              .lineStyle(1.5 / this.cameras.main.zoom, color, 0.85)
+              .strokePoints(corners, true);
+          }
+        }
+    }
+    if (!view) {
+      if (this.deliveryDrawKey) this.deliveryRoutes.clear();
+      this.deliveryDrawKey = "";
+      return;
+    }
+    const activity = productionActivity(this.simulation, view);
+    const deliveryKey = `${view.building}:${this.simulation.state.revision}:${this.simulation.state.tick}:${drawKey}`;
+    const redrawDeliveries = deliveryKey !== this.deliveryDrawKey;
+    if (redrawDeliveries) this.deliveryRoutes.clear();
+    this.deliveryDrawKey = deliveryKey;
+    for (const [agents, color] of [
+      [activity.incoming, LOGISTICS_COLORS.input],
+      [activity.outgoing, LOGISTICS_COLORS.output],
+    ] as const) {
+      for (const a of agents) {
+        // Existing deliveries can retain an older valid route after new roads
+        // are built; show their actual remaining journey as well as the network.
+        if (redrawDeliveries && a.active !== false)
+          this.drawGoodsPath(
+            this.deliveryRoutes,
+            a.path.slice(a.segment),
+            color,
+            false,
+          );
+        this.highlightWorker(a, color);
+      }
+    }
+    for (const a of activity.workers)
+      this.highlightWorker(a, LOGISTICS_COLORS.worker);
   }
   focusBuilding(id: number) {
     const b = this.simulation.building(id);
@@ -770,6 +917,8 @@ export class TownScene extends Phaser.Scene {
   }
   replace(simulation: Simulation) {
     this.simulation = simulation;
+    this.deliveryDrawKey = "";
+    this.deliveryRoutes.clear();
     this.buildingAlerts.clear();
     this.animation.clear();
     this.acc = 0;

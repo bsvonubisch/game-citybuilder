@@ -1062,6 +1062,110 @@ kbd {
   color: #a28a58;
   background: #f1ead6;
 }
+.production-logistics {
+  margin: 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.production-logistics h4 {
+  font:
+    500 17px Georgia,
+    serif;
+  margin: 0 0 10px;
+}
+.goods-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.goods-legend > span::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.goods-legend .input,
+.goods-activity .input {
+  color: #347e75;
+}
+.goods-legend .output,
+.goods-activity .output {
+  color: #9a6d25;
+}
+.goods-legend .worker {
+  color: #7653a5;
+}
+.logistics-hint,
+.logistics-empty {
+  font-size: 10px;
+  line-height: 1.5;
+  color: #78846e;
+  margin: 8px 0;
+}
+.production-logistics h5 {
+  font-size: 10px;
+  color: #50664c;
+  margin: 13px 0 6px;
+}
+.goods-link {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 8px 19px 8px 9px;
+  margin: 4px 0;
+  text-align: left;
+  border-left: 3px solid #6bb5a9;
+  background: #ecf0e4;
+  border-radius: 3px;
+}
+.goods-link.output {
+  border-left-color: #c6a35a;
+  background: #f2eddf;
+}
+.goods-link:hover,
+.goods-link:focus-visible {
+  outline: 1px solid #92a183;
+}
+.goods-link > span {
+  display: block;
+  font-size: 10px;
+  color: #4a634b;
+}
+.goods-link small {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  color: #78846e;
+}
+.goods-link .icon {
+  position: absolute;
+  right: 5px;
+  top: 12px;
+  width: 11px;
+  height: 11px;
+  color: #839277;
+}
+.goods-activity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin-top: 12px;
+  font-size: 10px;
+}
+.goods-workers {
+  font-size: 10px;
+  color: #7653a5;
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+.goods-workers span {
+  display: block;
+  color: #78846e;
+}
 .detail-row {
   display: flex;
   justify-content: space-between;

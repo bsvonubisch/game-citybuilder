@@ -1,0 +1,96 @@
+import { BUILDINGS, type Resource } from "./catalog.js";
+import type {
+  Agent,
+  Building,
+  Point,
+  Simulation,
+  World,
+} from "./simulation.js";
+
+export const LOGISTICS_COLORS = {
+  input: 0x67dfcf,
+  output: 0xffcc66,
+  worker: 0xc4a0ff,
+};
+export interface GoodsConnection {
+  source: number;
+  target: number;
+  resource: Resource;
+  path: Point[] | null;
+}
+export interface ProductionConnections {
+  building: number;
+  inputs: GoodsConnection[];
+  outputs: GoodsConnection[];
+  workers: number[];
+}
+
+/** Shared by dispatch and inspection: warehouses receive only these exports. */
+export function canSupply(source: Building, target: Building) {
+  const output = BUILDINGS[source.kind].recipe?.output;
+  return (
+    !!output &&
+    source.id !== target.id &&
+    (BUILDINGS[target.kind].recipe?.input === output ||
+      (target.kind === "warehouse" &&
+        ["bread", "tools", "wood", "stone", "metal"].includes(output)))
+  );
+}
+
+/** Keep missing road links in the inspector, without inventing a map route. */
+export function productionConnections(
+  sim: Simulation,
+  id: number,
+): ProductionConnections | null {
+  const b = sim.building(id);
+  if (!b || !BUILDINGS[b.kind].recipe) return null;
+  const link = (source: Building, target: Building): GoodsConnection => ({
+    source: source.id,
+    target: target.id,
+    resource: BUILDINGS[source.kind].recipe!.output,
+    path: sim.route(source, target),
+  });
+  return {
+    building: id,
+    inputs: sim.state.buildings
+      .filter((source) => canSupply(source, b))
+      .map((source) => link(source, b)),
+    outputs: sim.state.buildings
+      .filter((target) => canSupply(b, target))
+      .map((target) => link(b, target)),
+    workers: sim.state.residents.filter((r) => r.job === id).map((r) => r.id),
+  };
+}
+
+/** Road searches happen once per selection/network change, never per frame. */
+export class LogisticsCache {
+  private state?: World;
+  private key = "";
+  private value: ProductionConnections | null = null;
+  get(sim: Simulation, id: number | null) {
+    const key = `${id}:${sim.state.revision}`;
+    if (this.state !== sim.state || this.key !== key) {
+      this.state = sim.state;
+      this.key = key;
+      this.value = id === null ? null : productionConnections(sim, id);
+    }
+    return this.value;
+  }
+}
+
+export function productionActivity(
+  sim: Simulation,
+  view: ProductionConnections,
+) {
+  const incoming: Agent[] = [],
+    outgoing: Agent[] = [],
+    workers: Agent[] = [];
+  const assigned = new Set(view.workers);
+  for (const a of sim.state.agents) {
+    if (a.cargo && a.amount > 0) {
+      if (a.target === view.building) incoming.push(a);
+      if (a.source === view.building) outgoing.push(a);
+    } else if (a.resident !== null && assigned.has(a.resident)) workers.push(a);
+  }
+  return { incoming, outgoing, workers };
+}

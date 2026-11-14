@@ -22,6 +22,7 @@ import {
 } from "./catalog.js";
 import { initialDecorations, type Decoration } from "./decorations.js";
 import { Traffic } from "./traffic.js";
+import { canSupply } from "./logistics.js";
 export interface Point {
   x: number;
   y: number;
@@ -828,17 +829,7 @@ export class Simulation {
       )
         continue;
       const destinations = this.state.buildings
-        .filter(
-          (t) =>
-            t.connected &&
-            t.enabled &&
-            t.id !== b.id &&
-            (BUILDINGS[t.kind].recipe?.input === r.output ||
-              (["bread", "tools", "wood", "stone", "metal"].includes(
-                r.output,
-              ) &&
-                t.kind === "warehouse")),
-        )
+        .filter((t) => t.connected && t.enabled && canSupply(b, t))
         .sort(
           (a, c) => (a.inventory[r.output] ?? 0) - (c.inventory[r.output] ?? 0),
         );
