@@ -11,46 +11,35 @@ export const groundCoordinates = (x: number, y: number) => ({
   y: y / 32 - x / 64,
 });
 
-/** A projective fit aligns the whole base while keeping verticals upright and
- * roof lines straight. The transform has no y term in x, so walls cannot lean. */
+/** Keep the complete building rigid: one scale and a translation, with no
+ * perspective correction, shear or separate axis scaling. The paved lot is
+ * rendered separately, so a rectangular lot never distorts a square sprite. */
 export function plotTransform(
   [left, front, right]: PlotCorners,
   width: number,
   height: number,
 ) {
-  const l = iso(-0.5, height - 0.5),
-    f = iso(width - 0.5, height - 0.5),
-    r = iso(width - 0.5, -0.5);
-  const lx = left[0] - front[0],
-    ly = left[1] - front[1],
-    rx = right[0] - front[0],
-    ry = right[1] - front[1];
-  const dl = l.x - f.x,
-    dr = r.x - f.x,
-    g = (dr / rx - dl / lx) / (dl - dr),
-    a = dl * (g + 1 / lx);
-  const yl = (l.y - f.y) * (g * lx + 1),
-    yr = (r.y - f.y) * (g * rx + 1),
-    det = lx * ry - rx * ly;
-  const b = (yl * ry - yr * ly) / det,
-    d = (lx * yr - rx * yl) / det;
+  const back: GroundPoint = [
+    left[0] + right[0] - front[0],
+    left[1] + right[1] - front[1],
+  ];
+  const fit = fitGround([left, front, right, back], width, height, 0);
   return {
-    scale: d,
-    scaleAt: (x: number) => d / (g * (x - front[0]) + 1),
-    sourceX: (worldX: number) => {
-      const z = worldX - f.x;
-      return front[0] + z / (a - g * z);
-    },
-    point: (x: number, y: number) => {
-      const dx = x - front[0],
-        denominator = g * dx + 1;
-      return {
-        x: f.x + (a * dx) / denominator,
-        y: f.y + (b * dx + d * (y - front[1])) / denominator,
-      };
-    },
+    scale: fit.scale,
+    point: (x: number, y: number) => ({
+      x: fit.x + x * fit.scale,
+      y: fit.y + y * fit.scale,
+    }),
   };
 }
+
+/** The lot, unlike the upright artwork, follows the exact occupied grid. */
+export const plotOutline = (width: number, height: number) => [
+  iso(-0.5, -0.5),
+  iso(width - 0.5, -0.5),
+  iso(width - 0.5, height - 0.5),
+  iso(-0.5, height - 0.5),
+];
 
 /** Uniformly fit the ground outline into BOTH tile axes. A screen-space width
  * cannot describe an isometric plot, particularly a rectangular one.

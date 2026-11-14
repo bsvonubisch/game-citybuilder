@@ -750,6 +750,112 @@ kbd {
 .inspector[hidden] {
   display: none;
 }
+.housing-ladder {
+  margin-top: 20px;
+  color: #52694d;
+}
+.housing-ladder h4 {
+  font:
+    500 16px Georgia,
+    serif;
+  margin: 0 0 6px;
+}
+.housing-ladder p {
+  font-size: 10px;
+  line-height: 1.6;
+  color: #7e8b73;
+}
+.housing-ladder > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.housing-ladder figure {
+  margin: 0;
+  text-align: center;
+}
+.housing-ladder .building-icon {
+  width: 100%;
+  height: 78px;
+}
+.housing-ladder figcaption {
+  display: grid;
+  gap: 4px;
+  font-size: 9px;
+}
+.housing-ladder figcaption small {
+  color: #a58c58;
+}
+.housing-ladder figcaption b {
+  font-weight: 500;
+}
+#house-upgrade {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: #f0ecd9;
+  border-radius: 8px;
+}
+.upgrade-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.upgrade-art {
+  width: 62px;
+  height: 78px;
+  flex-shrink: 0;
+}
+.upgrade-heading > div {
+  display: grid;
+  gap: 5px;
+}
+.upgrade-heading b {
+  font:
+    500 16px Georgia,
+    serif;
+}
+.upgrade-heading small {
+  font-size: 9px;
+  line-height: 1.5;
+}
+.upgrade-costs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+  margin: 10px 0;
+}
+.upgrade-costs > span {
+  font-size: 10px;
+  padding: 6px;
+  background: #faf7ed;
+  border-radius: 4px;
+}
+.upgrade-costs small {
+  display: block;
+  font-size: 8px;
+  margin-top: 3px;
+  color: #7e8b73;
+}
+.upgrade-costs .missing {
+  color: #a35b3c;
+}
+.upgrade-costs .ready {
+  color: #486b3d;
+}
+.upgrade-reason,
+.upgrade-complete {
+  font-size: 10px;
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+.upgrade-complete {
+  margin: 0;
+  color: #486b3d;
+}
+.primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .close {
   position: absolute;
   right: 10px;

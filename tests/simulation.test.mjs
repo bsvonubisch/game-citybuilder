@@ -18,6 +18,8 @@ import {
   footprint,
   frontage,
   DECORATIONS,
+  HOUSE_TIERS,
+  houseCapacity,
 } from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
@@ -26,7 +28,14 @@ import {
   roadHeight,
   BRIDGE_HEIGHT,
   isBridge,
+  bridgeLandings,
+  deckHeight,
 } from "../.test-dist/bridges.js";
+import {
+  fenceMask,
+  fenceSpans,
+  FENCE_DIRECTIONS,
+} from "../.test-dist/fences.js";
 const execute = (sim, command, id = "test-" + sim.state.revision) =>
   sim.execute({
     id,
@@ -193,44 +202,62 @@ test("factory machinery pauses without inputs, staff, road access, or storage sp
   assert.equal(working(sim, mill), false);
 });
 
-test("all 44 building views fill their whole plot with both foundation edges aligned", () => {
+test("all 52 building and house-tier views preserve proportions inside current and legacy lots", () => {
   for (const kind of Object.keys(BUILDINGS))
-    for (let rotation = 0; rotation < 4; rotation++) {
-      const art = buildingArt(kind, rotation);
-      for (const [w, h] of [dimensions(kind, rotation), FOOTPRINTS[kind]]) {
-        const fit = plotTransform(art.ground, w, h),
-          expected = [
-            [-0.5, h - 0.5],
-            [w - 0.5, h - 0.5],
-            [w - 0.5, -0.5],
+    for (const tier of kind === "house" ? [1, 2, 3] : [1])
+      for (let rotation = 0; rotation < 4; rotation++) {
+        const art = buildingArt(kind, rotation, tier);
+        for (const [w, h] of [dimensions(kind, rotation), FOOTPRINTS[kind]]) {
+          const fit = plotTransform(art.ground, w, h);
+          const [left, front, right] = art.ground;
+          const back = [
+            left[0] + right[0] - front[0],
+            left[1] + right[1] - front[1],
           ];
-        art.ground.forEach(([x, y], i) => {
-          const screen = fit.point(x, y),
-            p = groundCoordinates(screen.x, screen.y);
+          [...art.ground, back].forEach(([x, y]) => {
+            const screen = fit.point(x, y),
+              p = groundCoordinates(screen.x, screen.y);
+            assert.ok(
+              p.x >= -0.5 - 1e-9 &&
+                p.x <= w - 0.5 + 1e-9 &&
+                p.y >= -0.5 - 1e-9 &&
+                p.y <= h - 0.5 + 1e-9,
+              `${kind}/${rotation}: foundation stays inside ${w}×${h}`,
+            );
+            assert.equal(
+              fit.point(x, y - 100).x,
+              screen.x,
+              "vertical walls remain upright",
+            );
+          });
+          // Equal source lengths must stay equal everywhere in the sprite. The
+          // old projective fit kept lines straight but stretched one roof side.
+          for (const [x, y] of [
+            [0, 0],
+            [100, 100],
+            [400, 300],
+          ]) {
+            const a = fit.point(x, y),
+              b = fit.point(x + 100, y),
+              c = fit.point(x, y + 100);
+            assert.ok(Math.abs(b.x - a.x - 100 * fit.scale) < 1e-9);
+            assert.ok(Math.abs(c.y - a.y - 100 * fit.scale) < 1e-9);
+            assert.equal(b.y, a.y, "no shear along horizontal roof edges");
+            assert.equal(c.x, a.x, "no shear along vertical walls");
+          }
+          const line = [
+            [100, 80],
+            [250, 120],
+            [400, 160],
+          ].map(([x, y]) => fit.point(x, y));
+          const [a, b, c] = line;
           assert.ok(
-            Math.abs(p.x - expected[i][0]) < 1e-9 &&
-              Math.abs(p.y - expected[i][1]) < 1e-9,
-            `${kind}/${rotation} must fill corner ${i}`,
+            Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) <
+              1e-8,
+            "roof lines stay straight",
           );
-          assert.equal(
-            fit.point(x, y - 100).x,
-            screen.x,
-            "vertical walls remain upright",
-          );
-        });
-        const line = [
-          [100, 80],
-          [250, 120],
-          [400, 160],
-        ].map(([x, y]) => fit.point(x, y));
-        const [a, b, c] = line;
-        assert.ok(
-          Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) <
-            1e-8,
-          "roof lines stay straight",
-        );
+        }
       }
-    }
 });
 
 test("fitting uses both diagonal plot edges, even when the lowest contact is off center", () => {
@@ -318,6 +345,220 @@ test("transparent atlas padding is excluded from visible ground alignment", () =
     groundX: 2,
   });
 });
+test("house upgrades charge once, retain families and plots, persist and increase capacity", () => {
+  const sim = new Simulation(),
+    house = sim.state.buildings.find((b) => b.kind === "house" && b.connected);
+  const warehouse = sim.state.buildings.find((b) => b.kind === "warehouse");
+  warehouse.inventory.planks = 40;
+  const original = {
+    x: house.x,
+    y: house.y,
+    rotation: house.rotation,
+    plot: house.plot,
+  };
+  const residents = sim.state.residents
+    .filter((r) => r.home === house.id)
+    .map((r) => r.id);
+  const money = sim.state.money,
+    wood = sim.stored("wood"),
+    stone = sim.stored("stone"),
+    metal = sim.stored("metal");
+  const env = {
+    id: "upgrade-once",
+    actorId: "test",
+    expectedRevision: sim.state.revision,
+    command: { type: "upgrade", id: house.id },
+  };
+  assert.equal(sim.execute(env).ok, true);
+  assert.equal(sim.execute(env).ok, true);
+  assert.equal(house.houseTier, 2);
+  assert.equal(sim.state.money, money - 180);
+  assert.equal(sim.stored("wood"), wood - 12);
+  assert.equal(sim.stored("stone"), stone - 10);
+  assert.equal(
+    sim.state.residents.filter((r) => r.home === house.id).length,
+    6,
+  );
+  assert.equal(execute(sim, { type: "upgrade", id: house.id }).ok, true);
+  assert.equal(houseCapacity(house), 9);
+  assert.equal(sim.state.money, money - 600);
+  assert.equal(sim.stored("planks"), 24);
+  assert.equal(sim.stored("stone"), stone - 30);
+  assert.equal(sim.stored("metal"), metal - 8);
+  assert.deepEqual(
+    { x: house.x, y: house.y, rotation: house.rotation, plot: house.plot },
+    original,
+  );
+  assert.ok(
+    residents.every((id) =>
+      sim.state.residents.some((r) => r.id === id && r.home === house.id),
+    ),
+  );
+  const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+  assert.equal(restored.building(house.id).houseTier, 3);
+  assert.equal(
+    restored.state.residents.filter((r) => r.home === house.id).length,
+    9,
+  );
+  for (let i = 0; i < 4; i++)
+    assert.equal(execute(restored, { type: "rotate", id: house.id }).ok, true);
+  assert.equal(restored.building(house.id).houseTier, 3);
+  const before = restored.snapshot();
+  assert.equal(execute(restored, { type: "upgrade", id: house.id }).ok, false);
+  assert.deepEqual(restored.snapshot(), before);
+  const gold = restored.state.money;
+  assert.equal(
+    execute(restored, { type: "demolish", x: house.x, y: house.y }).ok,
+    true,
+  );
+  assert.equal(restored.state.money, gold + Math.floor((90 + 180 + 420) / 2));
+});
+
+test("unaffordable, disconnected, stale and non-house upgrades change nothing", () => {
+  for (const scenario of [
+    "gold",
+    "wood",
+    "stone",
+    "disconnected",
+    "wrong-building",
+    "stale",
+  ]) {
+    const sim = new Simulation(),
+      house = sim.state.buildings.find(
+        (b) => b.kind === "house" && b.connected,
+      );
+    if (scenario === "gold") sim.state.money = 0;
+    if (scenario === "wood" || scenario === "stone")
+      sim.state.buildings.find((b) => b.kind === "warehouse").inventory[
+        scenario
+      ] = 0;
+    if (scenario === "disconnected") {
+      house.rotation = (house.rotation + 2) % 4;
+      sim.reconnect();
+      assert.equal(house.connected, false);
+    }
+    const before = sim.snapshot();
+    const id =
+      scenario === "wrong-building"
+        ? sim.state.buildings.find((b) => b.kind === "warehouse").id
+        : house.id;
+    const result = sim.execute({
+      id: scenario,
+      actorId: "test",
+      expectedRevision: sim.state.revision + (scenario === "stale" ? 1 : 0),
+      command: { type: "upgrade", id },
+    });
+    assert.equal(result.ok, false, scenario);
+    assert.deepEqual(sim.snapshot(), before, scenario);
+  }
+});
+
+test("old saves default to cottages and malformed house tiers are rejected", () => {
+  const old = new Simulation().snapshot();
+  for (const b of old.buildings) delete b.houseTier;
+  const loaded = parseSave(JSON.stringify(old));
+  assert.ok(
+    loaded.buildings
+      .filter((b) => b.kind === "house")
+      .every((b) => b.houseTier === 1),
+  );
+  for (const tier of [0, 4, 1.5, "2", {}]) {
+    const save = structuredClone(old);
+    save.buildings.find((b) => b.kind === "house").houseTier = tier;
+    assert.throws(() => parseSave(JSON.stringify(save)), /Invalid building/);
+  }
+  const save = structuredClone(old);
+  save.buildings.find((b) => b.kind === "warehouse").houseTier = 2;
+  assert.throws(() => parseSave(JSON.stringify(save)), /Invalid building/);
+});
+
+test("fence spans meet across tile boundaries for every connection pattern", () => {
+  const p = { x: 10, y: 10 };
+  for (let mask = 0; mask < 16; mask++) {
+    const neighbours = FENCE_DIRECTIONS.flatMap((d, i) =>
+      mask & (1 << i)
+        ? [{ id: i, kind: "fence", natural: false, x: p.x + d.x, y: p.y + d.y }]
+        : [],
+    );
+    assert.equal(fenceMask(p, neighbours), mask);
+    for (const [i, d] of FENCE_DIRECTIONS.entries())
+      if (mask & (1 << i)) {
+        const edge = fenceSpans(mask).find(
+          ([, end]) => end.x === d.x / 2 && end.y === d.y / 2,
+        );
+        const neighbourEnd = fenceSpans(1 << (i + 2) % 4)[0][1];
+        assert.ok(edge);
+        assert.equal(p.x + edge[1].x, p.x + d.x + neighbourEnd.x);
+        assert.equal(p.y + edge[1].y, p.y + d.y + neighbourEnd.y);
+      }
+  }
+  assert.equal(
+    fenceMask(p, [
+      { kind: "fence", x: 11, y: 11 },
+      { kind: "bench", x: 11, y: 10 },
+    ]),
+    0,
+  );
+});
+
+test("placed fences form corners and update neighbouring connections after removal and save", () => {
+  const sim = new Simulation();
+  const points = [
+    { x: 16, y: 17 },
+    { x: 17, y: 17 },
+    { x: 18, y: 17 },
+  ];
+  sim.state.decorations = sim.state.decorations.filter(
+    (d) => !points.some((p) => p.x === d.x && p.y === d.y),
+  );
+  for (const p of points)
+    assert.equal(execute(sim, { type: "place", kind: "fence", ...p }).ok, true);
+  assert.equal(fenceMask(points[1], sim.state.decorations), 5);
+  const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+  assert.equal(fenceMask(points[1], restored.state.decorations), 5);
+  assert.equal(execute(restored, { type: "demolish", ...points[1] }).ok, true);
+  assert.equal(fenceMask(points[0], restored.state.decorations), 0);
+  assert.equal(fenceMask(points[2], restored.state.decorations), 0);
+});
+
+test("bridges leave front entrances open and ramp to the bank without opening side walls", () => {
+  const seed = new Simulation().state.buildings.find((b) => b.kind === "house");
+  let house, tile;
+  for (let x = 18; x < 26 && !house; x++)
+    for (let y = 2; y < 24 && !house; y++)
+      for (let rotation = 0; rotation < 4; rotation++) {
+        if (
+          !footprint("house", x, y, rotation).every(
+            (p) => !isBridge(new Set([key(p)]), p.x, p.y),
+          )
+        )
+          continue;
+        const front = frontage("house", x, y, rotation).find((p) =>
+          isBridge(new Set([key(p)]), p.x, p.y),
+        );
+        if (front) {
+          house = { ...seed, x, y, rotation };
+          tile = front;
+          break;
+        }
+      }
+  assert.ok(house);
+  const roads = new Set([key(tile)]),
+    landings = bridgeLandings(roads, tile, [house]);
+  const edge = landings.findIndex(Boolean),
+    d = FENCE_DIRECTIONS[edge];
+  assert.ok(edge >= 0);
+  assert.equal(bridgeRails(roads, tile, [house])[edge], false);
+  assert.equal(deckHeight(roads, tile, d.x / 2, d.y / 2, [house]), 0);
+  assert.equal(deckHeight(roads, tile, 0, 0, [house]), BRIDGE_HEIGHT);
+  assert.equal(
+    bridgeRails(roads, tile, [
+      { ...house, rotation: (house.rotation + 2) % 4 },
+    ])[edge],
+    true,
+  );
+});
+
 test("cottages rotate four ways without changing occupancy, residents, or balances", () => {
   const sim = new Simulation(),
     house = sim.state.buildings.find((b) => b.kind === "house"),

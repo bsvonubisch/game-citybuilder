@@ -116,7 +116,9 @@ export class TownAnimation {
     const driving = a.wait <= 0 && a.active !== false && (a.move ?? 1) > 0;
     g.setVisible(sprite.visible);
     const phase = driving ? time * 13 + a.id : 0;
-    sprite.setRotation(driving ? Math.sin(phase) * 0.003 : 0);
+    // Rotate the wheel details only. Rocking the pixel-art body makes its
+    // nearest-neighbour pixels shimmer, especially when the camera is zoomed.
+    sprite.setRotation(0);
     const left = sprite.x - sprite.displayWidth / 2,
       top = sprite.y - sprite.displayHeight * sprite.originY;
     const positions =
@@ -168,7 +170,7 @@ export class TownAnimation {
         this.rotors.delete(id);
       }
     for (const b of sim.state.buildings) {
-      const art = buildingArt(b.kind, b.rotation);
+      const art = buildingArt(b.kind, b.rotation, b.houseTier);
       const active = working(sim, b);
       const phase = (this.machineryTime.get(b.id) ?? b.id) + (active ? dt : 0);
       this.machineryTime.set(b.id, phase);

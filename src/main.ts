@@ -10,6 +10,11 @@ import {
   DECORATIONS,
   isBuilding,
   isDecoration,
+  HOUSE_TIERS,
+  houseCapacity,
+  buildingName,
+  type HouseTier,
+  type Resource,
   type BuildingKind,
   type Tool,
 } from "./catalog.js";
@@ -19,6 +24,7 @@ import {
   DEPOSITS,
   key,
   type Point,
+  type Building,
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
 import { TownScene } from "./scene.js";
@@ -89,10 +95,15 @@ const atlasIcon = (
     id = `atlas-${iconSequence++}`;
   return `<svg class="building-icon ${cls}" viewBox="${x} ${y} ${w} ${h}" aria-hidden="true"><defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" /></clipPath></defs><image href="${path}" width="${w * columns}" height="${h * rows}" clip-path="url(#${id})" /></svg>`;
 };
-const frame = (kind: BuildingKind, cls = "", rotation = 0) => {
-  const art = buildingArt(kind, rotation);
+const frame = (
+  kind: BuildingKind,
+  cls = "",
+  rotation = 0,
+  houseTier: HouseTier = 1,
+) => {
+  const art = buildingArt(kind, rotation, houseTier);
   return atlasIcon(
-    `/plot-${kind}.png`,
+    `/${art.texture}.png`,
     art.columns,
     art.rows,
     ...art.size,
@@ -298,6 +309,15 @@ function renderSidebar() {
         renderSidebar();
       }),
   );
+  if (category === "homes") {
+    $("#sidebar-content .building-grid").insertAdjacentHTML(
+      "afterend",
+      `<section class="housing-ladder" aria-label="House upgrades"><h4>Grow your homes</h4><p>Build a cottage, then select it to upgrade.</p><div>${([1, 2, 3] as HouseTier[]).map((tier) => `<figure>${frame("house", "", 0, tier)}<figcaption><small>Tier ${tier}</small><b>${HOUSE_TIERS[tier].name}</b><span>${HOUSE_TIERS[tier].capacity} residents</span></figcaption></figure>`).join("")}</div></section>`,
+    );
+  } else if (category === "decorations") {
+    $("#sidebar-content .build-note p").textContent =
+      "Place fence pieces side by side to join them. Corners and junctions connect automatically. Use Remove (X) to clear decorations.";
+  }
   document
     .querySelectorAll<HTMLElement>("[data-building]")
     .forEach((el) => (el.onclick = () => setTool(el.dataset.building as Tool)));
@@ -367,8 +387,30 @@ function renderInspector() {
   const panel = $("#inspector");
   panel.hidden = !b;
   if (!b) return;
+  panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation)}<h3>${d.name}</h3><p>${d.description}</p><div id="building-status" class="building-status"></div><div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}<div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  if (b.kind === "house") {
+    const tier = b.houseTier ?? 1;
+    if (tier < 3) {
+      const nextTier = (tier + 1) as HouseTier,
+        next = HOUSE_TIERS[nextTier];
+      $("#house-upgrade").innerHTML =
+        `<div class="upgrade-heading">${frame("house", "upgrade-art", b.rotation, nextTier)}<div><span class="eyebrow">NEXT · TIER ${nextTier}</span><b>${next.name}</b><small>${houseCapacity(b)} → ${next.capacity} residents · same plot</small></div></div><div id="upgrade-costs" class="upgrade-costs"></div><button id="upgrade-house" class="primary">Upgrade to ${next.name.toLowerCase()}</button><p id="upgrade-reason" class="upgrade-reason" aria-live="polite"></p>`;
+      $("#upgrade-house").onclick = async () => {
+        const result = await gateway.command({ type: "upgrade", id: b.id });
+        toast(result.message);
+        if (result.ok) {
+          scene.redraw();
+          save(false);
+          renderInspector();
+          updateUI();
+        } else updateInspector();
+      };
+    } else
+      $("#house-upgrade").innerHTML =
+        '<p class="upgrade-complete">Fully upgraded · room for 9 residents</p>';
+  }
   {
     panel.insertAdjacentHTML(
       "beforeend",
@@ -454,7 +496,7 @@ function updateAgentInspector() {
   const from = simulation.building(a.returning ? a.target : a.source),
     to = simulation.building(a.returning ? a.source : a.target);
   const label = (b: typeof from) =>
-    b ? `${BUILDINGS[b.kind].name} · ${b.x}, ${b.y}` : "No destination";
+    b ? `${buildingName(b)} · ${b.x}, ${b.y}` : "No destination";
   $("#traveller-status").textContent =
     a.wait > 0
       ? "At the building"
@@ -497,7 +539,7 @@ function updateInspector() {
               "",
             )}${b.kind === "quarry" || b.kind === "mine" ? `<div class="detail-row"><span>Deposit remaining</span><b>${simulation.state.deposits[key(b)]}</b></div>` : ""}`
         : b.kind === "house"
-          ? `<div class="residents">${simulation.state.residents
+          ? `<div class="detail-row"><span>Residents</span><b>${simulation.state.residents.filter((r) => r.home === b.id).length} / ${houseCapacity(b)}</b></div><div class="residents">${simulation.state.residents
               .filter((r) => r.home === b.id)
               .map(
                 (r) =>
@@ -517,6 +559,28 @@ function updateInspector() {
     $("#toggle-production").textContent = b.enabled
       ? "Pause production"
       : "Resume production";
+  if (b.kind === "house" && (b.houseTier ?? 1) < 3) updateUpgrade(b);
+}
+function updateUpgrade(b: Building) {
+  const next = HOUSE_TIERS[((b.houseTier ?? 1) + 1) as HouseTier];
+  const costs = [
+    { name: "Gold", need: next.cost, have: simulation.state.money },
+    ...Object.entries(next.materials).map(([r, need]) => ({
+      name: RESOURCE_NAMES[r as Resource],
+      need,
+      have: simulation.stored(r as Resource),
+    })),
+  ];
+  $("#upgrade-costs").innerHTML = costs
+    .map(
+      (c) =>
+        `<span class="${c.have < c.need ? "missing" : "ready"}">${c.need} ${c.name}<small>${c.have} available</small></span>`,
+    )
+    .join("");
+  const reason = simulation.canUpgrade(b.id);
+  $<HTMLButtonElement>("#upgrade-house").disabled = !!reason;
+  $("#upgrade-reason").textContent =
+    reason ?? "Three more neighbours can move in.";
 }
 function drawMinimap() {
   const ctx = $<HTMLCanvasElement>("#minimap").getContext("2d")!;

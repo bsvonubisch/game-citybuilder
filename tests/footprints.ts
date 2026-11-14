@@ -4,21 +4,29 @@ import {
   FRONT_NAMES,
   FRONT_DIRECTIONS,
   type BuildingKind,
+  type HouseTier,
 } from "../src/catalog.js";
 import { buildingArt } from "../src/building-art.js";
 import { plotTransform, iso } from "../src/rendering.js";
-import { drawPlot } from "../src/plot-art.js";
+import { drawPlot, plotBounds } from "../src/plot-art.js";
 
 const contacts = document.querySelector<HTMLInputElement>("#contacts")!;
 const drawCases: (() => void)[] = [];
+contacts.onchange = () => drawCases.forEach((draw) => draw());
 const filter = new URLSearchParams(location.search).get("kind");
+const tier = Number(
+  new URLSearchParams(location.search).get("tier") ?? 1,
+) as HouseTier;
+const slate = new Image();
+slate.src = "/slate-hd.png";
+await slate.decode();
 for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
   if (filter && kind !== filter) continue;
   const image = new Image();
-  image.src = `/plot-${kind}.png`;
+  image.src = `/${buildingArt(kind, 0, tier).texture}.png`;
   await image.decode();
   for (let rotation = 0; rotation < 4; rotation++) {
-    const art = buildingArt(kind, rotation),
+    const art = buildingArt(kind, rotation, tier),
       [w, h] = dimensions(kind, rotation),
       fit = plotTransform(art.ground, w, h);
     const article = document.createElement("article"),
@@ -30,24 +38,14 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
     article.append(title, canvas);
     document.querySelector("main")!.append(article);
     const ctx = canvas.getContext("2d")!;
-    const sprite = document.createElement("canvas"),
-      [cw, ch] = art.size,
-      corners = [
-        [0, 0],
-        [cw, 0],
-        [cw, ch],
-        [0, ch],
-      ].map(([x, y]) => fit.point(x, y));
-    const left = Math.floor(Math.min(...corners.map((p) => p.x))),
-      top = Math.floor(Math.min(...corners.map((p) => p.y))),
-      right = Math.ceil(Math.max(...corners.map((p) => p.x))),
-      bottom = Math.ceil(Math.max(...corners.map((p) => p.y)));
+    const sprite = document.createElement("canvas");
+    const { left, top, right, bottom } = plotBounds(art, w, h);
     sprite.width = (right - left) * 4;
     sprite.height = (bottom - top) * 4;
     const sc = sprite.getContext("2d")!;
     sc.scale(4, 4);
     sc.translate(-left, -top);
-    drawPlot(sc, image, art, w, h);
+    drawPlot(sc, image, art, w, h, slate);
     const draw = () => {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = "#8da778";
@@ -123,4 +121,3 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
     draw();
   }
 }
-contacts.onchange = () => drawCases.forEach((draw) => draw());

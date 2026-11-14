@@ -1,4 +1,4 @@
-import type { BuildingKind } from "./catalog.js";
+import type { BuildingKind, HouseTier } from "./catalog.js";
 export type GroundPoint = readonly [number, number];
 export type PlotCorners = readonly [GroundPoint, GroundPoint, GroundPoint];
 export interface BuildingArt {
@@ -12,8 +12,8 @@ export interface BuildingArt {
   chimney?: GroundPoint;
   mechanism?: GroundPoint;
 }
-// Full stone foundations measured independently in all four views. Mapping
-// these corners aligns both plot axes and fills the entire reserved plot.
+// Full stone foundations measured independently in all four views. These bound
+// the rigid sprite inside the lot; the separate paving fills the occupied grid.
 const grounds: Record<BuildingKind, readonly PlotCorners[]> = {
   house: [
     [
@@ -322,7 +322,82 @@ const mechanisms: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
     [100, 349],
   ],
 };
-export function buildingArt(kind: BuildingKind, rotation = 0): BuildingArt {
+export function buildingArt(
+  kind: BuildingKind,
+  rotation = 0,
+  houseTier: HouseTier = 1,
+): BuildingArt {
+  if (kind === "house" && houseTier > 1) {
+    const upgradedGrounds: Record<2 | 3, readonly PlotCorners[]> = {
+      2: [
+        [
+          [121, 447],
+          [329, 545],
+          [538, 447],
+        ],
+        [
+          [90, 447],
+          [300, 545],
+          [509, 447],
+        ],
+        [
+          [121, 429],
+          [330, 522],
+          [540, 429],
+        ],
+        [
+          [86, 428],
+          [298, 523],
+          [507, 429],
+        ],
+      ],
+      3: [
+        [
+          [73, 500],
+          [323, 622],
+          [572, 500],
+        ],
+        [
+          [55, 499],
+          [305, 621],
+          [554, 499],
+        ],
+        [
+          [73, 499],
+          [323, 619],
+          [573, 499],
+        ],
+        [
+          [55, 498],
+          [305, 619],
+          [554, 499],
+        ],
+      ],
+    };
+    const upgradedChimneys: Record<2 | 3, readonly GroundPoint[]> = {
+      2: [
+        [274, 72],
+        [350, 72],
+        [382, 60],
+        [248, 60],
+      ],
+      3: [
+        [242, 17],
+        [386, 17],
+        [237, 32],
+        [385, 32],
+      ],
+    };
+    return {
+      texture: `plot-house-${houseTier}`,
+      frame: rotation,
+      columns: 2,
+      rows: 2,
+      size: [627, 627],
+      ground: upgradedGrounds[houseTier as 2 | 3][rotation],
+      chimney: upgradedChimneys[houseTier as 2 | 3][rotation],
+    };
+  }
   return {
     texture: `plot-${kind}`,
     frame: rotation,

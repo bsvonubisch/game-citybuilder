@@ -26,6 +26,8 @@ import { TerrainArt } from "./terrain-art.js";
 import { WaterArt } from "./water-art.js";
 import { lanePose, lanePoint, LANE_OFFSET, WALK_OFFSET } from "./traffic.js";
 import { BridgeArt } from "./bridge-art.js";
+import { FenceArt } from "./fence-art.js";
+import { fenceMask } from "./fences.js";
 import { roadHeight } from "./bridges.js";
 import {
   TownAnimation,
@@ -80,6 +82,7 @@ export class TownScene extends Phaser.Scene {
   private terrainArt!: TerrainArt;
   private plotArt!: PlotArt;
   private bridgeArt!: BridgeArt;
+  private fenceArt!: FenceArt;
   private waterArt!: WaterArt;
   private routeOverlay!: Phaser.GameObjects.Graphics;
   private decorationGhost?: Phaser.GameObjects.Image;
@@ -110,6 +113,8 @@ export class TownScene extends Phaser.Scene {
   preload() {
     for (const kind of Object.keys(BUILDINGS))
       this.load.image(`plot-${kind}`, `/plot-${kind}.png`);
+    this.load.image("plot-house-2", "/plot-house-2.png");
+    this.load.image("plot-house-3", "/plot-house-3.png");
     this.load.image("garden", "/garden-sprites.png");
     this.load.image("props", "/town-props.png");
     this.load.image("vehicles", "/vehicles-directions.png");
@@ -138,6 +143,7 @@ export class TownScene extends Phaser.Scene {
     this.waterArt = new WaterArt(this);
     this.terrainArt = new TerrainArt(this);
     this.bridgeArt = new BridgeArt(this);
+    this.fenceArt = new FenceArt(this);
     this.gridCache = this.add
       .renderTexture(-SIZE * 32, -16, SIZE * 64, SIZE * 32 + 32)
       .setOrigin(0, 0)
@@ -296,12 +302,13 @@ export class TownScene extends Phaser.Scene {
     y: number,
     rotation = 0,
     plot?: readonly [number, number],
+    houseTier: Building["houseTier"] = 1,
   ) {
-    this.plotArt.place(sprite, kind, x, y, rotation, plot);
+    this.plotArt.place(sprite, kind, x, y, rotation, plot, houseTier);
   }
   private artPoint(b: Building, x: number, y: number) {
     const sprite = this.buildings.get(b.id)!;
-    const p = this.plotArt.point(b.kind, b.rotation, x, y, b.plot),
+    const p = this.plotArt.point(b.kind, b.rotation, x, y, b.plot, b.houseTier),
       origin = iso(b.x, b.y);
     return { ...p, x: origin.x + p.x, y: origin.y + p.y, depth: sprite.depth };
   }
@@ -377,6 +384,13 @@ export class TownScene extends Phaser.Scene {
         .setData("decoration", d)
         .setInteractive({ pixelPerfect: true });
       sprite.setScale(def.height / sprite.frame.height);
+      if (d.kind === "fence")
+        this.fenceArt.place(
+          sprite,
+          d.x,
+          d.y,
+          fenceMask(d, this.simulation.state.decorations),
+        );
       this.trees.push(sprite);
     }
     for (const [id, sprite] of this.buildings) {
@@ -396,7 +410,7 @@ export class TownScene extends Phaser.Scene {
           .setInteractive({ pixelPerfect: true });
         this.buildings.set(b.id, s);
       }
-      this.placeSprite(s, b.kind, b.x, b.y, b.rotation, b.plot);
+      this.placeSprite(s, b.kind, b.x, b.y, b.rotation, b.plot, b.houseTier);
       s.setDepth((b.x + b.y + w + h - 2) * 32 + 12).setAlpha(
         b.enabled ? 1 : 0.55,
       );
@@ -434,14 +448,11 @@ export class TownScene extends Phaser.Scene {
     if (this.selected) {
       const b = this.simulation.building(this.selected);
       if (b) {
-        for (const p of footprint(b.kind, b.x, b.y, b.rotation, b.plot))
-          this.diamond(p, 0xf3ce7b, 0.23);
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
       }
     }
-    if (this.hover) {
+    if (this.hover && this.tool !== "inspect") {
       const valid =
-        this.tool === "inspect" ||
         this.tool === "bulldoze" ||
         !this.simulation.canPlace(
           this.tool,
@@ -465,6 +476,7 @@ export class TownScene extends Phaser.Scene {
           .setDepth(5001)
           .setOrigin(0.5, 1);
         this.decorationGhost
+          .setOrigin(0.5, 1)
           .setTexture(def.texture, def.frame)
           .setScale(
             def.height / this.textures.getFrame(def.texture, def.frame).height,
@@ -473,6 +485,13 @@ export class TownScene extends Phaser.Scene {
           .setAlpha(0.6)
           .setTint(valid ? 0xffffff : 0xe99385)
           .setVisible(true);
+        if (this.tool === "fence")
+          this.fenceArt.place(
+            this.decorationGhost,
+            this.hover.x,
+            this.hover.y,
+            fenceMask(this.hover, this.simulation.state.decorations),
+          );
       }
       if (isBuilding(this.tool)) {
         this.drawFront(this.tool, this.hover.x, this.hover.y, this.rotation);
@@ -566,7 +585,17 @@ export class TownScene extends Phaser.Scene {
       .map((_, i) => lanePoint(a.path, i + a.segment, offset))
       .map((p) => {
         const v = iso(p.x, p.y);
-        return { x: v.x, y: v.y - roadHeight(this.simulation.roads, p.x, p.y) };
+        return {
+          x: v.x,
+          y:
+            v.y -
+            roadHeight(
+              this.simulation.roads,
+              p.x,
+              p.y,
+              this.simulation.state.buildings,
+            ),
+        };
       });
     this.routeOverlay.lineStyle(2, 0xffdf88, 0.75).strokePoints(points, false);
     const p = lanePose(a, agentDistance(a, this.acc)),
@@ -575,7 +604,13 @@ export class TownScene extends Phaser.Scene {
       .lineStyle(1.5, 0xffe6a0, 1)
       .strokeEllipse(
         v.x,
-        v.y - roadHeight(this.simulation.roads, p.x, p.y),
+        v.y -
+          roadHeight(
+            this.simulation.roads,
+            p.x,
+            p.y,
+            this.simulation.state.buildings,
+          ),
         a.kind === "person" ? 12 : 27,
         8,
       );
@@ -656,7 +691,14 @@ export class TownScene extends Phaser.Scene {
             : 0;
       s.setPosition(
         v.x,
-        v.y - roadHeight(this.simulation.roads, p.x, p.y) + bob,
+        v.y -
+          roadHeight(
+            this.simulation.roads,
+            p.x,
+            p.y,
+            this.simulation.state.buildings,
+          ) +
+          bob,
       )
         .setVisible(a.active !== false)
         .setDepth((p.x + p.y) * 32 + 16)

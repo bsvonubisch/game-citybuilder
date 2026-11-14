@@ -1,17 +1,17 @@
 import type Phaser from "phaser";
 import { buildingArt, type BuildingArt } from "./building-art.js";
-import { dimensions, type BuildingKind } from "./catalog.js";
-import { iso, plotTransform } from "./rendering.js";
+import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
+import { iso, plotTransform, plotOutline } from "./rendering.js";
 
 const RESOLUTION = 4;
-/** Rasterize once into whole destination pixels, avoiding translucent seams
- * between fractional source columns. Call with a 4x canvas transform. */
+/** A grid-aligned paved lot beneath an undistorted building. Cached at 4x. */
 export function drawPlot(
   ctx: CanvasRenderingContext2D,
   source: HTMLImageElement,
   art: BuildingArt,
   w: number,
   h: number,
+  slate: HTMLImageElement,
 ) {
   const t = plotTransform(art.ground, w, h),
     [cw, ch] = art.size;
@@ -23,29 +23,47 @@ export function drawPlot(
     sy = Math.floor(
       (Math.floor(art.frame / art.columns) * source.height) / art.rows,
     );
+  ctx.save();
+  // Only the flat paving is projected. Its edges coincide with occupancy and
+  // road tiles, even when the source building has a different base aspect.
+  ctx.transform(32, 16, -32, 16, 0, 0);
+  ctx.fillStyle = "#aaa899";
+  ctx.fillRect(-0.5, -0.5, w, h);
+  const paving = ctx.createPattern(slate, "repeat")!;
+  paving.setTransform(new DOMMatrix().scale(2 / slate.width, 2 / slate.height));
+  ctx.fillStyle = paving;
+  ctx.fillRect(-0.5, -0.5, w, h);
+  // A restrained stone border makes the complete lot readable, including its
+  // loading apron, without drawing a second raised platform around the sprite.
+  ctx.strokeStyle = "#d5cbb1";
+  ctx.lineWidth = 0.035;
+  ctx.strokeRect(-0.4825, -0.4825, w - 0.035, h - 0.035);
+  ctx.restore();
   ctx.imageSmoothingEnabled = false;
-  const start = Math.ceil(t.point(0, 0).x * RESOLUTION),
-    end = Math.floor(t.point(cw, 0).x * RESOLUTION);
-  for (let column = start; column < end; column++) {
-    const left = column / RESOLUTION,
-      right = (column + 1) / RESOLUTION,
-      x = t.sourceX(left),
-      next = t.sourceX(right),
-      mid = t.sourceX((left + right) / 2);
-    const top = t.point(mid, 0).y,
-      bottom = t.point(mid, ch).y;
-    ctx.drawImage(
-      source,
-      sx + (x * sw) / cw,
-      sy,
-      ((next - x) * sw) / cw,
-      sh,
-      left,
-      top,
-      1 / RESOLUTION,
-      bottom - top,
-    );
-  }
+  const top = t.point(0, 0);
+  ctx.drawImage(
+    source,
+    sx,
+    sy,
+    sw,
+    sh,
+    top.x,
+    top.y,
+    cw * t.scale,
+    ch * t.scale,
+  );
+}
+
+export function plotBounds(art: BuildingArt, w: number, h: number) {
+  const t = plotTransform(art.ground, w, h),
+    [cw, ch] = art.size;
+  const corners = [t.point(0, 0), t.point(cw, ch), ...plotOutline(w, h)];
+  return {
+    left: Math.floor(Math.min(...corners.map((p) => p.x))),
+    top: Math.floor(Math.min(...corners.map((p) => p.y))),
+    right: Math.ceil(Math.max(...corners.map((p) => p.x))),
+    bottom: Math.ceil(Math.max(...corners.map((p) => p.y))),
+  };
 }
 export class PlotArt {
   private cache = new Map<string, { texture: string; x: number; y: number }>();
@@ -57,27 +75,17 @@ export class PlotArt {
     y: number,
     rotation: number,
     plot?: readonly [number, number],
+    houseTier: HouseTier = 1,
   ) {
     const [w, h] = dimensions(kind, rotation, plot),
-      key = `fitted-${kind}-${rotation}-${w}-${h}`;
+      key = `fitted-${kind}-${houseTier}-${rotation}-${w}-${h}`;
     let fit = this.cache.get(key);
     if (!fit) {
-      const art = buildingArt(kind, rotation),
+      const art = buildingArt(kind, rotation, houseTier),
         source = this.scene.textures
           .get(art.texture)
           .getSourceImage() as HTMLImageElement;
-      const transform = plotTransform(art.ground, w, h),
-        [cw, ch] = art.size;
-      const corners = [
-        [0, 0],
-        [cw, 0],
-        [cw, ch],
-        [0, ch],
-      ].map(([x, y]) => transform.point(x, y));
-      const left = Math.floor(Math.min(...corners.map((p) => p.x))),
-        top = Math.floor(Math.min(...corners.map((p) => p.y)));
-      const right = Math.ceil(Math.max(...corners.map((p) => p.x))),
-        bottom = Math.ceil(Math.max(...corners.map((p) => p.y)));
+      const { left, top, right, bottom } = plotBounds(art, w, h);
       const texture = this.scene.textures.createCanvas(
         key,
         (right - left) * RESOLUTION,
@@ -86,7 +94,14 @@ export class PlotArt {
       const ctx = texture.context;
       ctx.scale(RESOLUTION, RESOLUTION);
       ctx.translate(-left, -top);
-      drawPlot(ctx, source, art, w, h);
+      drawPlot(
+        ctx,
+        source,
+        art,
+        w,
+        h,
+        this.scene.textures.get("slate").getSourceImage() as HTMLImageElement,
+      );
       texture.refresh();
       fit = { texture: key, x: left, y: top };
       this.cache.set(key, fit);
@@ -104,10 +119,11 @@ export class PlotArt {
     x: number,
     y: number,
     plot?: readonly [number, number],
+    houseTier: HouseTier = 1,
   ) {
-    const art = buildingArt(kind, rotation),
+    const art = buildingArt(kind, rotation, houseTier),
       [w, h] = dimensions(kind, rotation, plot),
       t = plotTransform(art.ground, w, h);
-    return { ...t.point(x, y), scale: t.scaleAt(x) };
+    return { ...t.point(x, y), scale: t.scale };
   }
 }

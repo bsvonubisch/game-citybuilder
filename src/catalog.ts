@@ -1,5 +1,12 @@
 export type Resource =
-  "grain" | "flour" | "bread" | "wood" | "stone" | "metal" | "planks" | "tools";
+  | "grain"
+  | "flour"
+  | "bread"
+  | "wood"
+  | "stone"
+  | "metal"
+  | "planks"
+  | "tools";
 export type BuildingKind =
   | "house"
   | "farm"
@@ -12,6 +19,61 @@ export type BuildingKind =
   | "park"
   | "quarry"
   | "mine";
+export type HouseTier = 1 | 2 | 3;
+export const HOUSE_TIERS: Record<
+  HouseTier,
+  {
+    name: string;
+    capacity: number;
+    description: string;
+    cost: number;
+    materials: Partial<Record<Resource, number>>;
+  }
+> = {
+  1: {
+    name: "Timber cottage",
+    capacity: 3,
+    description: "A warm first home for three residents.",
+    cost: 90,
+    materials: { wood: 5 },
+  },
+  2: {
+    name: "Townhouse",
+    capacity: 6,
+    description:
+      "An extra floor and a flower balcony make room for six residents.",
+    cost: 180,
+    materials: { wood: 12, stone: 10 },
+  },
+  3: {
+    name: "Grand house",
+    capacity: 9,
+    description:
+      "A spacious town home with fine stonework, dormers and room for nine residents.",
+    cost: 420,
+    materials: { planks: 16, stone: 20, metal: 8 },
+  },
+};
+export const buildingName = (b: {
+  kind: BuildingKind;
+  houseTier?: HouseTier;
+}) =>
+  b.kind === "house"
+    ? HOUSE_TIERS[b.houseTier ?? 1].name
+    : BUILDINGS[b.kind].name;
+export const houseCapacity = (b: {
+  kind: BuildingKind;
+  houseTier?: HouseTier;
+}) => (b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].capacity : 0);
+export const buildingInvestment = (b: {
+  kind: BuildingKind;
+  houseTier?: HouseTier;
+}) =>
+  b.kind === "house"
+    ? ([1, 2, 3] as HouseTier[])
+        .filter((t) => t <= (b.houseTier ?? 1))
+        .reduce((sum, t) => sum + HOUSE_TIERS[t].cost, 0)
+    : BUILDINGS[b.kind].cost;
 export type DecorationKind =
   | "oak"
   | "pine"
@@ -77,7 +139,12 @@ export const DECORATIONS: Record<
   },
 };
 export type Tool =
-  BuildingKind | DecorationKind | "road" | "bridge" | "bulldoze" | "inspect";
+  | BuildingKind
+  | DecorationKind
+  | "road"
+  | "bridge"
+  | "bulldoze"
+  | "inspect";
 export const isBuilding = (kind: string): kind is BuildingKind =>
   Object.hasOwn(BUILDINGS, kind);
 export const isDecoration = (kind: string): kind is DecorationKind =>

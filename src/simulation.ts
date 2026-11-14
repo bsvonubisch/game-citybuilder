@@ -11,6 +11,11 @@ import {
   isBuilding,
   isDecoration,
   footprint,
+  HOUSE_TIERS,
+  houseCapacity,
+  buildingName,
+  buildingInvestment,
+  type HouseTier,
   type BuildingKind,
   type Resource,
   type Tool,
@@ -32,6 +37,7 @@ export interface Building extends Point {
   produced: number;
   rotation: 0 | 1 | 2 | 3;
   plot?: readonly [number, number];
+  houseTier?: HouseTier;
 }
 export interface Resident {
   id: number;
@@ -84,6 +90,7 @@ export type Command =
     }
   | { type: "demolish"; x: number; y: number }
   | { type: "toggle"; id: number }
+  | { type: "upgrade"; id: number }
   | { type: "rotate"; id: number };
 export interface CommandEnvelope {
   id: string;
@@ -226,6 +233,7 @@ export class Simulation {
         enabled: true,
         produced: 0,
         rotation: kind === "house" && x === 7 ? 2 : 0,
+        ...(kind === "house" ? { houseTier: 1 as const } : {}),
       });
     };
     [
@@ -350,7 +358,10 @@ export class Simulation {
       homes.some((h) => h.id === r.home),
     );
     for (const h of homes.filter((h) => h.connected)) {
-      while (this.state.residents.filter((r) => r.home === h.id).length < 3) {
+      while (
+        this.state.residents.filter((r) => r.home === h.id).length <
+        houseCapacity(h)
+      ) {
         const id = this.state.nextId++;
         this.state.residents.push({
           id,
@@ -480,6 +491,22 @@ export class Simulation {
       amount -= n;
     }
   }
+  canUpgrade(id: number): string | null {
+    const b = this.building(id);
+    if (!b || b.kind !== "house") return "Select a house to upgrade.";
+    if ((b.houseTier ?? 1) >= 3)
+      return "This house is already at the highest tier.";
+    if (!b.connected)
+      return "Connect the front entrance to a warehouse road before upgrading.";
+    const next = HOUSE_TIERS[((b.houseTier ?? 1) + 1) as HouseTier];
+    if (this.state.money < next.cost)
+      return `Need ${next.cost} gold to upgrade.`;
+    for (const [r, n] of Object.entries(next.materials)) {
+      if (this.stored(r as Resource) < n)
+        return `Need ${n} ${r} in warehouses to upgrade.`;
+    }
+    return null;
+  }
   execute(envelope: CommandEnvelope): Result {
     const prior = this.processed.get(envelope.id);
     if (prior) return prior;
@@ -490,7 +517,10 @@ export class Simulation {
         revision: this.state.revision,
       };
     const c = envelope.command;
-    if (!c || !["place", "demolish", "toggle", "rotate"].includes(c.type))
+    if (
+      !c ||
+      !["place", "demolish", "toggle", "rotate", "upgrade"].includes(c.type)
+    )
       return {
         ok: false,
         message: "Unknown action.",
@@ -562,6 +592,7 @@ export class Simulation {
           produced: 0,
           rotation: c.rotation ?? 0,
           plot: dimensions(c.kind, c.rotation),
+          ...(c.kind === "house" ? { houseTier: 1 as const } : {}),
         });
       message =
         c.kind === "road" || c.kind === "bridge"
@@ -593,7 +624,7 @@ export class Simulation {
         this.state.buildings = this.state.buildings.filter(
           (x) => x.id !== b.id,
         );
-        this.state.money += Math.floor(BUILDINGS[b.kind].cost / 2);
+        this.state.money += Math.floor(buildingInvestment(b) / 2);
       } else if (this.roadSet.has(key(c))) {
         this.state.roads = this.state.roads.filter((k) => k !== key(c));
         this.state.money += terrain(c.x, c.y) === "water" ? 17 : 6;
@@ -653,7 +684,19 @@ export class Simulation {
       this.state.decorations = this.state.decorations.filter(
         (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
       );
-      message = `${BUILDINGS[b.kind].name} rotated.`;
+      message = `${buildingName(b)} rotated.`;
+    } else if (c.type === "upgrade") {
+      const error = this.canUpgrade(c.id);
+      if (error)
+        return { ok: false, message: error, revision: this.state.revision };
+      const b = this.building(c.id)!;
+      const tier = ((b.houseTier ?? 1) + 1) as HouseTier,
+        next = HOUSE_TIERS[tier];
+      this.state.money -= next.cost;
+      for (const [r, n] of Object.entries(next.materials))
+        this.consume(r as Resource, n);
+      b.houseTier = tier;
+      message = `Upgraded to ${next.name.toLowerCase()}. Room for ${next.capacity} residents.`;
     } else if (c.type === "toggle") {
       const b = this.building(c.id);
       if (!b)
@@ -864,7 +907,7 @@ export class Simulation {
     return d.recipe
       ? "Producing"
       : b.kind === "house"
-        ? "3 residents at home"
+        ? `${this.state.residents.filter((r) => r.home === b.id).length} residents · tier ${b.houseTier ?? 1} home`
         : "Connected to town";
   }
   snapshot(): World {
@@ -918,6 +961,7 @@ export function parseSave(raw: string): World {
   }
   for (const b of s.buildings) {
     b.rotation ??= 0;
+    if (b.kind === "house") b.houseTier ??= 1;
     if (s.version < 3) {
       b.plot = FOOTPRINTS[b.kind];
       if (b.plot) {
@@ -941,6 +985,8 @@ export function parseSave(raw: string): World {
       !finite(b.produced) ||
       typeof b.enabled !== "boolean" ||
       ![0, 1, 2, 3].includes(b.rotation) ||
+      (b.houseTier !== undefined &&
+        (b.kind !== "house" || ![1, 2, 3].includes(b.houseTier))) ||
       (b.plot !== undefined &&
         (!Array.isArray(b.plot) ||
           b.plot.length !== 2 ||

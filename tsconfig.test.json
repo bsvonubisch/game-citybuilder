@@ -12,6 +12,7 @@
     "src/simulation.ts",
     "src/rendering.ts",
     "src/bridges.ts",
-    "src/animation.ts"
+    "src/animation.ts",
+    "src/fences.ts"
   ]
 }

@@ -31,11 +31,12 @@ npm run build
 - All eleven buildings rotate four ways before placement and after construction (R or Rotate). Rectangular plots rotate with the building; occupied roads, buildings and water block an invalid turn.
 - The front entrance determines road access. A front edge and arrow show green when a road reaches that side and amber when it does not. The entrance road must connect to a warehouse for employment and production.
 - Pedestrian walk cycles, turning vehicle wheels, windmill sails, working saw/conveyor details, hearth smoke, fountain droplets, and gentle water glints. Pause and speed controls apply to animation as well as the simulation.
-- Full paved foundations cover explicit 2×2, 3×2 and rotated 2×3 footprints. Each view is calibrated to its plot, with upright walls and straight roof lines. Existing towns retain their occupied plots, buildings, residents and inventories during migration.
+- Full paved lots cover explicit 2×2, 3×2 and rotated 2×3 footprints. Building art uses uniform scale and translation only, retaining its original proportions; the separate flat paving follows the grid. Existing towns retain occupied plots, buildings, residents and inventories.
 - Cars and trucks use right-hand lanes, safe following distances, continuous collision checks and fair junction reservations. Vehicles wait inside buildings until there is room to enter the road. Click a pedestrian or vehicle to inspect its destination, route and cargo.
-- Plant and remove oak, pine, birch and blossom trees, benches, streetlights, flower planters and fences through Gardens & streets. Decorations persist in device, exported and cloud saves.
-- Clear Brook water flows beneath fixed shorelines and bridge decks. Bridge support pilings render beneath opaque decks, with separate upper railing posts.
-- Cottages provide three named residents. Residents walk or drive between home and assigned workplaces. Road routing uses breadth-first search; disconnected or understaffed factories stop.
+- Plant and remove oak, pine, birch and blossom trees, benches, streetlights, flower planters and fences through Gardens & streets. Adjacent fence tiles join automatically into runs, corners, T-junctions and enclosures; removal updates both neighbours. Decorations persist in device, exported and cloud saves.
+- Clear Brook water flows beneath fixed shorelines and bridge decks. Bridge support pilings render beneath opaque decks, with separate upper railing posts. A front entrance on the bank opens the adjoining railing and adds a matching ramp; side and rear walls keep their rails.
+- Houses have three tiers with distinct four-direction artwork: Timber cottage (3 residents), Townhouse (6) and Grand house (9). Select a connected home to upgrade in place. The townhouse costs 180 gold, 12 wood and 10 stone; the grand-house upgrade costs 420 gold, 16 planks, 20 stone and 8 metal. Families, plot and orientation remain intact. Old saves default to tier 1; upgraded houses persist in all save formats.
+- Residents walk or drive between home and assigned workplaces. Cars have stable bodies with animated wheel details. Road routing uses breadth-first search; disconnected or understaffed factories stop. Explore mode has no hover or selected-tile grid highlighting; construction and removal retain their placement guides.
 - Gold, wood, stone, and metal construction costs. Quarries and metal mines use finite deposits. Delivered warehouse inventory pays material costs.
 - Farm → mill → bakery → warehouse. Forester → sawmill → workshop → warehouse. Vehicles move inventory in transit, and delivered tools sell for gold.
 - Daily bread consumption, household income, and basic happiness from food and parks.
@@ -55,7 +56,8 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 - `src/simulation.ts`: serializable, deterministic 250 ms simulation, commands, occupancy, routing, production, and logistics. No DOM, Phaser, or Firebase dependency.
 - `src/gateway.ts`: command boundary used by the interface.
 - `src/scene.ts`: Phaser rendering, asset atlas frames, camera, picking, and overlays.
-- `src/building-art.ts` / `src/plot-art.ts`: four-view art, calibrated full foundations, cached projective fitting and animation anchors.
+- `src/building-art.ts` / `src/plot-art.ts`: four-view art for buildings and house tiers, rigid sprite fitting, separate paved lots and animation anchors.
+- `src/fences.ts` / `src/fence-art.ts`: automatic cardinal fence connections and cached timber geometry.
 - `src/traffic.ts`: right-hand lanes, continuous swept collision checks, junction queues and entry spacing.
 - `src/decorations.ts`: persisted decorations and one-time migration of procedural scenery.
 - `src/rendering.ts`: ground fitting and smooth road movement between simulation ticks.

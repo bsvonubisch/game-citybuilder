@@ -1,7 +1,12 @@
 import type Phaser from "phaser";
-import { bridgeRails, deckHeight, DIRECTIONS, isBridge } from "./bridges.js";
+import {
+  bridgeRails,
+  bridgeLandings,
+  deckHeight,
+  isBridge,
+} from "./bridges.js";
 import { iso } from "./rendering.js";
-import { key, terrain, type Point, type Simulation } from "./simulation.js";
+import { type Point, type Simulation } from "./simulation.js";
 
 type Vec = { x: number; y: number };
 const RESOLUTION = 4,
@@ -84,18 +89,17 @@ export class BridgeArt {
     }
   }
   private variant(sim: Simulation, tile: Point) {
-    const open = bridgeRails(sim.roads, tile);
-    const land = DIRECTIONS.map(
-      (d) =>
-        sim.roads.has(key({ x: tile.x + d.x, y: tile.y + d.y })) &&
-        terrain(tile.x + d.x, tile.y + d.y) === "land",
-    );
+    const open = bridgeRails(sim.roads, tile, sim.state.buildings);
+    const land = bridgeLandings(sim.roads, tile, sim.state.buildings);
     const id = open.map(Number).join("") + land.map(Number).join("");
     const existing = this.variants.get(id);
     if (existing) return existing;
     const point = (u: number, v: number): Vec => {
       const p = iso(u, v);
-      return { x: p.x, y: p.y - deckHeight(sim.roads, tile, u, v) };
+      return {
+        x: p.x,
+        y: p.y - deckHeight(sim.roads, tile, u, v, sim.state.buildings),
+      };
     };
     const line = (
       ctx: CanvasRenderingContext2D,
