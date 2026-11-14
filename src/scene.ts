@@ -871,11 +871,23 @@ export class TownScene extends Phaser.Scene {
     y: number,
     rotation: number,
     plot?: readonly [number, number],
+    oneEdge = false,
   ) {
+    if (kind === "park" && !oneEdge) {
+      for (let edge = 0; edge < 4; edge++)
+        this.drawFront(kind, x, y, edge, plot, true);
+      return;
+    }
     const g = this.frontOverlay;
     const [w, h] = dimensions(kind, rotation, plot),
       d = FRONT_DIRECTIONS[rotation];
-    const connected = frontage(kind, x, y, rotation, plot).some(
+    const connected = frontage(
+      kind === "park" ? "house" : kind,
+      x,
+      y,
+      rotation,
+      [w, h],
+    ).some(
       (p) =>
         this.simulation.roads.has(key(p)) &&
         groundHeight(p.x, p.y, this.simulation.state.terrain) ===

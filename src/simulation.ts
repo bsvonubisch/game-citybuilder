@@ -1307,9 +1307,11 @@ export class Simulation {
       return this.adjacent(b).length === 0
         ? {
             kind: "road",
-            title: "No front road",
+            title: b.kind === "park" ? "No road connection" : "No front road",
             message:
-              "Build a road along the front entrance, or move the building beside a road.",
+              b.kind === "park"
+                ? "Connect a road to any side of the fountain square."
+                : "Build a road along the front entrance, or move the building beside a road.",
           }
         : {
             kind: "warehouse",

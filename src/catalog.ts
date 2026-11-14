@@ -392,6 +392,13 @@ export function frontage(
 ) {
   const [w, h] = dimensions(kind, rotation, plot),
     d = FRONT_DIRECTIONS[rotation];
+  if (kind === "park")
+    return [
+      ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y - 1 })),
+      ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y + h })),
+      ...Array.from({ length: h }, (_, i) => ({ x: x - 1, y: y + i })),
+      ...Array.from({ length: h }, (_, i) => ({ x: x + w, y: y + i })),
+    ];
   return d.x
     ? Array.from({ length: h }, (_, i) => ({
         x: x + (d.x > 0 ? w : -1),

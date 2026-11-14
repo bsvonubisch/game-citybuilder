@@ -65,7 +65,9 @@ export function buildingGuidance(
     }
     return build(
       "road",
-      "Draw a continuous road from the highlighted front entrance to a warehouse's front road. The entrance arrow turns green when it reaches the road.",
+      b.kind === "park"
+        ? "Connect any of the four sides to the warehouse road network. The square's rotation does not affect access."
+        : "Draw a continuous road from the highlighted front entrance to a warehouse's front road. The entrance arrow turns green when it reaches the road.",
     );
   }
   if (alert.kind === "workers" || (b.construction && !b.workers)) {

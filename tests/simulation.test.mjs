@@ -1595,3 +1595,31 @@ test("compact industry lots migrate inside the old footprint while keeping front
         assert.doesNotThrow(() => parseSave(JSON.stringify(restored)));
       }
 });
+
+test("fountain squares accept roads on every edge regardless of rotation", () => {
+  const expected = [
+    "9,10",
+    "9,11",
+    "12,10",
+    "12,11",
+    "10,9",
+    "11,9",
+    "10,12",
+    "11,12",
+  ].sort();
+  for (let rotation = 0; rotation < 4; rotation++) {
+    assert.deepEqual(
+      frontage("park", 10, 10, rotation).map(key).sort(),
+      expected,
+    );
+  }
+  const sim = new Simulation(),
+    park = sim.state.buildings.find((b) => b.kind === "park");
+  const roads = sim.adjacent(park).map(key).sort();
+  assert.ok(roads.length > 0);
+  for (let i = 0; i < 4; i++) {
+    assert.equal(execute(sim, { type: "rotate", id: park.id }).ok, true);
+    assert.equal(park.connected, true);
+    assert.deepEqual(sim.adjacent(park).map(key).sort(), roads);
+  }
+});

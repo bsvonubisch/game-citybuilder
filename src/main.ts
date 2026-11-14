@@ -368,8 +368,12 @@ function updateEntranceHint() {
           terrainCell(hovered!.x, hovered!.y, simulation.state.terrain).height,
     );
   el.textContent = connected
-    ? "Front connected to road"
-    : "Front entrance needs a road";
+    ? kind === "park"
+      ? "Square connected to road"
+      : "Front connected to road"
+    : kind === "park"
+      ? "Connect a road on any of the four sides"
+      : "Front entrance needs a road";
   el.className = connected ? "front-connected" : "front-missing";
 }
 function renderPanel() {
