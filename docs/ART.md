@@ -14,7 +14,15 @@ All raster artwork in `public/` was generated with the built-in image generation
 | `vehicles-directions.png` | Four vehicle types × four directional views, including rear views |
 | `people-directions.png` | Four residents × four directional views, including walking away |
 
-The quarry and mine currently reuse tinted industrial/lodge artwork and have explicit mining behavior and deposits. Unique mining artwork is still to be commissioned. Each villager has four directions, but these are not complete walk-animation cycles. The renderer trims alpha padding per cell and anchors each building at its visible ground-contact point.
+The quarry and mine currently reuse tinted industrial/lodge artwork and have explicit mining behavior and deposits. Unique mining artwork is still to be commissioned. Each villager has four directions, but these are not complete walk-animation cycles.
+
+## Ground alignment
+
+`src/building-art.ts` records ground-contact landmarks in original atlas-cell pixels for every building frame and each cottage rotation. Include the feet of steps, log piles, barrels, conveyor legs, and other props; exclude roofs and elevated foliage. The source cells are 418×418 for buildings and 627×627 for cottages. A narrow piece of the neighboring warehouse is excluded from the workshop runtime frame.
+
+`fitGround` converts the contacts to both isometric tile axes, fits their extents uniformly inside the logical footprint with a 0.08-tile curb clearance, and centers the result. Alpha trimming only affects the texture crop; it never decides the plot anchor or scale. Placement previews and finished buildings use the same transform. Rectangular industrial plots retain their existing dimensions and save compatibility. Elevated roofs and canopies may visually occlude ground behind them; their bases and ground-level props stay in the plot.
+
+For a visual regression review, run the dev server and open `/tests/footprints.html`. It shows every building and cottage rotation surrounded by roads, with contact guides and a comparison to the former placement. This audit page is excluded from the production build. Whenever replacing artwork, recalibrate its contact landmarks and inspect this page in addition to running the containment tests.
 
 ## Prompt briefs
 

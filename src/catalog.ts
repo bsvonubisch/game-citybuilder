@@ -202,3 +202,4 @@ export const footprint = (kind: BuildingKind, x: number, y: number) =>
   }));
 export const SIZE = 28;
 export const STEP = 0.25;
+export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;

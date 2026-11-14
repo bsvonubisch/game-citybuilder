@@ -3,6 +3,7 @@ import {
   RESOURCES,
   SIZE,
   STEP,
+  AGENT_SPEED,
   FOOTPRINTS,
   footprint,
   type BuildingKind,
@@ -576,8 +577,7 @@ export class Simulation {
         a.wait -= STEP;
         continue;
       }
-      a.progress +=
-        STEP * (a.kind === "person" ? 0.75 : a.kind === "car" ? 1.4 : 1.05);
+      a.progress += STEP * AGENT_SPEED[a.kind];
       if (a.progress >= 1) {
         a.segment++;
         a.progress -= 1;

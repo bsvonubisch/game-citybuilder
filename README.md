@@ -48,12 +48,16 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 - `src/simulation.ts`: serializable, deterministic 250 ms simulation, commands, occupancy, routing, production, and logistics. No DOM, Phaser, or Firebase dependency.
 - `src/gateway.ts`: command boundary used by the interface.
 - `src/scene.ts`: Phaser rendering, asset atlas frames, camera, picking, and overlays.
+- `src/building-art.ts`: calibrated foundation/prop contacts for each atlas frame and cottage rotation.
+- `src/rendering.ts`: ground fitting and smooth road movement between simulation ticks.
 - `src/main.ts`: interface, local saves, and interaction wiring.
 - `src/cloud.ts`: Firebase initialization, account login, and private save storage.
 - `tests/simulation.test.mjs`: economic, routing, persistence, migration, and collision regressions.
+
+Terrain and roads are baked into one render texture when the town changes; the grid is cached separately. Static paving geometry is not replayed every frame. Agents and smoke render continuously between the deterministic 250 ms ticks, including road turns and pauses. Add `?perf=1` to show a rolling FPS/frame-time counter; add `?qa=performance&perf=1` to measure in an isolated local-save slot. The visual footprint audit at `/tests/footprints.html` is available through the dev server.
 
 ## Current scope
 
 This is a single-player foundation, not live multiplayer. Firebase account/save code is implemented; project-specific provider setup and an authenticated Firebase CLI are required. Firestore ownership, schema, and shared-world isolation rules are covered by emulator tests (Java 21 required). See [the multiplayer plan](docs/MULTIPLAYER.md) for the authority and synchronization boundary.
 
-The economy is intentionally forgiving and not balanced for a full game. Vehicles follow routes without traffic queues or physical vehicle collisions. Residents use four directional views with movement bobbing; full walk animation cycles, seasons, terrain editing, power, zoning, and advanced logistics are future work. Decorative tree canopies can overhang neighboring ground; building base footprints cannot overlap roads. Atlas alpha padding is removed at runtime and visible ground-contact anchors align buildings with their plots.
+The economy is intentionally forgiving and not balanced for a full game. Vehicles follow routes without traffic queues or physical vehicle collisions. Residents use four directional views with movement bobbing; full walk animation cycles, seasons, terrain editing, power, zoning, and advanced logistics are future work. Decorative tree canopies and elevated roofs can occlude neighboring ground. Building foundations and ground-level props are fitted inside their plots using both isometric tile axes; atlas padding does not determine their alignment.

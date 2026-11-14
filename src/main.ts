@@ -111,6 +111,34 @@ const resize = new ResizeObserver(() =>
   game.scale.resize($("#game").clientWidth, $("#game").clientHeight),
 );
 resize.observe($("#game"));
+// Opt-in on-screen measurements make device-specific performance reports useful.
+if (new URLSearchParams(location.search).has("perf")) {
+  const meter = document.createElement("output");
+  meter.id = "performance";
+  meter.style.cssText =
+    "position:fixed;right:18px;top:74px;z-index:20;background:#243c31e8;color:#fff;padding:8px 12px;border-radius:6px;font:12px monospace;pointer-events:none";
+  meter.textContent = "Measuring frame rate…";
+  document.body.append(meter);
+  let last = performance.now(),
+    report = last;
+  const samples: number[] = [];
+  game.events.on(Phaser.Core.Events.POST_STEP, () => {
+    const now = performance.now(),
+      elapsed = now - last;
+    last = now;
+    if (document.hidden || elapsed > 1000) {
+      samples.length = 0;
+      return;
+    }
+    samples.push(elapsed);
+    if (samples.length > 300) samples.shift();
+    if (now - report < 1000 || samples.length < 20) return;
+    report = now;
+    const sorted = [...samples].sort((a, b) => a - b);
+    const fps = (1000 * samples.length) / samples.reduce((a, b) => a + b, 0);
+    meter.textContent = `${fps.toFixed(0)} FPS · 95% frames ≤ ${sorted[Math.floor(sorted.length * 0.95)].toFixed(1)} ms · ${simulation.state.agents.length} moving agents`;
+  });
+}
 function toast(message: string) {
   $("#toast").textContent = message;
   $("#toast").classList.add("visible");
@@ -552,6 +580,7 @@ document.querySelectorAll<HTMLElement>("[data-speed]").forEach(
         .querySelectorAll<HTMLElement>("[data-speed]")
         .forEach((b) => b.classList.toggle("active", b === el));
       $("#pause").innerHTML = icon("pause");
+      $("#pause").setAttribute("aria-label", "Pause simulation");
     }),
 );
 document

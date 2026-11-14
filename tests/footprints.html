@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Building ground contact audit</title>
+  <style>
+    body {
+      margin: 24px;
+      background: #eee9dd;
+      color: #293d32;
+      font: 15px system-ui;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+    label {
+      display: inline-block;
+      margin: 8px 24px 16px 0;
+    }
+    main {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 16px;
+    }
+    article {
+      background: #faf7ed;
+      border: 1px solid #c6cebc;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    h2 {
+      font-size: 16px;
+      margin: 14px 18px 0;
+    }
+    canvas {
+      width: 100%;
+      image-rendering: pixelated;
+      display: block;
+    }
+    p {
+      margin: 8px 0;
+    }
+  </style>
+  <h1>Building ground contact audit</h1>
+  <p>
+    Yellow: occupied plot. Cyan: measured ground contacts. Roads surround every
+    plot.
+  </p>
+  <label
+    ><input id="contacts" type="checkbox" checked /> Show ground contacts</label
+  >
+  <label><input id="before" type="checkbox" /> Previous placement</label>
+  <main></main>
+  <script type="module" src="./footprints.ts"></script>
+</html>

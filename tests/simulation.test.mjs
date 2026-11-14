@@ -1,6 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { facing, opaqueBounds } from "../.test-dist/rendering.js";
+import {
+  facing,
+  opaqueBounds,
+  fitGround,
+  groundCoordinates,
+  agentPose,
+} from "../.test-dist/rendering.js";
+import { buildingArt } from "../.test-dist/building-art.js";
+import {
+  BUILDINGS,
+  FOOTPRINTS,
+  STEP,
+  AGENT_SPEED,
+} from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 const execute = (sim, command, id = "test-" + sim.state.revision) =>
   sim.execute({
@@ -12,6 +25,97 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+
+test("ground contacts, including industrial props and all cottage rotations, stay inside their occupied tiles", () => {
+  for (const kind of Object.keys(BUILDINGS))
+    for (let rotation = 0; rotation < (kind === "house" ? 4 : 1); rotation++) {
+      const art = buildingArt(kind, rotation);
+      const [w, h] = FOOTPRINTS[kind];
+      const fit = fitGround(art.ground, w, h);
+      for (const [x, y] of art.ground) {
+        const p = groundCoordinates(
+          x * fit.scale + fit.x,
+          y * fit.scale + fit.y,
+        );
+        assert.ok(
+          p.x >= -0.42 - 1e-9 && p.x <= w - 0.58 + 1e-9,
+          `${kind}/${rotation} crosses the x plot edge`,
+        );
+        assert.ok(
+          p.y >= -0.42 - 1e-9 && p.y <= h - 0.58 + 1e-9,
+          `${kind}/${rotation} crosses the y plot edge`,
+        );
+      }
+    }
+});
+
+test("fitting uses both diagonal plot edges, even when the lowest contact is off center", () => {
+  // Same screen width, different ground shape: bounding-box width alone cannot fit this.
+  const ground = [
+    [0, 50],
+    [40, 100],
+    [120, 80],
+    [160, 40],
+  ];
+  const fit = fitGround(ground, 3, 2);
+  const points = ground.map(([x, y]) =>
+    groundCoordinates(x * fit.scale + fit.x, y * fit.scale + fit.y),
+  );
+  assert.ok(Math.max(...points.map((p) => p.y)) < 1.5);
+  assert.ok(Math.min(...points.map((p) => p.y)) > -0.5);
+  assert.ok(Math.max(...points.map((p) => p.x)) < 2.5);
+  assert.ok(Math.min(...points.map((p) => p.x)) > -0.5);
+});
+
+test("agents move between ticks and remain on the road through corners and arrivals", () => {
+  const a = {
+    kind: "car",
+    path: [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+    ],
+    segment: 0,
+    progress: 0.9,
+    wait: 0,
+  };
+  const before = structuredClone(a);
+  const early = agentPose(a, 0.025),
+    late = agentPose(a, 0.2);
+  assert.ok(early.x > 0.9 && early.x < 1);
+  assert.equal(early.y, 0);
+  assert.equal(late.x, 1);
+  assert.ok(late.y > 0 && late.y < 1);
+  assert.equal(facing(late.dx, late.dy), 1);
+  assert.deepEqual(a, before, "rendering must not change authoritative state");
+  a.segment = 1;
+  a.progress = 0.95;
+  assert.deepEqual(agentPose(a, STEP), { x: 1, y: 1, dx: 0, dy: 1 });
+  a.wait = 2;
+  assert.deepEqual(agentPose(a, STEP), agentPose(a, 0));
+});
+
+test("visual travel is continuous across a simulation tick for every agent type", () => {
+  for (const kind of Object.keys(AGENT_SPEED)) {
+    const sim = new Simulation();
+    const a = {
+      ...sim.state.agents[0],
+      kind,
+      path: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 1, y: 1 },
+      ],
+      segment: 0,
+      progress: 0.9,
+      wait: 0,
+    };
+    sim.state.agents = [a];
+    const predicted = agentPose(a, STEP);
+    sim.step();
+    assert.deepEqual(agentPose(a, 0), predicted);
+  }
+});
 test("each road direction selects a distinct matching atlas view", () => {
   assert.equal(facing(1, 0), 0);
   assert.equal(facing(0, 1), 1);

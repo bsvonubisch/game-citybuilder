@@ -1,3 +1,64 @@
+import type { GroundPoint } from "./building-art.js";
+import type { Agent } from "./simulation.js";
+import { AGENT_SPEED, STEP } from "./catalog.js";
+
+export const iso = (x: number, y: number) => ({
+  x: (x - y) * 32,
+  y: (x + y) * 16,
+});
+export const groundCoordinates = (x: number, y: number) => ({
+  x: x / 64 + y / 32,
+  y: y / 32 - x / 64,
+});
+
+/** Uniformly fit the ground outline into BOTH tile axes. A screen-space width
+ * cannot describe an isometric plot, particularly a rectangular one.
+ * Returned offsets refer to the original atlas cell, before alpha trimming. */
+export function fitGround(
+  ground: readonly GroundPoint[],
+  width: number,
+  height: number,
+  inset = 0.08,
+) {
+  const projected = ground.map(([x, y]) => groundCoordinates(x, y));
+  const minX = Math.min(...projected.map((p) => p.x));
+  const maxX = Math.max(...projected.map((p) => p.x));
+  const minY = Math.min(...projected.map((p) => p.y));
+  const maxY = Math.max(...projected.map((p) => p.y));
+  const scale = Math.min(
+    (width - 2 * inset) / (maxX - minX),
+    (height - 2 * inset) / (maxY - minY),
+  );
+  const offset = iso(
+    (width - 1) / 2 - (scale * (minX + maxX)) / 2,
+    (height - 1) / 2 - (scale * (minY + maxY)) / 2,
+  );
+  return { scale, x: offset.x, y: offset.y };
+}
+
+/** Sample deterministic travel between simulation ticks. Following the route by
+ * distance (rather than lerping endpoints) keeps turns on the road. No state is
+ * changed, and arrival/waiting never extrapolates beyond the destination. */
+export function agentPose(agent: Agent, elapsed = 0) {
+  const distance =
+    agent.segment +
+    agent.progress +
+    (agent.wait > 0
+      ? 0
+      : Math.max(0, Math.min(elapsed, STEP)) * AGENT_SPEED[agent.kind]);
+  const end = agent.path.length - 1;
+  const segment = Math.min(Math.floor(distance), Math.max(0, end - 1));
+  const progress = Math.min(1, distance - segment);
+  const from = agent.path[segment],
+    to = agent.path[Math.min(segment + 1, end)];
+  return {
+    x: from.x + (to.x - from.x) * progress,
+    y: from.y + (to.y - from.y) * progress,
+    dx: to.x - from.x,
+    dy: to.y - from.y,
+  };
+}
+
 /** Isometric facing columns used by both the pedestrian and vehicle atlases. */
 export function facing(dx: number, dy: number): 0 | 1 | 2 | 3 {
   if (dx > 0) return 0; // southeast
