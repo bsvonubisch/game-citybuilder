@@ -103,6 +103,18 @@ export interface Result {
   message: string;
   revision: number;
 }
+export interface BuildingAlert {
+  kind:
+    | "road"
+    | "warehouse"
+    | "paused"
+    | "depleted"
+    | "workers"
+    | "output"
+    | "input";
+  title: string;
+  message: string;
+}
 const dirs = [
   { x: 1, y: 0 },
   { x: -1, y: 0 },
@@ -887,23 +899,65 @@ export class Simulation {
         Math.round(this.state.food * 0.2),
     );
   }
-  status(b: Building) {
+  alert(b: Building): BuildingAlert | null {
     const d = BUILDINGS[b.kind];
-    if (!b.connected) return "Connect the front entrance to a warehouse road";
-    if (!b.enabled) return "Production paused";
+    if (!b.connected)
+      return this.adjacent(b).length === 0
+        ? {
+            kind: "road",
+            title: "No front road",
+            message:
+              "Build a road along the front entrance, or rotate the building toward a road.",
+          }
+        : {
+            kind: "warehouse",
+            title: "No warehouse connection",
+            message:
+              "Connect this entrance road to the front entrance of a warehouse.",
+          };
+    if (!b.enabled && d.recipe)
+      return {
+        kind: "paused",
+        title: "Production paused",
+        message: "Open the building details to resume production.",
+      };
     if (
       (b.kind === "quarry" || b.kind === "mine") &&
       (this.state.deposits[key(b)] ?? 0) < d.recipe!.count
     )
-      return "Deposit exhausted";
-    if (d.jobs > b.workers) return "Waiting for workers";
+      return {
+        kind: "depleted",
+        title: "Deposit exhausted",
+        message:
+          "Build an extractor on a new deposit to keep gathering resources.",
+      };
+    if (d.recipe && (b.inventory[d.recipe.output] ?? 0) >= 20)
+      return {
+        kind: "output",
+        title: "Output storage full",
+        message: `Waiting for a delivery to collect ${d.recipe.output}. Check road access and downstream demand.`,
+      };
+    if (d.jobs > b.workers)
+      return {
+        kind: "workers",
+        title: "Waiting for workers",
+        message: `${b.workers} of ${d.jobs} jobs filled. Connect more homes or upgrade a connected house.`,
+      };
     if (
       d.recipe?.input &&
       (b.inventory[d.recipe.input] ?? 0) < d.recipe.amount!
     )
-      return `Waiting for ${d.recipe.input}`;
-    if (d.recipe && (b.inventory[d.recipe.output] ?? 0) >= 20)
-      return "Output storage full";
+      return {
+        kind: "input",
+        title: `Waiting for ${d.recipe.input}`,
+        message: `Needs ${d.recipe.amount} ${d.recipe.input} per cycle. Check the supplying industry and its delivery route.`,
+      };
+    return null;
+  }
+  status(b: Building) {
+    const alert = this.alert(b);
+    if (alert) return alert.title;
+    const d = BUILDINGS[b.kind];
     return d.recipe
       ? "Producing"
       : b.kind === "house"

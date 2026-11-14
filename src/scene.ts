@@ -22,6 +22,7 @@ import {
 } from "./rendering.js";
 import { buildingArt } from "./building-art.js";
 import { PlotArt } from "./plot-art.js";
+import { BuildingAlerts } from "./building-alerts.js";
 import { TerrainArt } from "./terrain-art.js";
 import { WaterArt } from "./water-art.js";
 import { lanePose, lanePoint, LANE_OFFSET, WALK_OFFSET } from "./traffic.js";
@@ -81,6 +82,8 @@ export class TownScene extends Phaser.Scene {
   onCamera: () => void = () => {};
   private terrainArt!: TerrainArt;
   private plotArt!: PlotArt;
+  private buildingAlerts!: BuildingAlerts;
+  private cameraKey = "";
   private bridgeArt!: BridgeArt;
   private fenceArt!: FenceArt;
   private waterArt!: WaterArt;
@@ -111,8 +114,10 @@ export class TownScene extends Phaser.Scene {
     this.simulation = simulation;
   }
   preload() {
-    for (const kind of Object.keys(BUILDINGS))
-      this.load.image(`plot-${kind}`, `/plot-${kind}.png`);
+    for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
+      const art = buildingArt(kind);
+      this.load.image(art.texture, `/${art.texture}.png`);
+    }
     this.load.image("plot-house-2", "/plot-house-2.png");
     this.load.image("plot-house-3", "/plot-house-3.png");
     this.load.image("garden", "/garden-sprites.png");
@@ -129,6 +134,11 @@ export class TownScene extends Phaser.Scene {
   }
   create() {
     this.plotArt = new PlotArt(this);
+    this.buildingAlerts = new BuildingAlerts(
+      document.querySelector("#building-alerts")!,
+      (id) => this.onSelect(id),
+    );
+    this.events.once("shutdown", () => this.buildingAlerts.clear());
     this.trimAtlas("vehicles", 4, 4);
     this.trimAtlas("walkers", 8, 4);
     this.trimAtlas("deposits", 4, 2);
@@ -404,7 +414,7 @@ export class TownScene extends Phaser.Scene {
       const [w, h] = dimensions(b.kind, b.rotation, b.plot);
       if (!s) {
         s = this.add
-          .image(0, 0, `plot-${b.kind}`)
+          .image(0, 0, buildingArt(b.kind, b.rotation, b.houseTier).texture)
           .setOrigin(0.5, 1)
           .setData("buildingId", b.id)
           .setInteractive({ pixelPerfect: true });
@@ -448,6 +458,8 @@ export class TownScene extends Phaser.Scene {
     if (this.selected) {
       const b = this.simulation.building(this.selected);
       if (b) {
+        for (const p of footprint(b.kind, b.x, b.y, b.rotation, b.plot))
+          this.diamond(p, 0xf3ce7b, 0.23);
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
       }
     }
@@ -712,6 +724,26 @@ export class TownScene extends Phaser.Scene {
         );
     }
     const time = this.simulation.state.tick * STEP + this.acc;
+    const camera = this.cameras.main;
+    const cameraKey = `${camera.scrollX}:${camera.scrollY}:${camera.zoom}:${camera.width}:${camera.height}`;
+    if (cameraKey !== this.cameraKey) {
+      this.cameraKey = cameraKey;
+      this.onCamera();
+    }
+    this.buildingAlerts.update(
+      this.simulation,
+      camera,
+      this.tool === "inspect",
+      (b) => {
+        const sprite = this.buildings.get(b.id);
+        if (!sprite) return;
+        const [w, h] = dimensions(b.kind, b.rotation, b.plot);
+        return {
+          x: iso(b.x + (w - 1) / 2, b.y + (h - 1) / 2).x,
+          y: sprite.y - 4,
+        };
+      },
+    );
     this.waterArt.update(time);
     this.drawAgentRoute();
     this.animation.update(
@@ -738,6 +770,7 @@ export class TownScene extends Phaser.Scene {
   }
   replace(simulation: Simulation) {
     this.simulation = simulation;
+    this.buildingAlerts.clear();
     this.animation.clear();
     this.acc = 0;
     this.selected = null;

@@ -7,6 +7,7 @@ import {
   groundCoordinates,
   agentPose,
   plotTransform,
+  cameraViewport,
 } from "../.test-dist/rendering.js";
 import { buildingArt } from "../.test-dist/building-art.js";
 import {
@@ -46,6 +47,89 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+
+test("building alerts distinguish missing frontage from an isolated road network", () => {
+  const sim = new Simulation();
+  const b = sim.state.buildings.find((b) => b.kind === "house");
+  b.connected = false;
+  const roads = sim.adjacent(b);
+  assert.ok(roads.length);
+  assert.equal(sim.alert(b).kind, "warehouse");
+  for (const p of roads) sim.roads.delete(key(p));
+  assert.equal(sim.alert(b).kind, "road");
+  b.connected = true;
+  assert.equal(sim.alert(b), null);
+});
+
+test("production alerts explain blockers, prioritize full output and clear after recovery", () => {
+  const sim = new Simulation();
+  const b = sim.state.buildings.find((b) => b.kind === "sawmill");
+  b.connected = true;
+  b.enabled = true;
+  b.workers = 2;
+  b.inventory = { wood: 3, planks: 0 };
+  assert.equal(sim.alert(b), null);
+  b.inventory.wood = 0;
+  assert.equal(sim.alert(b).kind, "input");
+  b.inventory.planks = 20;
+  assert.equal(sim.alert(b).kind, "output");
+  b.inventory.planks = 0;
+  b.workers = 0;
+  assert.equal(sim.alert(b).kind, "workers");
+  b.enabled = false;
+  assert.equal(sim.alert(b).kind, "paused");
+  b.enabled = true;
+  b.workers = 2;
+  b.inventory.wood = 3;
+  const before = sim.snapshot();
+  assert.equal(sim.alert(b), null);
+  assert.deepEqual(
+    sim.snapshot(),
+    before,
+    "reading alerts never mutates a town",
+  );
+  const warehouse = sim.state.buildings.find((b) => b.kind === "warehouse");
+  warehouse.connected = true;
+  warehouse.inventory.wood = 999;
+  assert.equal(
+    sim.alert(warehouse),
+    null,
+    "unlimited warehouse inventory is not production output storage",
+  );
+});
+
+test("depleted extractor alerts clear with a usable deposit and pauses take priority", () => {
+  const sim = new Simulation();
+  const seed = sim.state.buildings.find((b) => b.kind === "forester");
+  const b = {
+    ...seed,
+    kind: "quarry",
+    connected: true,
+    enabled: true,
+    workers: 2,
+  };
+  sim.state.deposits[key(b)] = 0;
+  assert.equal(sim.alert(b).kind, "depleted");
+  b.enabled = false;
+  assert.equal(sim.alert(b).kind, "paused");
+  b.enabled = true;
+  sim.state.deposits[key(b)] = 3;
+  assert.equal(sim.alert(b), null);
+});
+
+test("minimap and badges use the zoomed camera viewport and retain its center", () => {
+  const c = { scrollX: -100, scrollY: 200, width: 1200, height: 800, zoom: 1 };
+  assert.deepEqual(cameraViewport(c), {
+    x: -100,
+    y: 200,
+    width: 1200,
+    height: 800,
+  });
+  const v = cameraViewport({ ...c, zoom: 2 });
+  assert.deepEqual(v, { x: 200, y: 400, width: 600, height: 400 });
+  assert.equal(v.x + v.width / 2, c.scrollX + c.width / 2);
+  assert.equal(v.y + v.height / 2, c.scrollY + c.height / 2);
+});
 
 test("bridges connect people and deliveries across an inlet and survive a save roundtrip", () => {
   const seed = new Simulation().snapshot();

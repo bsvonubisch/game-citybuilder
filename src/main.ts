@@ -30,6 +30,8 @@ import { LocalGateway } from "./gateway.js";
 import { TownScene } from "./scene.js";
 import { icon } from "./icons.js";
 import { buildingArt } from "./building-art.js";
+import { alertIcon } from "./building-alerts.js";
+import { cameraViewport } from "./rendering.js";
 import { CloudSaves, cloudError } from "./cloud.js";
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
@@ -127,12 +129,10 @@ $("#app").innerHTML = `
    )
    .join("")}
  </div><div class="header-actions"><button class="quiet" id="cloud-button" title="Sign in & cloud saves">${icon("cloud")}<span id="cloud-label">Connect</span></button><button class="icon-button" id="settings" aria-label="Save and settings">${icon("settings")}</button></div></header>
- <main><aside class="sidebar"><div class="side-heading"><span class="eyebrow">A TOWN OF YOUR OWN</span><h1>Little by little.</h1><p>Good things grow here.</p></div>
+ <main><aside class="sidebar"><div class="side-heading"><span class="eyebrow">THE EMERALD VALLEY</span><h1>Pinehaven <span class="town-star">✦</span></h1><p>A little industry. A lovely life.</p><div class="town-season">${icon("sun")}<b id="day">Day 1</b><span>Spring · Year 1</span></div></div>
  <div class="side-tabs"><button id="build-tab" class="active">${icon("hammer")} Build</button><button id="town-tab">${icon("leaf")} Your town</button></div>
- <div id="sidebar-content"></div><div class="sidebar-footer"><span class="status-dot"></span><span id="save-status">Saved on this device</span><button id="save-now" title="Save now" aria-label="Save town">${icon("save")}</button></div></aside>
- <section class="world" aria-label="Interactive town map"><div id="game"></div><div class="world-heading"><span class="world-tag">THE EMERALD VALLEY</span><h2>Pinehaven<span>✦</span></h2><p>A little industry. A lovely life.</p></div>
- <div class="season"><span class="sun-icon">${icon("sun")}</span><div><b id="day">Day 1</b><small>Spring · Year 1</small></div></div>
- <div class="goal-card"><div class="goal-icon">${icon("flag")}</div><div><span class="eyebrow">A FRESH BEGINNING</span><h3>Small town. Big possibilities.</h3><p id="goal-copy">Let your first deliveries find their way home.</p><div class="goal-progress"><span id="goal-progress"></span></div><small id="goal-count">0 / 30 goods delivered</small></div></div>
+ <div id="sidebar-content"></div><details class="town-progress"><summary>${icon("flag")} Town progress <span>+</span></summary><div class="town-progress-content"><h3>Small town. Big possibilities.</h3><p id="goal-copy">Let your first deliveries find their way home.</p><div class="goal-progress"><span id="goal-progress"></span></div><small id="goal-count">0 / 30 goods delivered</small></div></details><div class="sidebar-footer"><span class="status-dot"></span><span id="save-status">Saved on this device</span><button id="save-now" title="Save now" aria-label="Save town">${icon("save")}</button></div></aside>
+ <section class="world" aria-label="Interactive town map"><div id="game"></div><div id="building-alerts" role="group" aria-label="Building alerts"></div>
  <div id="inspector" class="inspector" hidden></div>
  <div class="map-corner"><canvas id="minimap" width="168" height="102" aria-label="Town minimap"></canvas><div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><button id="center" title="Center town">${icon("map")}<span id="zoom-level">100%</span></button><button id="zoom-in" aria-label="Zoom in">+</button></div></div>
  <div class="bottom-area"><div id="placement-hint" class="placement-hint">${icon("inspect")} Click a building to explore. Drag to look around.</div><nav class="toolbar" aria-label="Town tools"><div class="tool-group">${[
@@ -381,6 +381,7 @@ scene.onCamera = () => {
   if ($("#zoom-level"))
     $("#zoom-level").textContent =
       `${Math.round(scene.cameras.main.zoom * 100)}%`;
+  drawMinimap();
 };
 function renderInspector() {
   const b = selected ? simulation.building(selected) : null;
@@ -520,11 +521,11 @@ function updateInspector() {
     return;
   }
   const d = BUILDINGS[b.kind];
-  $("#building-status").textContent = simulation.status(b);
-  $("#building-status").classList.toggle(
-    "warning",
-    simulation.status(b) !== "Producing" && !!d.recipe,
-  );
+  const alert = simulation.alert(b);
+  $("#building-status").innerHTML = alert
+    ? `<div class="status-heading">${icon(alertIcon[alert.kind])}<b>${escapeHtml(alert.title)}</b></div><p>${escapeHtml(alert.message)}</p>`
+    : escapeHtml(simulation.status(b));
+  $("#building-status").classList.toggle("warning", !!alert);
   $("#building-detail").innerHTML =
     `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${d.jobs}</b></div>` : ""}${
       d.recipe
@@ -608,6 +609,21 @@ function drawMinimap() {
       BUILDINGS[b.kind].category === "production" ? "#b77c51" : "#486553";
     ctx.fillRect(p.x, p.y - 1, 3, 3);
   });
+  if (scene.cameras?.main) {
+    const v = cameraViewport(scene.cameras.main);
+    const x = 76 + (v.x * 2.7) / 32,
+      y = 6 + (v.y * 1.55) / 16;
+    const w = (v.width * 2.7) / 32,
+      h = (v.height * 1.55) / 16;
+    ctx.fillStyle = "#fff5cf22";
+    ctx.fillRect(x, y, w, h);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#294f44";
+    ctx.strokeRect(x, y, w, h);
+    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = "#fff6ce";
+    ctx.strokeRect(x, y, w, h);
+  }
 }
 function updateUI() {
   const s = simulation.state;

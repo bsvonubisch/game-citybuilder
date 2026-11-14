@@ -6,6 +6,23 @@ export const iso = (x: number, y: number) => ({
   x: (x - y) * 32,
   y: (x + y) * 16,
 });
+/** Phaser's default camera zooms about its center, not its top-left corner. */
+export function cameraViewport(c: {
+  scrollX: number;
+  scrollY: number;
+  width: number;
+  height: number;
+  zoom: number;
+}) {
+  const width = c.width / c.zoom,
+    height = c.height / c.zoom;
+  return {
+    x: c.scrollX + (c.width - width) / 2,
+    y: c.scrollY + (c.height - height) / 2,
+    width,
+    height,
+  };
+}
 export const groundCoordinates = (x: number, y: number) => ({
   x: x / 64 + y / 32,
   y: y / 32 - x / 64,
