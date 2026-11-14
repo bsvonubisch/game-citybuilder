@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // These are private single-player saves, never authoritative multiplayer state.
+    match /privateSaves/{userId}/towns/{townId} {
+      function isOwner() { return request.auth != null && request.auth.uid == userId; }
+      function validSave() {
+        return request.resource.data.keys().hasAll(['ownerId', 'name', 'schemaVersion', 'snapshot', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['ownerId', 'name', 'schemaVersion', 'snapshot', 'updatedAt'])
+          && request.resource.data.ownerId == userId
+          && request.resource.data.name is string && request.resource.data.name.size() <= 80
+          && request.resource.data.schemaVersion == 1
+          && request.resource.data.snapshot is string && request.resource.data.snapshot.size() <= 800000
+          && request.resource.data.updatedAt == request.time;
+      }
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validSave();
+    }
+    // Shared-world state is reserved for a future authenticated server authority.
+    match /worlds/{worldId}/{document=**} { allow read, write: if false; }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

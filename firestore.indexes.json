@@ -1,0 +1,6 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "towns", "fieldPath": "snapshot", "indexes": [] }
+  ]
+}

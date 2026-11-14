@@ -1,0 +1,31 @@
+name: Check game
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm run test:rules
+      - run: npm run build
+        env:
+          VITE_FIREBASE_CONFIG: ${{ secrets.FIREBASE_WEB_CONFIG }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playable-build
+          path: dist

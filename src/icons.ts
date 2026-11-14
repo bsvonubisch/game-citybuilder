@@ -1,0 +1,37 @@
+const paths: Record<string, string> = {
+  tree: "M12 2 5 12h4l-5 6h6v4h4v-4h6l-5-6h4L12 2Z",
+  home: "m3 11 9-8 9 8M5 10v11h14V10M10 21v-7h4v7",
+  road: "m8 2-5 20M16 2l5 20M12 3v3m0 4v4m0 4v3",
+  hammer: "m14 3 7 7-4 4-3-3-9 10-3-3 10-9-3-3 5-3Z",
+  factory: "M3 21V10l6 3V8l7 4V3h4v18H3Zm4-4h1m3 0h1m3 0h1",
+  coin: "M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0ZM12 7v10m3-8h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9",
+  wood: "m4 7 12-4 5 10-12 5L4 7Zm0 0c-4 2 0 13 5 11m-4-6 3-1",
+  stone: "m3 16 3-9 8-3 7 7-2 9H7l-4-4Zm3-9 7 5 8-1m-8 1-6 8",
+  metal: "m3 16 4-9h10l4 9-9 5-9-5Zm4-9 5 5 5-5m-5 5v9M3 16l9-4 9 4",
+  people:
+    "M15 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM6 21v-5a6 6 0 0 1 12 0v5M3 11a3 3 0 0 0-1 5m19-5a3 3 0 0 1 1 5",
+  heart: "M20 4c-3-2-6 0-8 2-2-2-5-4-8-2-5 4 1 11 8 16 7-5 13-12 8-16Z",
+  box: "m3 7 9-5 9 5v10l-9 5-9-5V7Zm0 0 9 5 9-5m-9 5v10M8 4l9 5",
+  arrow: "m9 5 7 7-7 7",
+  inspect: "M3 2v17l5-5 4 7 4-2-4-7h8L3 2Z",
+  grid: "M3 3h18v18H3V3Zm6 0v18m6-18v18M3 9h18M3 15h18",
+  pause: "M8 4v16M16 4v16",
+  play: "m7 3 14 9-14 9V3Z",
+  save: "M4 3h13l4 4v14H3V3h1Zm3 0v7h10V3M7 21v-8h10v8",
+  cloud: "M6 19a5 5 0 0 1-1-10 7 7 0 0 1 13-2 6 6 0 0 1 0 12H6Z",
+  settings:
+    "M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2",
+  close: "m5 5 14 14M19 5 5 19",
+  sun: "M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0-5v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1",
+  help: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM9 8a3 3 0 1 1 4 3c-1 1-1 2-1 3m0 3v1",
+  leaf: "M20 3C7 1 2 9 6 16s16 3 14-13ZM5 21 16 9",
+  check: "m4 12 5 5L20 6",
+  flag: "M5 22V3c6-4 8 4 15 0v10c-7 4-9-4-15 0",
+  bread: "M4 11C0 8 4 3 8 4c2-3 6-3 8 0 5-1 8 5 4 7v9H4v-9Zm4-3v6m4-7v7m4-6v6",
+  reset: "M3 10a9 9 0 1 1 2 9M3 3v7h7",
+  download: "M12 2v13m-5-5 5 5 5-5M3 16v6h18v-6",
+  upload: "M12 16V3m-5 5 5-5 5 5M3 16v6h18v-6",
+  map: "m2 5 7-3 6 3 7-3v17l-7 3-6-3-7 3V5Zm7-3v17m6-14v17",
+};
+export const icon = (name: string, cls = "") =>
+  `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] ?? paths.box}"/></svg>`;

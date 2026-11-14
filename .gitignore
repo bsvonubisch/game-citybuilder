@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+.openai/*.local.*
+.openai/
+.env*
+!.env.example
+.test-dist/
+firebase-debug.log
+firestore-debug.log
+.firebase/
+*-service-account*.json
