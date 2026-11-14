@@ -6,7 +6,7 @@ export type GuidanceAction =
   | { type: "build"; kind: BuildingKind | "road" }
   | { type: "inspect"; id: number }
   | { type: "agent"; id: number }
-  | { type: "toggle" | "move" | "water" | "workforce" };
+  | { type: "toggle" | "move" | "water" | "workforce" | "deepen" };
 export interface BuildingGuidance {
   message: string;
   label: string;
@@ -134,9 +134,10 @@ export function buildingGuidance(
   }
   if (alert.kind === "depleted")
     return {
-      message: `Move this ${BUILDINGS[b.kind].name.toLowerCase()} onto a fresh matching deposit. Its inventory and identity are kept.`,
-      label: "Move to a new deposit",
-      action: { type: "move" },
+      message:
+        "Keep this site. Dig deeper to unlock another large layer at the same deposit. Check the materials below; builders do the excavation and your inventory is retained.",
+      label: "Dig deeper",
+      action: { type: "deepen" },
     };
   if (b.kind === "fishery" && alert.kind === "input")
     return {

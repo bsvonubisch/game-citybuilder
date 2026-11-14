@@ -284,7 +284,7 @@ test("road and paused warnings lead to their actual fixes", () => {
   assert.equal(buildingGuidance(sim, mill).label, "Resume construction");
 });
 
-test("output and exhausted deposits suggest useful destinations and relocation", () => {
+test("output and exhausted deposits suggest useful destinations and deeper excavation", () => {
   const sim = new Simulation(),
     farm = building(sim, "farm"),
     mill = building(sim, "mill");
@@ -300,7 +300,7 @@ test("output and exhausted deposits suggest useful destinations and relocation",
   );
   const quarry = building(sim, "quarry");
   sim.state.deposits[key(quarry)] = 0;
-  assert.deepEqual(buildingGuidance(sim, quarry).action, { type: "move" });
+  assert.deepEqual(buildingGuidance(sim, quarry).action, { type: "deepen" });
 });
 
 test("worker and construction advice accounts for available residents", () => {

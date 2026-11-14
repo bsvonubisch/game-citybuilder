@@ -1,4 +1,4 @@
-import { SIZE, footprint } from "./catalog.js";
+import { SIZE, STARTING_SIZE, footprint } from "./catalog.js";
 import type { World, Point } from "./simulation.js";
 
 export type TerrainCell = { kind: "land" | "water"; height: number };
@@ -17,10 +17,15 @@ export const HEIGHT_STEP = 8,
   MIN_HEIGHT = -3,
   MAX_HEIGHT = 6;
 const key = (x: number, y: number) => `${x},${y}`;
-export const baseTerrain = (x: number, y: number): "land" | "water" =>
-  x >= 23 + Math.floor(Math.sin(y * 0.37) * 1.6) || (y < 2 && x > 18)
-    ? "water"
-    : "land";
+export const baseTerrain = (x: number, y: number): "land" | "water" => {
+  const bank = 23 + Math.floor(Math.sin(y * 0.37) * 1.6);
+  // Keep every original tile intact, including the two existing bridge ends.
+  if (x < STARTING_SIZE && y < STARTING_SIZE)
+    return x >= bank || (y < 2 && x > 18) ? "water" : "land";
+  const river = x >= bank && x < 30 + Math.floor(Math.sin(y * 0.19) * 1.5);
+  const lake = ((x - 51) / 6) ** 2 + ((y - 45) / 6) ** 2 < 1;
+  return river || lake || (y < 2 && x > 18 && x < 31) ? "water" : "land";
+};
 export function terrainCell(
   x: number,
   y: number,

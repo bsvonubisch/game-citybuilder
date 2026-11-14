@@ -178,7 +178,7 @@ export class TownScene extends Phaser.Scene {
   private logisticsDrawKey = "";
   private logisticsView: ReturnType<LogisticsCache["get"]> = null;
   private decorationGhost?: Phaser.GameObjects.Image;
-  private gridCache!: Phaser.GameObjects.RenderTexture;
+  private gridCache!: Phaser.GameObjects.Container;
   private overlay!: Phaser.GameObjects.Graphics;
   private frontOverlay!: Phaser.GameObjects.Graphics;
   private trees: Phaser.GameObjects.Image[] = [];
@@ -273,11 +273,7 @@ export class TownScene extends Phaser.Scene {
     this.elevationArt = new ElevationArt(this);
     this.bridgeArt = new BridgeArt(this);
     this.fenceArt = new FenceArt(this);
-    this.gridCache = this.add
-      .renderTexture(-SIZE * 32, -16, SIZE * 64, SIZE * 32 + 32)
-      .setOrigin(0, 0)
-      .setDepth(-999)
-      .setVisible(false);
+    this.gridCache = this.add.container(0, 0).setDepth(-999).setVisible(false);
     const grid = this.add.graphics().lineStyle(0.5, 0xe8e9ca, 0.3);
     for (let y = 0; y < SIZE; y++)
       for (let x = 0; x < SIZE; x++) {
@@ -292,7 +288,19 @@ export class TownScene extends Phaser.Scene {
           true,
         );
       }
-    this.gridCache.draw(grid, SIZE * 32, 16);
+    for (let y = -16; y < SIZE * 32 + 16; y += 1024)
+      for (let x = -SIZE * 32; x < SIZE * 32; x += 1024) {
+        const chunk = this.add
+          .renderTexture(
+            x,
+            y,
+            Math.min(1024, SIZE * 32 - x),
+            Math.min(1024, SIZE * 32 + 16 - y),
+          )
+          .setOrigin(0);
+        chunk.draw(grid, -x, -y);
+        this.gridCache.add(chunk);
+      }
     grid.destroy();
     this.overlay = this.add.graphics().setDepth(5000);
     this.frontOverlay = this.add.graphics().setDepth(5004);
@@ -482,8 +490,16 @@ export class TownScene extends Phaser.Scene {
   }
   private clampCamera() {
     const c = this.cameras.main;
-    c.scrollX = Phaser.Math.Clamp(c.scrollX, -1100, 600);
-    c.scrollY = Phaser.Math.Clamp(c.scrollY, -500, 800);
+    // Clamp the viewport center, independent of zoom and screen resolution.
+    const x = c.scrollX + c.width / 2,
+      y = c.scrollY + c.height / 2;
+    c.scrollX += Phaser.Math.Clamp(x, -SIZE * 32, SIZE * 32) - x;
+    c.scrollY += Phaser.Math.Clamp(y, -80, SIZE * 32 + 80) - y;
+  }
+  focusTile(x: number, y: number) {
+    const p = iso(x, y);
+    this.cameras.main.centerOn(p.x, p.y);
+    this.onCamera();
   }
   private trimAtlas(name: string, columns: number, rows: number) {
     const texture = this.textures.get(name),
@@ -1274,6 +1290,7 @@ export class TownScene extends Phaser.Scene {
     const cameraKey = `${camera.scrollX}:${camera.scrollY}:${camera.zoom}:${camera.width}:${camera.height}`;
     if (cameraKey !== this.cameraKey) {
       this.cameraKey = cameraKey;
+      this.terrainArt.update(this.simulation);
       updateArtworkScaling(this.game, camera.zoom);
       this.onCamera();
     }

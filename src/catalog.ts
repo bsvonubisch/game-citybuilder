@@ -409,6 +409,7 @@ export function frontage(
         y: y + (d.y > 0 ? h : -1),
       }));
 }
-export const SIZE = 28;
+export const STARTING_SIZE = 28;
+export const SIZE = 64;
 export const STEP = 0.25;
 export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;

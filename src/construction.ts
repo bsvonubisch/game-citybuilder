@@ -6,6 +6,8 @@ export interface Construction {
   required: number;
   completed: number;
   upgradeTo?: HouseTier;
+  /** Permanent excavation at the current deposit; completed depth is stored on the world. */
+  deeperTo?: number;
 }
 const LABOUR: Record<BuildingKind, number> = {
   house: 120,

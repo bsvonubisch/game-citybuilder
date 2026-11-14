@@ -21,6 +21,7 @@ import { rotorView } from "../.test-dist/windmill.js";
 import { fisheryCells } from "../.test-dist/shoreline.js";
 import {
   BUILDINGS,
+  SIZE,
   FOOTPRINTS,
   STEP,
   AGENT_SPEED,
@@ -32,6 +33,12 @@ import {
   houseCapacity,
 } from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
+import {
+  DEPOSITS,
+  INITIAL_RESERVE,
+  deeperLayer,
+} from "../.test-dist/deposits.js";
+import { baseTerrain } from "../.test-dist/terrain.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
 import {
   constructionWork,
@@ -217,9 +224,19 @@ test("moving preserves a working building, stocks, labour, progress and live del
     assert.equal(current.segment, a.segment);
     assert.equal(current.progress, a.progress);
   }
+  const loaded = parseSave(JSON.stringify(sim.state)).buildings.find(
+    (c) => c.id === b.id,
+  );
+  const restored = structuredClone(b);
+  for (const truck of sim.state.agents.filter(
+    (a) => a.kind === "truck" && a.source === b.id && a.cargo,
+  ))
+    restored.inventory[truck.cargo] =
+      (restored.inventory[truck.cargo] ?? 0) + truck.amount;
   assert.deepEqual(
-    parseSave(JSON.stringify(sim.state)).buildings.find((c) => c.id === b.id),
-    b,
+    loaded,
+    restored,
+    "reload returns in-flight cargo to its source without losing goods",
   );
   advance(sim, 120);
   assert.ok(b.produced > before.produced, "production continues");
@@ -1006,7 +1023,7 @@ test("both factory chains deliver real goods and export tools", () => {
   assert.ok(sim.state.buildings.find((b) => b.kind === "bakery").produced > 0);
   assert.ok(sim.stored("stone") > 45);
   assert.ok(sim.stored("metal") > 25);
-  assert.ok(sim.state.deposits["19,4"] < 600);
+  assert.ok(sim.state.deposits["19,4"] < INITIAL_RESERVE);
   for (const b of sim.state.buildings)
     for (const n of Object.values(b.inventory)) assert.ok(n >= 0);
 });
@@ -1622,4 +1639,147 @@ test("fountain squares accept roads on every edge regardless of rotation", () =>
     assert.equal(park.connected, true);
     assert.deepEqual(sim.adjacent(park).map(key).sort(), roads);
   }
+});
+
+test("expanded valley preserves every starter terrain tile and offers buildable deposits throughout", () => {
+  assert.equal(SIZE, 64);
+  for (let y = 0; y < 28; y++)
+    for (let x = 0; x < 28; x++) {
+      const original =
+        x >= 23 + Math.floor(Math.sin(y * 0.37) * 1.6) || (y < 2 && x > 18)
+          ? "water"
+          : "land";
+      assert.equal(baseTerrain(x, y), original, `${x},${y}`);
+    }
+  const sim = new Simulation();
+  assert.equal(Object.keys(DEPOSITS).length, 28);
+  for (const [k, kind] of Object.entries(DEPOSITS)) {
+    assert.equal(sim.state.deposits[k], INITIAL_RESERVE);
+    const [x, y] = k.split(",").map(Number);
+    if (x < 28 && y < 28) continue;
+    assert.equal(
+      sim.canPlace(kind === "stone" ? "quarry" : "mine", x, y),
+      null,
+      `usable ${k}`,
+    );
+  }
+  assert.equal(sim.canPlace("house", 61, 61), null);
+  assert.match(sim.canPlace("house", 63, 63), /footprint|valley/);
+  assert.doesNotThrow(() => parseSave(JSON.stringify(sim.snapshot())));
+});
+
+test("old towns expand once without moving buildings, replacing cleared scenery or resetting consumption", () => {
+  const current = new Simulation().snapshot();
+  delete current.valleyVersion;
+  delete current.depositDepths;
+  current.decorations = current.decorations.filter((d) => d.x < 28 && d.y < 28);
+  current.deposits = Object.fromEntries(
+    Object.keys(DEPOSITS)
+      .filter((k) => k.split(",").every((v) => Number(v) < 28))
+      .map((k) => [k, 543]),
+  );
+  current.agents = [];
+  const removed = current.decorations.pop();
+  current.terrain = { "1,1": { kind: "land", height: 2 } };
+  current.decorations = current.decorations.filter(
+    (d) => d.x !== 1 || d.y !== 1,
+  );
+  const expanded = parseSave(JSON.stringify(current));
+  assert.deepEqual(expanded.buildings, current.buildings);
+  assert.deepEqual(expanded.roads, current.roads);
+  assert.deepEqual(expanded.terrain, current.terrain);
+  assert.deepEqual(
+    expanded.decorations.filter((d) => d.x < 28 && d.y < 28),
+    current.decorations,
+  );
+  assert.ok(!expanded.decorations.some((d) => d.id === removed.id));
+  assert.equal(expanded.deposits["19,4"], INITIAL_RESERVE - 57);
+  assert.equal(expanded.deposits["6,32"], INITIAL_RESERVE);
+  expanded.deposits["19,4"] -= 30;
+  const reloaded = parseSave(JSON.stringify(expanded));
+  assert.deepEqual(reloaded.deposits, expanded.deposits);
+  assert.deepEqual(reloaded.decorations, expanded.decorations);
+});
+
+test("an exhausted deposit supports repeated deeper layers with real builders and keeps its location and stock", () => {
+  const sim = new Simulation(),
+    b = sim.state.buildings.find((b) => b.kind === "quarry");
+  const location = key(b),
+    original = { id: b.id, x: b.x, y: b.y, rotation: b.rotation };
+  sim.state.money = 100000;
+  for (const w of sim.state.buildings.filter((b) => b.kind === "warehouse"))
+    Object.assign(w.inventory, { planks: 1000, metal: 1000 });
+  for (let depth = 0; depth < 4; depth++) {
+    sim.state.deposits[location] = 0;
+    b.inventory.stone = 7;
+    b.progress = 2;
+    const next = deeperLayer(depth),
+      beforeGold = sim.state.money;
+    const result = execute(sim, { type: "deepen", id: b.id });
+    assert.equal(result.ok, true, result.message);
+    assert.equal(sim.state.money, beforeGold - next.cost);
+    assert.equal(b.construction.deeperTo, depth + 1);
+    assert.equal(
+      sim.state.deposits[location],
+      0,
+      "reserve only unlocked after labour",
+    );
+    assert.equal(b.inventory.stone, 7);
+    assert.equal(b.progress, 2);
+    assert.ok(
+      sim.canMove(b.id, 6, 32),
+      "an excavation cannot move to another deposit",
+    );
+    const saved = parseSave(JSON.stringify(sim.snapshot()));
+    assert.equal(
+      saved.buildings.find((c) => c.id === b.id).construction.deeperTo,
+      depth + 1,
+    );
+    finishConstruction(sim, b);
+    assert.equal(sim.state.depositDepths[location], depth + 1);
+    assert.equal(sim.state.deposits[location], next.reserve);
+    for (const [field, value] of Object.entries(original))
+      assert.equal(b[field], value);
+  }
+  const depth = sim.state.depositDepths[location],
+    reserve = sim.state.deposits[location];
+  assert.equal(execute(sim, { type: "move", id: b.id, x: 6, y: 32 }).ok, true);
+  assert.equal(
+    sim.state.depositDepths[location],
+    depth,
+    "depth stays with deposit, not building",
+  );
+  assert.equal(sim.state.deposits[location], reserve);
+  assert.equal(sim.state.depositDepths["6,32"] ?? 0, 0);
+});
+
+test("unaffordable and duplicate excavation commands are atomic; malformed depths are rejected", () => {
+  const sim = new Simulation(),
+    b = sim.state.buildings.find((b) => b.kind === "mine");
+  sim.state.money = 0;
+  const before = sim.snapshot();
+  assert.equal(execute(sim, { type: "deepen", id: b.id }).ok, false);
+  assert.deepEqual(sim.snapshot(), before);
+  sim.state.money = 100000;
+  for (const w of sim.state.buildings.filter((b) => b.kind === "warehouse"))
+    Object.assign(w.inventory, { planks: 1000, metal: 1000 });
+  const command = {
+    id: "excavate-once",
+    actorId: "test",
+    expectedRevision: sim.state.revision,
+    command: { type: "deepen", id: b.id },
+  };
+  assert.equal(sim.execute(command).ok, true);
+  const gold = sim.state.money;
+  assert.equal(sim.execute(command).ok, true);
+  assert.equal(sim.state.money, gold);
+  assert.equal(execute(sim, { type: "deepen", id: b.id }).ok, false);
+  for (const depth of [-1, 0.5, "1", Infinity]) {
+    const bad = sim.snapshot();
+    bad.depositDepths[key(b)] = depth;
+    assert.throws(() => parseSave(JSON.stringify(bad)), /depth/);
+  }
+  const bad = sim.snapshot();
+  bad.buildings.find((c) => c.id === b.id).construction.deeperTo = 8;
+  assert.throws(() => parseSave(JSON.stringify(bad)), /building/);
 });

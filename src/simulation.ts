@@ -2,6 +2,7 @@ import {
   BUILDINGS,
   RESOURCES,
   SIZE,
+  STARTING_SIZE,
   STEP,
   AGENT_SPEED,
   FOOTPRINTS,
@@ -21,6 +22,13 @@ import {
   type Tool,
 } from "./catalog.js";
 import { initialDecorations, type Decoration } from "./decorations.js";
+import {
+  DEPOSITS,
+  INITIAL_RESERVE,
+  deeperLayer,
+  isExtractor,
+} from "./deposits.js";
+export { DEPOSITS } from "./deposits.js";
 import { Traffic } from "./traffic.js";
 import { canSupply } from "./logistics.js";
 import { fisherySiteError } from "./shoreline.js";
@@ -107,6 +115,8 @@ export interface World {
   food: number;
   history: string[];
   terrain?: TerrainMap;
+  valleyVersion?: 2;
+  depositDepths?: Record<string, number>;
 }
 export type Command =
   | TerrainCommand
@@ -121,6 +131,7 @@ export type Command =
   | { type: "demolish"; x: number; y: number }
   | { type: "toggle"; id: number }
   | { type: "upgrade"; id: number }
+  | { type: "deepen"; id: number }
   | { type: "move"; id: number; x: number; y: number; rotation?: 0 | 1 | 2 | 3 }
   | { type: "rotate"; id: number };
 export interface CommandEnvelope {
@@ -168,16 +179,6 @@ export const inside = (x: number, y: number) =>
   y >= 0 &&
   x < SIZE &&
   y < SIZE;
-export const DEPOSITS: Record<string, "stone" | "metal"> = {
-  "19,4": "stone",
-  "19,7": "metal",
-  "17,5": "stone",
-  "19,5": "metal",
-  "4,19": "stone",
-  "20,20": "metal",
-  "9,22": "stone",
-  "15,3": "metal",
-};
 const NAMES = [
   "Ada",
   "Finn",
@@ -223,6 +224,8 @@ export class Simulation {
       ? structuredClone(saved)
       : {
           version: 3,
+          valleyVersion: 2,
+          depositDepths: {},
           tick: 0,
           revision: 0,
           nextId: 1,
@@ -233,7 +236,7 @@ export class Simulation {
           residents: [],
           agents: [],
           deposits: Object.fromEntries(
-            Object.keys(DEPOSITS).map((k) => [k, 600]),
+            Object.keys(DEPOSITS).map((k) => [k, INITIAL_RESERVE]),
           ),
           delivered: 0,
           exported: 0,
@@ -261,6 +264,7 @@ export class Simulation {
           !!DEPOSITS[key({ x, y })],
         () => this.state.nextId++,
       );
+    expandValley(this.state);
     this.reconnect();
   }
   private seed() {
@@ -589,6 +593,8 @@ export class Simulation {
   ): string | null {
     const b = this.building(id);
     if (!b) return "Select a building to move.";
+    if (b.construction?.deeperTo !== undefined && (x !== b.x || y !== b.y))
+      return "Finish digging this deposit before moving the building.";
     const facing = rotation ?? b.rotation;
     if (
       ![0, 1, 2, 3].includes(facing) ||
@@ -761,6 +767,23 @@ export class Simulation {
     }
     return null;
   }
+  canDeepen(id: number): string | null {
+    const b = this.building(id);
+    if (!b || !isExtractor(b.kind))
+      return "Select a quarry or mine to dig deeper.";
+    if (b.construction) return "Finish the current construction first.";
+    if (DEPOSITS[key(b)] !== (b.kind === "quarry" ? "stone" : "metal"))
+      return "This extractor needs its matching deposit.";
+    if (!b.connected)
+      return "Connect the entrance to a warehouse road before digging deeper.";
+    const next = deeperLayer(this.state.depositDepths?.[key(b)] ?? 0);
+    if (this.state.money < next.cost)
+      return `Need ${next.cost} gold to dig deeper.`;
+    for (const [r, n] of Object.entries(next.materials))
+      if (this.stored(r as Resource) < n)
+        return `Need ${n} ${r} in warehouses to dig deeper.`;
+    return null;
+  }
   execute(envelope: CommandEnvelope): Result {
     const prior = this.processed.get(envelope.id);
     if (prior) return prior;
@@ -779,6 +802,7 @@ export class Simulation {
         "toggle",
         "rotate",
         "upgrade",
+        "deepen",
         "move",
         "terrain",
         "undoTerrain",
@@ -1016,6 +1040,22 @@ export class Simulation {
         (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
       );
       message = `${buildingName(b)} rotated.`;
+    } else if (c.type === "deepen") {
+      const error = this.canDeepen(c.id);
+      if (error)
+        return { ok: false, message: error, revision: this.state.revision };
+      const b = this.building(c.id)!;
+      const next = deeperLayer(this.state.depositDepths?.[key(b)] ?? 0);
+      this.state.money -= next.cost;
+      for (const [r, n] of Object.entries(next.materials))
+        this.consume(r as Resource, n);
+      b.construction = {
+        required: next.labour,
+        completed: 0,
+        deeperTo: next.depth,
+      };
+      b.enabled = true;
+      message = `Digging to layer ${next.depth + 1}. Builders will unlock ${next.reserve.toLocaleString()} more resources here.`;
     } else if (c.type === "upgrade") {
       const error = this.canUpgrade(c.id);
       if (error)
@@ -1045,7 +1085,7 @@ export class Simulation {
     }
     this.state.revision++;
     if (networkChanged)
-      this.reconnect(["move", "place", "upgrade"].includes(c.type));
+      this.reconnect(["move", "place", "upgrade", "deepen"].includes(c.type));
     if (c.type === "move" && !this.building(c.id)?.connected)
       message +=
         " Connect the front entrance to the warehouse road network to resume work.";
@@ -1075,6 +1115,12 @@ export class Simulation {
       );
       if (b.construction.completed >= b.construction.required) {
         if (b.construction.upgradeTo) b.houseTier = b.construction.upgradeTo;
+        if (b.construction.deeperTo !== undefined) {
+          const depth = b.construction.deeperTo;
+          this.state.depositDepths ??= {};
+          this.state.depositDepths[key(b)] = depth;
+          this.state.deposits[key(b)] += deeperLayer(depth - 1).reserve;
+        }
         delete b.construction;
         this.state.history.unshift(`${buildingName(b)} construction finished.`);
         completed = true;
@@ -1220,7 +1266,17 @@ export class Simulation {
           const priority = (target: Building) =>
             r.output === "planks" &&
             target.kind === "warehouse" &&
-            this.stored("planks") < 16
+            this.stored("planks") <
+              Math.max(
+                16,
+                ...this.state.buildings
+                  .filter((b) => isExtractor(b.kind))
+                  .map(
+                    (b) =>
+                      deeperLayer(this.state.depositDepths?.[key(b)] ?? 0)
+                        .materials.planks ?? 0,
+                  ),
+              )
               ? -1
               : (target.inventory[r.output] ?? 0);
           return priority(a) - priority(c);
@@ -1293,7 +1349,7 @@ export class Simulation {
     if (b.construction)
       return {
         kind: "construction",
-        title: `${b.construction.upgradeTo ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
+        title: `${b.construction.deeperTo !== undefined ? "Digging deeper" : b.construction.upgradeTo ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
         message: !b.enabled
           ? "Construction is paused. Resume it to assign builders."
           : !b.connected
@@ -1333,7 +1389,7 @@ export class Simulation {
         kind: "depleted",
         title: "Deposit exhausted",
         message:
-          "Build an extractor on a new deposit to keep gathering resources.",
+          "This layer is exhausted. Dig deeper here to unlock another large reserve without moving the building.",
       };
     if (d.recipe && (b.inventory[d.recipe.output] ?? 0) >= 20)
       return {
@@ -1414,11 +1470,24 @@ export function parseSave(raw: string): World {
   const ids = new Set<number>();
   if (
     !s.deposits ||
+    (s.valleyVersion !== undefined && s.valleyVersion !== 2) ||
     Object.entries(s.deposits).some(
-      ([k, v]) => !Object.hasOwn(DEPOSITS, k) || !finite(v) || v > 600,
+      ([k, v]) =>
+        !Object.hasOwn(DEPOSITS, k) || !finite(v) || !Number.isSafeInteger(v),
     )
   )
     throw new Error("Invalid deposits.");
+  if (
+    s.depositDepths !== undefined &&
+    (!s.depositDepths ||
+      typeof s.depositDepths !== "object" ||
+      Array.isArray(s.depositDepths) ||
+      Object.entries(s.depositDepths).some(
+        ([k, v]) =>
+          !Object.hasOwn(DEPOSITS, k) || !Number.isSafeInteger(v) || v < 0,
+      ))
+  )
+    throw new Error("Invalid deposit depths.");
   for (const k of s.roads) {
     if (typeof k !== "string") throw new Error("Invalid roads.");
     const [x, y] = k.split(",").map(Number);
@@ -1495,6 +1564,13 @@ export function parseSave(raw: string): World {
           b.construction.required <= 0 ||
           b.construction.required > 10000 ||
           b.construction.completed > b.construction.required ||
+          (b.construction.deeperTo !== undefined &&
+            (!isExtractor(b.kind) ||
+              !DEPOSITS[key(b)] ||
+              b.construction.upgradeTo !== undefined ||
+              !Number.isSafeInteger(b.construction.deeperTo) ||
+              b.construction.deeperTo !==
+                (s.depositDepths?.[key(b)] ?? 0) + 1)) ||
           (b.construction.upgradeTo !== undefined &&
             (b.kind !== "house" ||
               ![2, 3].includes(b.construction.upgradeTo) ||
@@ -1670,5 +1746,44 @@ export function parseSave(raw: string): World {
     () => s.nextId++,
   );
   s.version = 3;
+  expandValley(s as World);
   return s as World;
+}
+
+/** Add wilderness only outside the original map. Never replant cleared starter
+ * tiles or reset extracted quantities on subsequent saves. */
+function expandValley(s: World) {
+  if (s.valleyVersion === 2) return;
+  for (const k of Object.keys(DEPOSITS)) {
+    const [x, y] = k.split(",").map(Number);
+    s.deposits[k] =
+      x < STARTING_SIZE && y < STARTING_SIZE
+        ? Math.max(0, INITIAL_RESERVE - 600 + (s.deposits[k] ?? 600))
+        : INITIAL_RESERVE;
+  }
+  const occupied = new Set([
+    ...s.roads,
+    ...s.decorations.map(key),
+    ...s.buildings.flatMap((b) =>
+      footprint(b.kind, b.x, b.y, b.rotation, b.plot).map(key),
+    ),
+  ]);
+  s.decorations.push(
+    ...initialDecorations(
+      new Set(s.roads),
+      (x, y) =>
+        (x < STARTING_SIZE && y < STARTING_SIZE) ||
+        occupied.has(key({ x, y })) ||
+        terrain(x, y, s.terrain) === "water" ||
+        !!DEPOSITS[key({ x, y })],
+      () => s.nextId++,
+    ),
+  );
+  s.depositDepths ??= {};
+  s.valleyVersion = 2;
+  s.revision++;
+  s.history.unshift(
+    "The valley has expanded. Original town preserved; deposits now have larger reserves and repeatable deeper layers.",
+  );
+  s.history = s.history.slice(0, 20);
 }

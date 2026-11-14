@@ -1,7 +1,7 @@
 import type Phaser from "phaser";
 import { groundHeight } from "./terrain.js";
 import { SIZE } from "./catalog.js";
-import { iso } from "./rendering.js";
+import { iso, cameraViewport } from "./rendering.js";
 import { key, terrain, type Simulation } from "./simulation.js";
 
 // Four source pixels per world pixel preserves detail at the maximum 2.7× zoom.
@@ -21,7 +21,10 @@ const shade = (x: number, y: number) => {
 
 export class TerrainArt {
   private chunks: {
-    texture: Phaser.Textures.CanvasTexture;
+    texture?: Phaser.Textures.CanvasTexture;
+    image?: Phaser.GameObjects.Image;
+    name: string;
+    dirty: boolean;
     x: number;
     y: number;
     w: number;
@@ -43,24 +46,51 @@ export class TerrainArt {
         const w = Math.min(CHUNK, width - x),
           h = Math.min(CHUNK, height - y);
         const name = `terrain-${x}-${y}`;
-        const texture = scene.textures.createCanvas(
-          name,
-          w * TERRAIN_RESOLUTION,
-          h * TERRAIN_RESOLUTION,
-        )!;
         const worldX = x - SIZE * 32,
           worldY = y - 16;
-        scene.add
-          .image(worldX, worldY, name)
-          .setOrigin(0)
-          .setScale(1 / TERRAIN_RESOLUTION)
-          .setDepth(-1000);
-        this.chunks.push({ texture, x: worldX, y: worldY, w, h });
+        this.chunks.push({ name, dirty: true, x: worldX, y: worldY, w, h });
       }
   }
 
   redraw(sim: Simulation) {
+    for (const chunk of this.chunks) chunk.dirty = true;
+    this.update(sim);
+  }
+  /** The expanded valley keeps high-resolution terrain only around the camera.
+   * Off-screen chunks are disposable, so map size does not allocate one huge bitmap. */
+  update(sim: Simulation) {
+    const view = cameraViewport(this.scene.cameras.main),
+      margin = 180;
     for (const chunk of this.chunks) {
+      const near =
+        chunk.x + chunk.w >= view.x - margin &&
+        chunk.x <= view.x + view.width + margin &&
+        chunk.y + chunk.h >= view.y - margin &&
+        chunk.y <= view.y + view.height + margin;
+      if (!near) {
+        if (chunk.texture) {
+          chunk.image!.destroy();
+          this.scene.textures.remove(chunk.name);
+          chunk.texture = undefined;
+          chunk.image = undefined;
+          chunk.dirty = true;
+        }
+        continue;
+      }
+      if (!chunk.texture) {
+        chunk.texture = this.scene.textures.createCanvas(
+          chunk.name,
+          chunk.w * TERRAIN_RESOLUTION,
+          chunk.h * TERRAIN_RESOLUTION,
+        )!;
+        chunk.image = this.scene.add
+          .image(chunk.x, chunk.y, chunk.name)
+          .setOrigin(0)
+          .setScale(1 / TERRAIN_RESOLUTION)
+          .setDepth(-1000);
+      }
+      if (!chunk.dirty) continue;
+      chunk.dirty = false;
       const ctx = chunk.texture.context;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, chunk.texture.width, chunk.texture.height);

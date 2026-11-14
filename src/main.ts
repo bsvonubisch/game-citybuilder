@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import "./style.css";
 import {
   BUILDINGS,
+  SIZE,
   RESOURCES,
   RESOURCE_NAMES,
   dimensions,
@@ -27,6 +28,7 @@ import {
   type Building,
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
+import { deeperLayer, isExtractor } from "./deposits.js";
 import { builderCapacity, constructionWork } from "./construction.js";
 import { fishingStatus } from "./fishing.js";
 import { TownScene } from "./scene.js";
@@ -636,6 +638,23 @@ function renderInspector() {
       $("#house-upgrade").innerHTML =
         '<p class="upgrade-complete">Fully upgraded · room for 9 residents</p>';
   }
+  if (isExtractor(b.kind) && !b.construction) {
+    panel.insertAdjacentHTML(
+      "beforeend",
+      '<section id="deposit-upgrade"><h4>Dig deeper · same site</h4><p id="deepen-benefit"></p><div id="deepen-costs" class="upgrade-costs"></div><p id="deepen-reason" class="upgrade-reason" aria-live="polite"></p></section><button id="deepen-deposit">Dig deeper</button>',
+    );
+    $(".building-actions").after($("#deposit-upgrade"));
+    $("#deepen-deposit").onclick = async () => {
+      const result = await gateway.command({ type: "deepen", id: b.id });
+      toast(result.message);
+      if (result.ok) {
+        scene.redraw();
+        save(false);
+        renderInspector();
+        updateUI();
+      } else updateInspector();
+    };
+  }
   {
     panel.insertAdjacentHTML(
       "beforeend",
@@ -682,6 +701,8 @@ function updateBuildingActions(b: Building) {
   if (guide) {
     $("#building-next-step").textContent = guide.message;
     resolve.textContent = guide.label;
+    resolve.disabled =
+      guide.action.type === "deepen" && !!simulation.canDeepen(b.id);
     resolve.onclick = () => {
       const current = buildingGuidance(
         simulation,
@@ -695,6 +716,7 @@ function updateBuildingActions(b: Building) {
   const buttons = [
     "resolve-issue",
     "upgrade-house",
+    "deepen-deposit",
     "toggle-production",
     "move-building",
   ]
@@ -707,11 +729,13 @@ function updateBuildingActions(b: Building) {
         ? "resolve-issue"
         : b.construction
           ? "toggle-production"
-          : b.kind === "house" && (b.houseTier ?? 1) < 3
-            ? "upgrade-house"
-            : BUILDINGS[b.kind].recipe
-              ? "toggle-production"
-              : "move-building"),
+          : isExtractor(b.kind)
+            ? "deepen-deposit"
+            : b.kind === "house" && (b.houseTier ?? 1) < 3
+              ? "upgrade-house"
+              : BUILDINGS[b.kind].recipe
+                ? "toggle-production"
+                : "move-building"),
   )!;
   for (const button of buttons) {
     const isPrimary = button === primary;
@@ -722,6 +746,7 @@ function updateBuildingActions(b: Building) {
       button.id === "resolve-issue"
         ? !guide
         : (button.id === "upgrade-house" && !!b.construction) ||
+          (button.id === "deepen-deposit" && guide?.action.type === "deepen") ||
           (button.id === "toggle-production" &&
             guide?.action.type === "toggle") ||
           (button.id === "move-building" && guide?.action.type === "move");
@@ -732,6 +757,7 @@ function updateBuildingActions(b: Building) {
 }
 function runGuidance(b: Building, action: GuidanceAction) {
   if (action.type === "toggle") $("#toggle-production").click();
+  else if (action.type === "deepen") $("#deepen-deposit").click();
   else if (action.type === "move") $("#move-building").click();
   else if (action.type === "inspect") {
     scene.onSelect(action.id);
@@ -899,6 +925,31 @@ function updateInspector() {
       `<h4>${icon("fish")} Fishing boat</h4><p>${escapeHtml(fishingStatus(b))}</p><div class="detail-row"><span>Catch aboard</span><b>${trip?.cargo ?? 0} fish</b></div><div class="detail-row"><span>Headed to</span><b>${trip ? `${trip.phase === "returning" ? "Pier" : "Fishing grounds"} · ${destination!.x}, ${destination!.y}` : "Moored"}</b></div><p class="muted">The blue line follows the boat. Fish become available when it returns to the pier.</p>`;
   }
   if (b.kind === "house" && (b.houseTier ?? 1) < 3) updateUpgrade(b);
+  if (isExtractor(b.kind) && !b.construction) {
+    const depth = simulation.state.depositDepths?.[key(b)] ?? 0;
+    const next = deeperLayer(depth);
+    $("#deepen-benefit").textContent =
+      `Layer ${depth + 1} · ${simulation.state.deposits[key(b)].toLocaleString()} remaining. Next layer adds ${next.reserve.toLocaleString()} resources · ${next.labour} worker-seconds. Repeat whenever needed; the deposit stays here.`;
+    const costs = [
+      { name: "Gold", need: next.cost, have: simulation.state.money },
+      ...Object.entries(next.materials).map(([r, need]) => ({
+        name: RESOURCE_NAMES[r as Resource],
+        need,
+        have: simulation.stored(r as Resource),
+      })),
+    ];
+    $("#deepen-costs").innerHTML = costs
+      .map(
+        (c) =>
+          `<span class="${c.have < c.need ? "missing" : "ready"}">${c.need} ${c.name}<small>${c.have.toLocaleString()} available</small></span>`,
+      )
+      .join("");
+    const reason = simulation.canDeepen(b.id);
+    $<HTMLButtonElement>("#deepen-deposit").disabled = !!reason;
+    $("#deepen-reason").textContent =
+      reason ??
+      "Excavation pauses extraction. Stored goods stay here while builders prepare the next layer.";
+  }
   if (b.construction) {
     const progress = Math.floor(
       (b.construction.completed / b.construction.required) * 100,
@@ -910,7 +961,7 @@ function updateInspector() {
       .filter((r) => r.job === b.id)
       .map((r) => escapeHtml(r.name));
     $("#building-detail").innerHTML =
-      `<h4>${b.construction.upgradeTo ? "Home improvements" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Builders assigned</span><b>${b.workers} / ${builderCapacity(b)}</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div><p class="muted">${names.join(", ") || "Waiting for available residents."}</p>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
+      `<h4>${b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Builders assigned</span><b>${b.workers} / ${builderCapacity(b)}</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div><p class="muted">${names.join(", ") || "Waiting for available residents."}</p>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
     if (d.recipe) $("#production-logistics").hidden = true;
     $("#toggle-production").textContent = b.enabled
       ? "Pause construction"
@@ -1025,38 +1076,46 @@ function drawMinimap() {
   const ctx = $<HTMLCanvasElement>("#minimap").getContext("2d")!;
   ctx.fillStyle = "#d5dfc9";
   ctx.fillRect(0, 0, 168, 102);
+  const sx = 76 / SIZE,
+    sy = 44 / SIZE;
   const map = (x: number, y: number) => ({
-    x: 76 + (x - y) * 2.7,
-    y: 6 + (x + y) * 1.55,
+    x: 84 + (x - y) * sx,
+    y: 6 + (x + y) * sy,
   });
-  for (let y = 0; y < 28; y++)
-    for (let x = 0; x < 28; x++) {
+  for (let y = 0; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) {
       const p = map(x, y);
       const cell = terrainCell(x, y, simulation.state.terrain);
       ctx.fillStyle =
         cell.kind === "water"
           ? "#82aaa0"
           : `hsl(91 21% ${55 + cell.height * 3}%)`;
-      ctx.fillRect(p.x, p.y, 3, 2);
+      ctx.fillRect(p.x, p.y, sx + 0.4, sy + 0.4);
     }
   simulation.state.roads.forEach((k) => {
     const [x, y] = k.split(",").map(Number),
       p = map(x, y);
     ctx.fillStyle = "#ddd1ae";
-    ctx.fillRect(p.x, p.y, 3, 2);
+    ctx.fillRect(p.x, p.y, sx + 0.4, sy + 0.4);
   });
+  for (const [k, kind] of Object.entries(DEPOSITS)) {
+    const [x, y] = k.split(",").map(Number),
+      p = map(x, y);
+    ctx.fillStyle = kind === "stone" ? "#f6efd5" : "#ae603c";
+    ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+  }
   simulation.state.buildings.forEach((b) => {
     const p = map(b.x, b.y);
     ctx.fillStyle =
       BUILDINGS[b.kind].category === "production" ? "#b77c51" : "#486553";
-    ctx.fillRect(p.x, p.y - 1, 3, 3);
+    ctx.fillRect(p.x, p.y - 1, 2, 2);
   });
   if (scene.cameras?.main) {
     const v = cameraViewport(scene.cameras.main);
-    const x = 76 + (v.x * 2.7) / 32,
-      y = 6 + (v.y * 1.55) / 16;
-    const w = (v.width * 2.7) / 32,
-      h = (v.height * 1.55) / 16;
+    const x = 84 + (v.x * sx) / 32,
+      y = 6 + (v.y * sy) / 16;
+    const w = (v.width * sx) / 32,
+      h = (v.height * sy) / 16;
     ctx.fillStyle = "#fff5cf22";
     ctx.fillRect(x, y, w, h);
     ctx.lineWidth = 3;
@@ -1067,6 +1126,19 @@ function drawMinimap() {
     ctx.strokeRect(x, y, w, h);
   }
 }
+$("#minimap").title =
+  "Tap to explore the valley · pale deposits: stone · copper deposits: metal";
+$("#minimap").onclick = (event) => {
+  const rect = $("#minimap").getBoundingClientRect();
+  const u =
+    (((event.clientX - rect.left) * 168) / rect.width - 84) / (76 / SIZE);
+  const v =
+    (((event.clientY - rect.top) * 102) / rect.height - 6) / (44 / SIZE);
+  scene.focusTile(
+    Math.max(0, Math.min(SIZE - 1, (u + v) / 2)),
+    Math.max(0, Math.min(SIZE - 1, (v - u) / 2)),
+  );
+};
 function updateUI() {
   const s = simulation.state;
   const employed = s.residents.filter((r) => r.job !== null).length;
