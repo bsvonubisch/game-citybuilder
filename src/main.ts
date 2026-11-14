@@ -473,7 +473,7 @@ function showSettings() {
   $("#art").onclick = () => {
     closeModal();
     openModal(
-      `<span class="eyebrow">OUR VISUAL DIRECTION</span><h2>Pine & Copper.</h2><p>Forest greens, warm timber, copper machinery. Pine & Copper architecture with Garden Streets: textured trees, warm paving, and shaded villagers.</p><img class="art-board" src="/street-directions.png" alt="Woodland Lanes, Alpine Cobble, and the selected Garden Streets style"><p class="muted">Concept art. The playable scene uses individual building sprites and a live simulation.</p>`,
+      `<span class="eyebrow">OUR VISUAL DIRECTION</span><h2>Pine & Copper.</h2><p>Warm timber and copper, Garden Streets trees, Alpine Slate roads and meadows, and Clear Brook water.</p><img class="art-board" src="/terrain-options.png" alt="Terrain options: selected C, Alpine Slate"><img class="art-board" src="/water-options.png" alt="Water options: selected A, Clear Brook"><p class="muted">Concept art. The town uses separate sprites, walking cycles, moving machinery, and a live simulation.</p>`,
     );
   };
   $("#reset").onclick = () => {

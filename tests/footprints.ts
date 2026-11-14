@@ -3,9 +3,14 @@ import { buildingArt, atlasContentWidth } from "../src/building-art.js";
 import { fitGround, iso, opaqueBounds } from "../src/rendering.js";
 
 const images = new Map<string, HTMLImageElement>();
-for (const texture of ["buildings", "houses"]) {
+for (const texture of ["buildings", "houses", "mill"]) {
   const image = new Image();
-  image.src = texture === "houses" ? "/house-rotations.png" : "/buildings.png";
+  image.src =
+    texture === "houses"
+      ? "/house-rotations.png"
+      : texture === "mill"
+        ? "/windmill-parts.png"
+        : "/buildings.png";
   await image.decode();
   images.set(texture, image);
 }
@@ -31,7 +36,7 @@ for (const { kind, rotation } of cases) {
   const ctx = canvas.getContext("2d")!;
   const art = buildingArt(kind, rotation);
   const img = images.get(art.texture)!;
-  const columns = art.texture === "houses" ? 2 : 3;
+  const columns = art.texture === "buildings" ? 3 : 2;
   const cell = Math.floor(img.width / columns);
   const sx = (art.frame % columns) * cell,
     sy = Math.floor(art.frame / columns) * cell;

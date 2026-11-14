@@ -15,6 +15,7 @@ import {
   AGENT_SPEED,
 } from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
+import { walkFrame, working } from "../.test-dist/animation.js";
 const execute = (sim, command, id = "test-" + sim.state.revision) =>
   sim.execute({
     id,
@@ -25,6 +26,50 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+
+test("walking cycles stay within their directional row and stop cycling while waiting", () => {
+  for (let direction = 0; direction < 4; direction++)
+    for (let variant = 0; variant < 2; variant++) {
+      const frames = Array.from(
+        { length: 4 },
+        (_, i) => walkFrame(direction, variant, i / 10, false).frame,
+      );
+      assert.ok(new Set(frames).size >= 3);
+      assert.ok(
+        frames.every(
+          (f) =>
+            f >= direction * 8 + variant * 4 &&
+            f < direction * 8 + variant * 4 + 4,
+        ),
+      );
+      assert.deepEqual(
+        walkFrame(direction, variant, 0, true),
+        walkFrame(direction, variant, 12.6, true),
+      );
+    }
+});
+
+test("factory machinery pauses without inputs, staff, road access, or storage space", () => {
+  const sim = new Simulation(),
+    mill = sim.state.buildings.find((b) => b.kind === "mill");
+  mill.inventory.grain = 3;
+  mill.inventory.flour = 0;
+  assert.equal(working(sim, mill), true);
+  mill.inventory.grain = 0;
+  assert.equal(working(sim, mill), false);
+  mill.inventory.grain = 3;
+  mill.enabled = false;
+  assert.equal(working(sim, mill), false);
+  mill.enabled = true;
+  mill.connected = false;
+  assert.equal(working(sim, mill), false);
+  mill.connected = true;
+  mill.workers = 0;
+  assert.equal(working(sim, mill), false);
+  mill.workers = 2;
+  mill.inventory.flour = 20;
+  assert.equal(working(sim, mill), false);
+});
 
 test("ground contacts, including industrial props and all cottage rotations, stay inside their occupied tiles", () => {
   for (const kind of Object.keys(BUILDINGS))

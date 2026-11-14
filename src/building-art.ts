@@ -2,7 +2,7 @@ import { BUILDINGS, type BuildingKind } from "./catalog.js";
 
 export type GroundPoint = readonly [number, number];
 export interface BuildingArt {
-  texture: "buildings" | "houses";
+  texture: "buildings" | "houses" | "mill";
   frame: number;
   cellSize: number;
   /** Ground contacts in untrimmed atlas-cell pixels, including steps and props.
@@ -132,6 +132,20 @@ export function atlasContentWidth(
 }
 
 export function buildingArt(kind: BuildingKind, rotation = 0): BuildingArt {
+  if (kind === "mill")
+    return {
+      texture: "mill",
+      frame: 0,
+      cellSize: 887,
+      ground: [
+        [128, 743],
+        [235, 806],
+        [330, 818],
+        [409, 849],
+        [603, 843],
+        [815, 763],
+      ],
+    };
   if (kind === "house") {
     const frame = [1, 0, 2, 3][rotation];
     return {

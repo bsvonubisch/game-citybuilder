@@ -2,6 +2,8 @@
 
 Selected: **Pine & Copper** architecture and **Garden Streets (C)** environment treatment.
 
+Terrain update selected: **Alpine Slate (C)** roads, meadow grass and deposits; **Clear Brook (A)** water and shoreline palette.
+
 All raster artwork in `public/` was generated with the built-in image generation tool for this project. The runtime frames the atlases directly; it does not use the mockup images as a fake playable world. Roads, terrain, and overlays are rendered procedurally. Assets are provisional game art and can be replaced independently of simulation data.
 
 | Asset | Purpose |
@@ -13,12 +15,21 @@ All raster artwork in `public/` was generated with the built-in image generation
 | `house-rotations.png` | 2×2 atlas of the approved cottage viewed from four world rotations |
 | `vehicles-directions.png` | Four vehicle types × four directional views, including rear views |
 | `people-directions.png` | Four residents × four directional views, including walking away |
+| `terrain-options.png` | Garden Cobble, Woodland Lane, and selected Alpine Slate concepts |
+| `water-options.png` | Selected Clear Brook, Emerald River, and Silver-Blue Lake concepts |
+| `alpine-surfaces.png` | Four grass and four slate pavement top-down texture cells |
+| `alpine-deposits.png` | Four stone and four copper-bearing metal deposit cutouts |
+| `clear-brook-water.png` | Turquoise water texture distributed across an 8×8-tile repeat |
+| `pedestrian-walk.png` | Two costumes × four directions × four walking poses; runtime corrects one reversed view and excludes one mismatched bag pose |
+| `windmill-parts.png` | Separate stationary mill and front-facing rotor; 96 projected rotor views are cached at startup |
 
-The quarry and mine currently reuse tinted industrial/lodge artwork and have explicit mining behavior and deposits. Unique mining artwork is still to be commissioned. Each villager has four directions, but these are not complete walk-animation cycles.
+The quarry and mine currently reuse tinted industrial/lodge artwork and have explicit mining behavior and deposits. Unique mining buildings are still to be commissioned; their resource deposits now have dedicated artwork. The active pedestrian atlas has looping walk poses in four directions, with a stationary passing pose while waiting. The older four-costume directional atlas remains as a source reference.
 
 ## Ground alignment
 
-`src/building-art.ts` records ground-contact landmarks in original atlas-cell pixels for every building frame and each cottage rotation. Include the feet of steps, log piles, barrels, conveyor legs, and other props; exclude roofs and elevated foliage. The source cells are 418×418 for buildings and 627×627 for cottages. A narrow piece of the neighboring warehouse is excluded from the workshop runtime frame.
+`src/building-art.ts` records ground-contact landmarks in original atlas-cell pixels for every building frame and each cottage rotation. Include the feet of steps, log piles, barrels, conveyor legs, and other props; exclude roofs and elevated foliage. Source cells are 418×418 for the original buildings, 627×627 for cottages, and 887×887 for the separate windmill. A narrow piece of the neighboring warehouse is excluded from the workshop runtime frame.
+
+Terrain source textures are projected to exact 2:1 diamond tiles and baked into a single map texture after edits. Water glints, fountain droplets, chimney puffs, saw motion, conveyor cargo, and wheel spokes are small runtime overlays. Machinery requires an enabled, staffed, road-connected factory with inputs and output capacity; pauses freeze its phase. Windmill rotation uses a cached atlas rather than rerasterizing the sails each frame. Pedestrian gait follows traveled distance, and all animation timing uses simulation speed.
 
 `fitGround` converts the contacts to both isometric tile axes, fits their extents uniformly inside the logical footprint with a 0.08-tile curb clearance, and centers the result. Alpha trimming only affects the texture crop; it never decides the plot anchor or scale. Placement previews and finished buildings use the same transform. Rectangular industrial plots retain their existing dimensions and save compatibility. Elevated roofs and canopies may visually occlude ground behind them; their bases and ground-level props stay in the plot.
 

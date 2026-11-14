@@ -4,7 +4,7 @@
 
 A playable browser city-building foundation. Phaser 3.90 + TypeScript + Vite, with Firebase Authentication, private Firestore cloud saves, and Firebase Hosting deployment configuration.
 
-The selected art direction is **Pine & Copper architecture + Garden Streets**. Buildings, trees, villagers, and vehicles use generated pixel-art atlases; connected paving and terrain are drawn by the renderer.
+The selected art direction is **Pine & Copper architecture + Garden Streets trees + Alpine Slate terrain + Clear Brook water**. Buildings, trees, villagers, vehicles, ground textures, and resource rocks use generated pixel-art assets.
 
 ## Run
 
@@ -27,6 +27,7 @@ npm run build
 
 - Isometric 28×28 valley; pan, zoom, grid, building inspection, and speed controls.
 - Four-facing cottage rotation, both before placement and after construction (R or the Rotate button). Cars and pedestrians select front/rear directional sprites as they turn.
+- Pedestrian walk cycles, turning vehicle wheels, windmill sails, working saw/conveyor details, hearth smoke, fountain droplets, and gentle water glints. Pause and speed controls apply to animation as well as the simulation.
 - Explicit 2×2 and 3×2 building footprints. The entire footprint is validated against roads, buildings, water, and map edges; roads connect through the perimeter. Existing one-tile saves migrate without discarding buildings or their inventories.
 - Cottages provide three named residents. Residents walk or drive between home and assigned workplaces. Road routing uses breadth-first search; disconnected or understaffed factories stop.
 - Gold, wood, stone, and metal construction costs. Quarries and metal mines use finite deposits. Delivered warehouse inventory pays material costs.
@@ -50,14 +51,16 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 - `src/scene.ts`: Phaser rendering, asset atlas frames, camera, picking, and overlays.
 - `src/building-art.ts`: calibrated foundation/prop contacts for each atlas frame and cottage rotation.
 - `src/rendering.ts`: ground fitting and smooth road movement between simulation ticks.
+- `src/terrain-art.ts`: texture projection, cached terrain, slate curbs, bridges, and shoreline transitions.
+- `src/animation.ts`: walking frames, vehicle details, projected mill rotor, and working-building effects.
 - `src/main.ts`: interface, local saves, and interaction wiring.
 - `src/cloud.ts`: Firebase initialization, account login, and private save storage.
 - `tests/simulation.test.mjs`: economic, routing, persistence, migration, and collision regressions.
 
-Terrain and roads are baked into one render texture when the town changes; the grid is cached separately. Static paving geometry is not replayed every frame. Agents and smoke render continuously between the deterministic 250 ms ticks, including road turns and pauses. Add `?perf=1` to show a rolling FPS/frame-time counter; add `?qa=performance&perf=1` to measure in an isolated local-save slot. The visual footprint audit at `/tests/footprints.html` is available through the dev server.
+Terrain and roads are baked into one canvas texture when the town changes; the grid and mill rotor frames are cached separately. Static paving geometry is not replayed every frame. Agents and effects render continuously between the deterministic 250 ms ticks, including road turns and pauses. Add `?perf=1` to show a rolling FPS/frame-time counter; add `?qa=performance&perf=1` to measure in an isolated local-save slot. The visual footprint audit at `/tests/footprints.html` is available through the dev server.
 
 ## Current scope
 
 This is a single-player foundation, not live multiplayer. Firebase account/save code is implemented; project-specific provider setup and an authenticated Firebase CLI are required. Firestore ownership, schema, and shared-world isolation rules are covered by emulator tests (Java 21 required). See [the multiplayer plan](docs/MULTIPLAYER.md) for the authority and synchronization boundary.
 
-The economy is intentionally forgiving and not balanced for a full game. Vehicles follow routes without traffic queues or physical vehicle collisions. Residents use four directional views with movement bobbing; full walk animation cycles, seasons, terrain editing, power, zoning, and advanced logistics are future work. Decorative tree canopies and elevated roofs can occlude neighboring ground. Building foundations and ground-level props are fitted inside their plots using both isometric tile axes; atlas padding does not determine their alignment.
+The economy is intentionally forgiving and not balanced for a full game. Vehicles follow routes without traffic queues or physical vehicle collisions. Seasons, terrain editing, power, zoning, and advanced logistics are future work. Decorative tree canopies and elevated roofs can occlude neighboring ground. Building foundations and ground-level props are fitted inside their plots using both isometric tile axes; atlas padding does not determine their alignment.
