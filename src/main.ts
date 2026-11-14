@@ -294,6 +294,16 @@ function rotatePlacement() {
   setTool(tool);
   toast(`Front entrance facing ${FRONT_NAMES[scene.rotation]}.`);
 }
+function cancelTool() {
+  scene.cancelPlacement();
+  setTool("inspect");
+}
+scene.onCancel = cancelTool;
+$("#app").addEventListener("contextmenu", (e) => {
+  if (tool === "inspect" || $<HTMLDialogElement>("#dialog").open) return;
+  e.preventDefault();
+  cancelTool();
+});
 function updateEntranceHint() {
   const el = document.querySelector<HTMLElement>("#front-access");
   const moving =
@@ -1096,7 +1106,7 @@ window.addEventListener("keydown", (e) => {
   )
     return;
   const k = e.key.toLowerCase();
-  if (k === "escape" || k === "v") setTool("inspect");
+  if (k === "escape" || k === "v") cancelTool();
   if (k === "r") {
     if (isBuilding(tool) || tool === "move") rotatePlacement();
     else setTool("road");

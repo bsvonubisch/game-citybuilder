@@ -467,6 +467,9 @@ main {
   font-weight: 700;
 }
 .building-alert {
+  /* Camera movement must be immediate; never inherit the button transform tween. */
+  transition: background-color 0.15s;
+  will-change: transform;
   position: absolute;
   left: 0;
   top: 0;

@@ -142,6 +142,14 @@ export class TownScene extends Phaser.Scene {
     this.terrainTarget = p;
     this.drawOverlay();
   }
+  onCancel: () => void = () => {};
+  cancelPlacement() {
+    this.terrainDrag = null;
+    this.terrainTarget = null;
+    this.movingBuilding = null;
+    this.dragging = false;
+    this.moved = 0;
+  }
   private plotArt!: PlotArt;
   private constructionArt!: ConstructionArt;
   private buildingAlerts!: BuildingAlerts;
@@ -204,6 +212,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("brook", "/brook-hd.png");
     this.load.image("mill", "/windmill-parts.png");
     this.load.image("construction-props", "/construction-props.png");
+    this.load.image("construction-earth", "/construction-earth.png");
     this.load.image("construction-workers", "/construction-workers.png");
   }
   create() {
@@ -279,6 +288,10 @@ export class TownScene extends Phaser.Scene {
       false,
     ) as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (p.button === 2 && this.tool !== "inspect") {
+        this.onCancel();
+        return;
+      }
       if (p.wasTouch) {
         this.touches.start(p.id, { x: p.x, y: p.y });
         return;
@@ -364,6 +377,10 @@ export class TownScene extends Phaser.Scene {
     this.input.on(
       "pointerup",
       (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+        if (!p.wasTouch && p.button !== 0) {
+          this.dragging = false;
+          return;
+        }
         if (this.terrainDrag && !p.wasTouch) {
           const command = this.terrainDrag.command;
           this.terrainDrag = null;

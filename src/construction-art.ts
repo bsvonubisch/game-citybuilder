@@ -35,23 +35,18 @@ export class ConstructionArt {
         ctx.fill();
         ctx.save();
         ctx.clip();
-        // Deterministic earth flecks remain crisp even at close zoom.
-        for (let y = -16; y < (w + h) * 16; y += 1.5)
-          for (let x = -h * 32; x < w * 32; x += 1.5) {
-            const n = Math.abs(Math.sin(x * 71.3 + y * 37.9));
-            ctx.fillStyle =
-              n > 0.87
-                ? "#aa8660"
-                : n > 0.58
-                  ? "#91704d"
-                  : n > 0.27
-                    ? "#80603f"
-                    : "#684c34";
-            ctx.fillRect(x, y, 1.5, 1);
-          }
+        // A detailed painted earth material, at the same scale on every plot.
+        // Project its ground plane only; scaffolding and workers remain rigid.
+        const earth = this.scene.textures
+          .get("construction-earth")
+          .getSourceImage() as HTMLImageElement;
+        const origin = iso(-0.5, -0.5);
+        ctx.transform(32, 16, -32, 16, origin.x, origin.y);
+        for (let x = 0; x < w; x += 2)
+          for (let y = 0; y < h; y += 2) ctx.drawImage(earth, x, y, 2, 2);
         ctx.restore();
-        ctx.strokeStyle = "#bda380";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#8d683e";
+        ctx.lineWidth = 0.4;
         ctx.stroke();
       }
       const source = this.scene.textures

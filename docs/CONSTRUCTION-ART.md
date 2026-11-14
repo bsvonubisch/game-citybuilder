@@ -20,3 +20,9 @@ Workers (reference: `public/pedestrian-walk.png`, style only):
 Final transparent-background edit of the worker atlas:
 
 > Edit ONLY the background of this 4-column by 4-row construction worker animation atlas. Keep every worker, tool, sawhorse, pose and its exact pixel position and scale unchanged. Remove ALL gray/beige backdrop, paper grain, haze, glows and cast shadows to completely clear alpha transparency (alpha=0) between and around all 16 sprites. Preserve clean opaque silhouettes, with transparent gaps between arms, shovel, legs and workbench. Absolutely NO replacement background, no ground, no checkerboard drawn into image. Production game sprite cutout sheet with genuinely empty RGBA pixels around every object. Do not add or remove frames. Keep exact original canvas dimensions and cell layout.
+
+## Textured earth revision
+
+`public/construction-earth.png` was generated with the built-in image tool from the construction screenshot as a style reference, using this prompt: seamless, edge-to-edge, directly-overhead warm compacted sandy-brown soil; subtle clumps, embedded small tan/gray pebbles, fine grit, softly blended natural patches and a few shallow irregular boot impressions. Match the detailed cozy pixel art of the houses, trees and paving. Muted umber, ochre and sandy tan, gentle top-left light. No plank shapes, stripes, rows, grid, trenches, large stones, grass, buildings, UI, labels or isometric outline. Keep a constant texture scale when the ground plane is projected into different footprints.
+
+Source: `exec-cdbff0e4-d544-4429-92d1-849e0694132c.png`. The renderer uses one repeat per two ground tiles in each axis, clipped exactly to the construction footprint, cached at 4× resolution. Scaffolding, materials and workers retain their original proportions.
