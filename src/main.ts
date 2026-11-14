@@ -252,7 +252,8 @@ function setTool(next: Tool) {
   if (next === "move") {
     const b = simulation.building(scene.movingBuilding!);
     $("#placement-hint").innerHTML =
-      `${icon("inspect")} Move ${b ? buildingName(b) : "building"} · stock & progress kept <span id="front-access"></span><button id="cancel-move" class="rotate-placement">Cancel</button>`;
+      `${icon("inspect")} Move ${b ? buildingName(b) : "building"} · stock & progress kept <button id="rotate-placement" class="rotate-placement">${icon("reset")} Rotate <kbd>R</kbd></button><span id="front-access"></span><button id="cancel-move" class="rotate-placement">Cancel</button>`;
+    $("#rotate-placement").onclick = rotatePlacement;
     $("#cancel-move").onclick = () => setTool("inspect");
   }
   if (next === "terrain") {
@@ -1048,7 +1049,7 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (k === "escape" || k === "v") setTool("inspect");
   if (k === "r") {
-    if (isBuilding(tool)) rotatePlacement();
+    if (isBuilding(tool) || tool === "move") rotatePlacement();
     else if (tool !== "move") setTool("road");
   }
   if (k === "x") setTool("bulldoze");
