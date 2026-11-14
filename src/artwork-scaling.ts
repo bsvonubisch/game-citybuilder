@@ -1,14 +1,17 @@
 import Phaser from "phaser";
 
-const PREFERENCE = "little-works.smooth-artwork";
+export type ArtworkMode = "auto" | "smooth" | "crisp";
+const PREFERENCE = "little-works.artwork-scaling";
+let mode: ArtworkMode = "auto";
 let smooth = true;
 try {
-  smooth = localStorage.getItem(PREFERENCE) !== "false";
+  const saved = localStorage.getItem(PREFERENCE);
+  if (saved === "auto" || saved === "smooth" || saved === "crisp") mode = saved;
 } catch {
   /* Rendering still works when device storage is unavailable. */
 }
 
-export const smoothArtwork = () => smooth;
+export const artworkMode = () => mode;
 const filter = () =>
   smooth
     ? Phaser.Textures.FilterMode.LINEAR
@@ -17,6 +20,7 @@ const filterTexture = (_key: string, texture: Phaser.Textures.Texture) =>
   texture.setFilter(filter());
 
 function apply(game: Phaser.Game) {
+  document.documentElement.dataset.artworkMode = mode;
   document.documentElement.dataset.artwork = smooth ? "smooth" : "crisp";
   game.canvas.style.imageRendering = smooth ? "auto" : "pixelated";
   // Also controls newly created and refreshed terrain/foundation canvases.
@@ -28,6 +32,7 @@ function apply(game: Phaser.Game) {
 }
 
 export function setupArtworkScaling(game: Phaser.Game) {
+  smooth = mode !== "crisp";
   apply(game);
   game.textures.on(Phaser.Textures.Events.ADD, filterTexture);
   game.events.once(Phaser.Core.Events.DESTROY, () =>
@@ -35,11 +40,34 @@ export function setupArtworkScaling(game: Phaser.Game) {
   );
 }
 
-export function setArtworkSmoothing(game: Phaser.Game, enabled: boolean) {
-  smooth = enabled;
+export function updateArtworkScaling(
+  game: Phaser.Game,
+  zoom: number,
+  force = false,
+) {
+  // Separate entry/exit thresholds prevent filter flicker during a pinch gesture.
+  const next =
+    mode === "smooth"
+      ? true
+      : mode === "crisp"
+        ? false
+        : smooth
+          ? zoom < 2
+          : zoom <= 1.85;
+  if (next === smooth && !force) return;
+  smooth = next;
   apply(game);
+}
+
+export function setArtworkMode(
+  game: Phaser.Game,
+  value: ArtworkMode,
+  zoom: number,
+) {
+  mode = value;
+  updateArtworkScaling(game, zoom, true);
   try {
-    localStorage.setItem(PREFERENCE, String(smooth));
+    localStorage.setItem(PREFERENCE, mode);
   } catch {
     /* Keep this session's choice. */
   }

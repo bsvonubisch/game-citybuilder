@@ -1,5 +1,8 @@
 import Phaser from "phaser";
-import { setupArtworkScaling } from "./artwork-scaling.js";
+import {
+  setupArtworkScaling,
+  updateArtworkScaling,
+} from "./artwork-scaling.js";
 import { rotorView } from "./windmill.js";
 import {
   BUILDINGS,
@@ -1231,6 +1234,7 @@ export class TownScene extends Phaser.Scene {
     const cameraKey = `${camera.scrollX}:${camera.scrollY}:${camera.zoom}:${camera.width}:${camera.height}`;
     if (cameraKey !== this.cameraKey) {
       this.cameraKey = cameraKey;
+      updateArtworkScaling(this.game, camera.zoom);
       this.onCamera();
     }
     this.buildingAlerts.update(

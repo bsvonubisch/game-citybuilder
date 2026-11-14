@@ -30,7 +30,11 @@ import { LocalGateway } from "./gateway.js";
 import { builderCapacity, constructionWork } from "./construction.js";
 import { fishingStatus } from "./fishing.js";
 import { TownScene } from "./scene.js";
-import { smoothArtwork, setArtworkSmoothing } from "./artwork-scaling.js";
+import {
+  artworkMode,
+  setArtworkMode,
+  type ArtworkMode,
+} from "./artwork-scaling.js";
 import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
 import { buildingPreview } from "./previews.js";
@@ -1009,12 +1013,26 @@ function showSettings() {
   );
   $("#dialog-content").insertAdjacentHTML(
     "beforeend",
-    `<div class="artwork-setting"><label for="artwork-scaling">Artwork scaling</label><select id="artwork-scaling"><option value="smooth" ${smoothArtwork() ? "selected" : ""}>Smooth</option><option value="crisp" ${smoothArtwork() ? "" : "selected"}>Crisp pixels</option></select><small>Smooth softens jagged edges at different zoom levels. Crisp pixels keeps the original hard edges. Changes apply immediately.</small></div>`,
+    `<div class="artwork-setting"><label for="artwork-scaling">Artwork scaling</label><select id="artwork-scaling">${(
+      [
+        ["auto", "Automatic"],
+        ["smooth", "Smooth"],
+        ["crisp", "Crisp pixels"],
+      ] as const
+    )
+      .map(
+        ([value, label]) =>
+          `<option value="${value}" ${artworkMode() === value ? "selected" : ""}>${label}</option>`,
+      )
+      .join(
+        "",
+      )}</select><small>Automatic uses smooth scaling when zoomed out and crisp pixels for close-ups. You can also keep either style at every zoom. Changes apply immediately.</small></div>`,
   );
   $<HTMLSelectElement>("#artwork-scaling").onchange = (event) =>
-    setArtworkSmoothing(
+    setArtworkMode(
       game,
-      (event.target as HTMLSelectElement).value === "smooth",
+      (event.target as HTMLSelectElement).value as ArtworkMode,
+      scene.cameras.main.zoom,
     );
   $("#modal-save").onclick = () => save();
   $("#export").onclick = () => {
