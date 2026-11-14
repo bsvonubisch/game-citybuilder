@@ -2,6 +2,7 @@ const paths: Record<string, string> = {
   tree: "M12 2 5 12h4l-5 6h6v4h4v-4h6l-5-6h4L12 2Z",
   home: "m3 11 9-8 9 8M5 10v11h14V10M10 21v-7h4v7",
   road: "m8 2-5 20M16 2l5 20M12 3v3m0 4v4m0 4v3",
+  bridge: "M2 13h20M4 8v12M20 8v12M8 10v10M16 10v10M4 8q8 6 16 0M2 17h20",
   hammer: "m14 3 7 7-4 4-3-3-9 10-3-3 10-9-3-3 5-3Z",
   factory: "M3 21V10l6 3V8l7 4V3h4v18H3Zm4-4h1m3 0h1m3 0h1",
   coin: "M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0ZM12 7v10m3-8h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9",

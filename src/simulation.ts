@@ -372,13 +372,16 @@ export class Simulation {
     y: number,
   ): string | null {
     if (!inside(x, y)) return "Choose a tile inside the valley.";
-    const cells = kind === "road" ? [{ x, y }] : footprint(kind, x, y);
+    if (kind === "bridge" && terrain(x, y) !== "water")
+      return "Place bridges over water. Use roads on dry land.";
+    const cells =
+      kind === "road" || kind === "bridge" ? [{ x, y }] : footprint(kind, x, y);
     for (const p of cells) {
       if (!inside(p.x, p.y))
         return "The whole building must fit inside the valley.";
       if (this.buildingAt(p.x, p.y) || this.roadSet.has(key(p)))
         return "The building footprint overlaps a road or another building.";
-      if (terrain(p.x, p.y) === "water" && kind !== "road")
+      if (terrain(p.x, p.y) === "water" && kind !== "road" && kind !== "bridge")
         return "The whole building needs dry land. Roads can form bridges.";
     }
     if (
@@ -387,13 +390,13 @@ export class Simulation {
     )
       return `Place this on a ${kind === "quarry" ? "stone" : "metal"} deposit.`;
     const cost =
-      kind === "road"
+      kind === "road" || kind === "bridge"
         ? terrain(x, y) === "water"
           ? 35
           : 12
         : BUILDINGS[kind].cost;
     if (this.state.money < cost) return "Not enough gold yet.";
-    if (kind !== "road")
+    if (kind !== "road" && kind !== "bridge")
       for (const [r, n] of Object.entries(BUILDINGS[kind].materials ?? {})) {
         if (this.stored(r as Resource) < n)
           return `Need ${n} ${r} in warehouses.`;
@@ -438,7 +441,11 @@ export class Simulation {
           message: "Invalid rotation.",
           revision: this.state.revision,
         };
-      if (c.kind !== "road" && !Object.hasOwn(BUILDINGS, c.kind))
+      if (
+        c.kind !== "road" &&
+        c.kind !== "bridge" &&
+        !Object.hasOwn(BUILDINGS, c.kind)
+      )
         return {
           ok: false,
           message: "Unknown building.",
@@ -448,16 +455,17 @@ export class Simulation {
       if (error)
         return { ok: false, message: error, revision: this.state.revision };
       const cost =
-        c.kind === "road"
+        c.kind === "road" || c.kind === "bridge"
           ? terrain(c.x, c.y) === "water"
             ? 35
             : 12
           : BUILDINGS[c.kind].cost;
       this.state.money -= cost;
-      if (c.kind !== "road")
+      if (c.kind !== "road" && c.kind !== "bridge")
         for (const [r, n] of Object.entries(BUILDINGS[c.kind].materials ?? {}))
           this.consume(r as Resource, n);
-      if (c.kind === "road") this.state.roads.push(key(c));
+      if (c.kind === "road" || c.kind === "bridge")
+        this.state.roads.push(key(c));
       else
         this.state.buildings.push({
           id: this.state.nextId++,
@@ -473,7 +481,11 @@ export class Simulation {
           rotation: c.kind === "house" ? (c.rotation ?? 0) : 0,
         });
       message =
-        c.kind === "road" ? "Road laid." : `${BUILDINGS[c.kind].name} built.`;
+        c.kind === "road" || c.kind === "bridge"
+          ? terrain(c.x, c.y) === "water"
+            ? "Bridge built. Connect both ends to roads."
+            : "Road laid."
+          : `${BUILDINGS[c.kind].name} built.`;
     } else if (c.type === "demolish") {
       const b = this.buildingAt(c.x, c.y);
       if (

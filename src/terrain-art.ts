@@ -3,185 +3,239 @@ import { SIZE } from "./catalog.js";
 import { iso } from "./rendering.js";
 import { key, terrain, type Simulation } from "./simulation.js";
 
-const shade = (x: number, y: number) => {
-  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-  return n - Math.floor(n);
-};
+// Four source pixels per world pixel preserves detail at the maximum 2.7× zoom.
+// Small GPU textures also work on devices with a 2048px texture limit.
+export const TERRAIN_RESOLUTION = 4;
+const CHUNK = 512;
 const EDGES = [
   { dx: 1, dy: 0, a: [32, 0], b: [0, 16] },
   { dx: 0, dy: 1, a: [0, 16], b: [-32, 0] },
   { dx: -1, dy: 0, a: [-32, 0], b: [0, -16] },
   { dx: 0, dy: -1, a: [0, -16], b: [32, 0] },
 ];
+const shade = (x: number, y: number) => {
+  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return n - Math.floor(n);
+};
 
-/** Rasterize flat source textures into diamond tiles once. The complete map is
- * uploaded only after edits, keeping texture-rich terrain out of the frame loop. */
 export class TerrainArt {
-  readonly texture: Phaser.Textures.CanvasTexture;
-  private tiles: HTMLCanvasElement[] = [];
-  constructor(scene: Phaser.Scene) {
-    this.texture = scene.textures.createCanvas(
-      "terrain-art",
-      SIZE * 64,
-      SIZE * 32 + 32,
-    )!;
-    const surfaces = scene.textures
-      .get("surfaces")
-      .getSourceImage() as HTMLImageElement;
-    const water = scene.textures
-      .get("brook")
-      .getSourceImage() as HTMLImageElement;
-    // Spread water across 8×8 tiles so broad ripples do not shrink into noise.
-    for (let i = 0; i < 72; i++) {
-      const c = document.createElement("canvas");
-      c.width = 128;
-      c.height = 64;
-      const ctx = c.getContext("2d")!;
-      ctx.imageSmoothingEnabled = true;
-      // Square texture axes project to the two diagonals of a 2:1 tile.
-      ctx.setTransform(0.5, 0.25, -0.5, 0.25, 64, 0);
-      if (i >= 8)
-        ctx.drawImage(
-          water,
-          (((i - 8) % 8) * water.width) / 8,
-          (Math.floor((i - 8) / 8) * water.height) / 8,
-          water.width / 8,
-          water.height / 8,
-          0,
-          0,
-          128,
-          128,
-        );
-      else {
-        const w = surfaces.width / 4,
-          h = surfaces.height / 2;
-        ctx.drawImage(
-          surfaces,
-          (i % 4) * w + 2,
-          Math.floor(i / 4) * h + 2,
-          w - 4,
-          h - 4,
-          0,
-          0,
-          128,
-          128,
-        );
-        if (i < 4) {
-          ctx.fillStyle = "#8fa77933";
-          ctx.fillRect(0, 0, 128, 128);
-        }
+  private chunks: {
+    texture: Phaser.Textures.CanvasTexture;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }[] = [];
+  private grass: HTMLImageElement;
+  private slate: HTMLImageElement;
+  private water: HTMLImageElement;
+  private shore: HTMLImageElement;
+  constructor(private scene: Phaser.Scene) {
+    const source = (name: string) =>
+      scene.textures.get(name).getSourceImage() as HTMLImageElement;
+    this.grass = source("meadow");
+    this.slate = source("slate");
+    this.water = source("brook");
+    this.shore = source("shore");
+    const width = SIZE * 64,
+      height = SIZE * 32 + 32;
+    for (let y = 0; y < height; y += CHUNK)
+      for (let x = 0; x < width; x += CHUNK) {
+        const w = Math.min(CHUNK, width - x),
+          h = Math.min(CHUNK, height - y);
+        const name = `terrain-${x}-${y}`;
+        const texture = scene.textures.createCanvas(
+          name,
+          w * TERRAIN_RESOLUTION,
+          h * TERRAIN_RESOLUTION,
+        )!;
+        const worldX = x - SIZE * 32,
+          worldY = y - 16;
+        scene.add
+          .image(worldX, worldY, name)
+          .setOrigin(0)
+          .setScale(1 / TERRAIN_RESOLUTION)
+          .setDepth(-1000);
+        this.chunks.push({ texture, x: worldX, y: worldY, w, h });
       }
-      this.tiles.push(c);
-    }
   }
+
   redraw(sim: Simulation) {
-    const ctx = this.texture.context;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, this.texture.width, this.texture.height);
-    ctx.translate(SIZE * 32, 16);
-    ctx.imageSmoothingEnabled = false;
-    const polygon = (points: number[][], color: string) => {
-      ctx.beginPath();
-      points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-      ctx.closePath();
-      ctx.fillStyle = color;
-      ctx.fill();
-    };
-    for (let y = 0; y < SIZE; y++)
-      for (let x = 0; x < SIZE; x++) {
-        const p = iso(x, y),
-          water = terrain(x, y) === "water",
-          road = sim.roads.has(key({ x, y }));
-        const n = shade(x, y);
-        if (x === SIZE - 1 || y === SIZE - 1)
-          polygon(
-            [
-              [p.x - 32, p.y],
-              [p.x, p.y + 16],
-              [p.x + 32, p.y],
-              [p.x + 32, p.y + 9],
-              [p.x, p.y + 25],
-              [p.x - 32, p.y + 9],
-            ],
-            water ? "#347d7b" : "#647e58",
-          );
-        polygon(
-          [
-            [p.x, p.y - 16],
-            [p.x + 32, p.y],
-            [p.x, p.y + 16],
-            [p.x - 32, p.y],
-          ],
-          water ? "#419e9a" : "#91a96d",
+    for (const chunk of this.chunks) {
+      const ctx = chunk.texture.context;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, chunk.texture.width, chunk.texture.height);
+      ctx.setTransform(
+        TERRAIN_RESOLUTION,
+        0,
+        0,
+        TERRAIN_RESOLUTION,
+        -chunk.x * TERRAIN_RESOLUTION,
+        -chunk.y * TERRAIN_RESOLUTION,
+      );
+      ctx.imageSmoothingEnabled = true;
+      const pattern = (source: HTMLImageElement, size: number) => {
+        const p = ctx.createPattern(source, "repeat")!;
+        p.setTransform(
+          new DOMMatrix().scale(size / source.width, size / source.height),
         );
-        const frame = water
-          ? 8 + (x % 8) + (y % 8) * 8
-          : (road ? 4 : 0) + Math.floor(n * 4);
-        ctx.drawImage(this.tiles[frame], p.x - 32, p.y - 16, 64, 32);
-        if (road && water) {
-          polygon(
-            [
-              [p.x, p.y - 16],
-              [p.x + 32, p.y],
-              [p.x, p.y + 16],
-              [p.x - 32, p.y],
-            ],
-            "#947952",
-          );
-          for (let i = 0; i < 8; i++) {
-            const a = iso(i / 8 - 0.5, -0.5),
-              b = iso(i / 8 - 0.5, 0.5);
-            ctx.strokeStyle = i % 2 ? "#c8a77a" : "#ae8a5f";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(p.x + a.x, p.y + a.y);
-            ctx.lineTo(p.x + b.x, p.y + b.y);
-            ctx.stroke();
+        return p;
+      };
+      // Continuous fields retain the camera orientation of the grass and ripples.
+      const meadow = pattern(this.grass, 160),
+        brook = pattern(this.water, 320);
+      const poly = (points: number[][], fill: string | CanvasPattern) => {
+        ctx.beginPath();
+        points.forEach(([x, y], i) =>
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y),
+        );
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+      };
+      const visible = (x: number, y: number) =>
+        x + 42 >= chunk.x &&
+        x - 42 < chunk.x + chunk.w &&
+        y + 32 >= chunk.y &&
+        y - 36 < chunk.y + chunk.h;
+      const line = (
+        ax: number,
+        ay: number,
+        bx: number,
+        by: number,
+        width: number,
+        color: string,
+      ) => {
+        ctx.lineWidth = width;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+      };
+      // An opaque continuous base prevents antialiased tile edges from exposing
+      // thin grid seams when the water is magnified.
+      poly(
+        [
+          [0, -16],
+          [SIZE * 32, (SIZE - 1) * 16],
+          [0, (SIZE - 0.5) * 32],
+          [-SIZE * 32, (SIZE - 1) * 16],
+        ],
+        brook,
+      );
+      for (let y = 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) {
+          const p = iso(x, y);
+          if (!visible(p.x, p.y)) continue;
+          const water = terrain(x, y) === "water",
+            road = sim.roads.has(key({ x, y }));
+          if (x === SIZE - 1 || y === SIZE - 1)
+            poly(
+              [
+                [p.x - 32, p.y],
+                [p.x, p.y + 16],
+                [p.x + 32, p.y],
+                [p.x + 32, p.y + 9],
+                [p.x, p.y + 25],
+                [p.x - 32, p.y + 9],
+              ],
+              water ? "#347d7b" : "#64754d",
+            );
+          const diamond = [
+            [p.x, p.y - 16.1],
+            [p.x + 32.2, p.y],
+            [p.x, p.y + 16.1],
+            [p.x - 32.2, p.y],
+          ];
+          poly(diamond, water ? brook : meadow);
+          if (!water && road) {
+            ctx.save();
+            ctx.translate(p.x, p.y - 16);
+            ctx.transform(32, 16, -32, 16, 0, 0);
+            ctx.drawImage(this.slate, 0, 0, 1, 1);
+            ctx.restore();
           }
         }
-      }
-    // Shorelines and curbs are a second pass so neighboring tiles never cover them.
-    for (let y = 0; y < SIZE; y++)
-      for (let x = 0; x < SIZE; x++) {
-        const p = iso(x, y),
-          water = terrain(x, y) === "water",
-          road = sim.roads.has(key({ x, y }));
-        for (const e of EDGES) {
-          const nx = x + e.dx,
-            ny = y + e.dy;
-          if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE) continue;
-          const shore = water && !road && terrain(nx, ny) === "land";
-          const curb = road && !water && !sim.roads.has(key({ x: nx, y: ny }));
-          if (!shore && !curb) continue;
-          const ax = p.x + e.a[0],
-            ay = p.y + e.a[1],
-            bx = p.x + e.b[0],
-            by = p.y + e.b[1];
-          ctx.lineWidth = shore ? 5 : 4;
-          ctx.strokeStyle = shore ? "#bcb58a" : "#d2c8ad";
-          ctx.beginPath();
-          ctx.moveTo(ax, ay);
-          ctx.lineTo(bx, by);
-          ctx.stroke();
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = shore ? "#d9dab080" : "#eee1bf";
-          ctx.beginPath();
-          ctx.moveTo(ax, ay - 1);
-          ctx.lineTo(bx, by - 1);
-          ctx.stroke();
-          for (let i = 1; i < 8; i++) {
-            const xx = ax + ((bx - ax) * i) / 8,
-              yy = ay + ((by - ay) * i) / 8;
-            ctx.fillStyle = shore ? (i % 2 ? "#8a9e8b" : "#e0cc9d") : "#8f968c";
-            ctx.fillRect(xx, yy, shore ? 3 : 1, 2);
-            if (shore && shade(x + i, y) > 0.88) {
-              ctx.fillStyle = "#6b8649";
-              ctx.fillRect(xx, yy - 5, 1, 6);
-              ctx.fillRect(xx + 2, yy - 3, 1, 4);
+      // Individual raised curb stones and banks are baked only after town edits.
+      for (let y = 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) {
+          const p = iso(x, y);
+          if (!visible(p.x, p.y)) continue;
+          const water = terrain(x, y) === "water",
+            road = sim.roads.has(key({ x, y }));
+          for (const e of EDGES) {
+            const nx = x + e.dx,
+              ny = y + e.dy;
+            if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE) continue;
+            const shore = water && !road && terrain(nx, ny) === "land";
+            const curb =
+              road && !water && !sim.roads.has(key({ x: nx, y: ny }));
+            if (!shore && !curb) continue;
+            const ax = p.x + e.a[0],
+              ay = p.y + e.a[1],
+              bx = p.x + e.b[0],
+              by = p.y + e.b[1];
+            if (curb) {
+              line(ax, ay + 1, bx, by + 1, 3.2, "#6f7560");
+              line(ax, ay - 0.6, bx, by - 0.6, 3.2, "#c6bba1");
+              line(ax, ay - 1.7, bx, by - 1.7, 0.7, "#eee2c4");
+              for (let i = 0; i <= 6; i++) {
+                const xx = ax + ((bx - ax) * i) / 6,
+                  yy = ay + ((by - ay) * i) / 6;
+                line(xx - 1, yy + 0.7, xx + 1, yy - 2, 0.6, "#897f6a");
+              }
+            } else {
+              line(ax, ay, bx, by, 17, "#a4ccb324");
+              line(ax, ay, bx, by, 11, "#b9ceaa42");
+              // Riverbed stones remain visible beneath the pale shallows.
+              for (let i = 0; i < 2; i++) {
+                const t = (i + 0.5) / 2,
+                  frame = this.scene.textures.getFrame(
+                    "shore",
+                    (x + y + i) % 4,
+                  );
+                const w = 16,
+                  h = (w * frame.height) / frame.width;
+                ctx.globalAlpha = 0.32;
+                ctx.drawImage(
+                  this.shore,
+                  frame.cutX,
+                  frame.cutY,
+                  frame.cutWidth,
+                  frame.cutHeight,
+                  ax + (bx - ax) * t - e.dx * 3 - w / 2,
+                  ay + (by - ay) * t + 3 - h / 2,
+                  w,
+                  h,
+                );
+                ctx.globalAlpha = 1;
+              }
+              line(ax, ay, bx, by, 5, "#b7b08e");
+              for (let i = 0; i < 3; i++) {
+                const t = (i + 0.5) / 3;
+                const frame = this.scene.textures.getFrame(
+                  "shore",
+                  Math.floor(shade(x + i, y) * 4),
+                );
+                const w = 12 + shade(x, y + i) * 5,
+                  h = (w * frame.height) / frame.width;
+                ctx.drawImage(
+                  this.shore,
+                  frame.cutX,
+                  frame.cutY,
+                  frame.cutWidth,
+                  frame.cutHeight,
+                  ax + (bx - ax) * t - w / 2,
+                  ay + (by - ay) * t - h * 0.68,
+                  w,
+                  h,
+                );
+              }
             }
           }
         }
-      }
-    this.texture.refresh();
+      chunk.texture.refresh();
+    }
   }
 }

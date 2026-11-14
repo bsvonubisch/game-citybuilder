@@ -26,6 +26,8 @@ npm run build
 ## Playable now
 
 - Isometric 28×28 valley; pan, zoom, grid, building inspection, and speed controls.
+- Detailed Alpine Slate paving, continuous meadow grass, and Clear Brook water with shallow riverbed stones, banks, and reeds. Terrain retains four source pixels per world pixel through the maximum zoom.
+- Build wooden bridges with B: 35 gold per water tile. Raised decks, ramps, capped railings, and support posts follow the road connections. Cars, pedestrians, and delivery trucks cross at deck height; existing roads over water become bridges automatically.
 - Four-facing cottage rotation, both before placement and after construction (R or the Rotate button). Cars and pedestrians select front/rear directional sprites as they turn.
 - Pedestrian walk cycles, turning vehicle wheels, windmill sails, working saw/conveyor details, hearth smoke, fountain droplets, and gentle water glints. Pause and speed controls apply to animation as well as the simulation.
 - Explicit 2×2 and 3×2 building footprints. The entire footprint is validated against roads, buildings, water, and map edges; roads connect through the perimeter. Existing one-tile saves migrate without discarding buildings or their inventories.
@@ -37,7 +39,7 @@ npm run build
 
 ## Controls
 
-Choose a building in the sidebar, then click an empty plot. A translucent preview shows its visible sprite and full footprint. Click a building while exploring to inspect it. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R rotates a selected cottage (otherwise selects roads), X removes, G toggles the grid, and Escape cancels a tool.
+Choose a building in the sidebar, then click an empty plot. A translucent preview shows its visible sprite and full footprint. Click a building while exploring to inspect it. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R rotates a selected cottage (otherwise selects roads), B selects bridges, X removes, G toggles the grid, and Escape cancels a tool. Connect bridges to roads at both banks; open-water ends make piers.
 
 ## Firebase & GitHub
 
@@ -51,13 +53,14 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 - `src/scene.ts`: Phaser rendering, asset atlas frames, camera, picking, and overlays.
 - `src/building-art.ts`: calibrated foundation/prop contacts for each atlas frame and cottage rotation.
 - `src/rendering.ts`: ground fitting and smooth road movement between simulation ticks.
-- `src/terrain-art.ts`: texture projection, cached terrain, slate curbs, bridges, and shoreline transitions.
+- `src/terrain-art.ts`: detailed cached terrain chunks, slate curbs, and shoreline transitions.
+- `src/bridges.ts` / `src/bridge-art.ts`: shared deck elevation, road connections, and cached textured bridge geometry with separate rail depth layers.
 - `src/animation.ts`: walking frames, vehicle details, projected mill rotor, and working-building effects.
 - `src/main.ts`: interface, local saves, and interaction wiring.
 - `src/cloud.ts`: Firebase initialization, account login, and private save storage.
 - `tests/simulation.test.mjs`: economic, routing, persistence, migration, and collision regressions.
 
-Terrain and roads are baked into one canvas texture when the town changes; the grid and mill rotor frames are cached separately. Static paving geometry is not replayed every frame. Agents and effects render continuously between the deterministic 250 ms ticks, including road turns and pauses. Add `?perf=1` to show a rolling FPS/frame-time counter; add `?qa=performance&perf=1` to measure in an isolated local-save slot. The visual footprint audit at `/tests/footprints.html` is available through the dev server.
+Terrain and roads are baked at 4× resolution into chunks no larger than 2048×2048 pixels when the town changes. Bridge geometry is cached by neighbor connections; the grid and mill rotor frames are cached separately. Static paving geometry is not replayed every frame. Agents and effects render continuously between the deterministic 250 ms ticks, including road turns and pauses. Add `?perf=1` to show a rolling FPS/frame-time counter; add `?qa=performance&perf=1` to measure in an isolated local-save slot. The visual footprint audit at `/tests/footprints.html` is available through the dev server.
 
 ## Current scope
 

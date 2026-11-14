@@ -80,6 +80,7 @@ $("#app").innerHTML = `
  <div class="bottom-area"><div id="placement-hint" class="placement-hint">${icon("inspect")} Click a building to explore. Drag to look around.</div><nav class="toolbar" aria-label="Town tools"><div class="tool-group">${[
    ["inspect", "inspect", "Explore", "V"],
    ["road", "road", "Road", "R"],
+   ["bridge", "bridge", "Bridge", "B"],
    ["bulldoze", "hammer", "Remove", "X"],
  ]
    .map(
@@ -172,9 +173,11 @@ function setTool(next: Tool) {
         )} · ${FOOTPRINTS[next as BuildingKind].join("×")} tiles ${next === "house" ? `<button id="rotate-placement" class="rotate-placement" title="Rotate cottage (R)">${icon("reset")} Rotate <kbd>R</kbd></button>` : ""} <kbd>Esc</kbd>`
     : next === "road"
       ? `${icon("road")} Click to lay roads · 12 gold · Bridges 35 gold <kbd>Esc</kbd>`
-      : next === "bulldoze"
-        ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
-        : `${icon("inspect")} Click a building to explore. Drag to look around.`;
+      : next === "bridge"
+        ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
+        : next === "bulldoze"
+          ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
+          : `${icon("inspect")} Click a building to explore. Drag to look around.`;
   if (next === "house") $("#rotate-placement").onclick = rotatePlacement;
   scene.drawOverlay();
 }
@@ -588,7 +591,7 @@ document
   .forEach((el) => (el.onclick = () => setTool(el.dataset.tool as Tool)));
 $("#help").onclick = () =>
   openModal(
-    `<span class="eyebrow">WELCOME TO PINEHAVEN</span><h2>Settle in. Build a little.</h2><div class="help-list"><p><b>Build</b> Choose a building, then click an empty tile. Connect it to a warehouse with roads.</p><p><b>Explore</b> Click a building for its workers, stock, and production. Drag the map to move. Scroll to zoom.</p><p><b>Gather</b> Quarries need stone deposits; metal mines need metal deposits. Unbuilt deposits are marked on the map.</p><p><b>Automate</b> Trucks deliver inputs and outputs. Residents walk or drive to work. Production stops without roads or workers.</p><p><b>Shortcuts</b> V explore · R road · X remove · G grid · Esc cancel · WASD / arrows move · Space + drag pan</p></div>`,
+    `<span class="eyebrow">WELCOME TO PINEHAVEN</span><h2>Settle in. Build a little.</h2><div class="help-list"><p><b>Build</b> Choose a building, then click an empty tile. Connect it to a warehouse with roads.</p><p><b>Explore</b> Click a building for its workers, stock, and production. Drag the map to move. Scroll to zoom.</p><p><b>Gather</b> Quarries need stone deposits; metal mines need metal deposits. Unbuilt deposits are marked on the map.</p><p><b>Automate</b> Trucks deliver inputs and outputs. Residents walk or drive to work. Production stops without roads or workers.</p><p><b>Bridges</b> Choose Bridge (B), then place spans over water for 35 gold each. Connect both banks to roads for workers and deliveries.</p><p><b>Shortcuts</b> V explore · R road · B bridge · X remove · G grid · Esc cancel · WASD / arrows move · Space + drag pan</p></div>`,
   );
 $<HTMLInputElement>("#import-file").onchange = async (e) => {
   const input = e.target as HTMLInputElement,
@@ -630,6 +633,7 @@ window.addEventListener("keydown", (e) => {
     else setTool("road");
   }
   if (k === "x") setTool("bulldoze");
+  if (k === "b") setTool("bridge");
   if (k === "g") $("#grid").click();
 });
 window.addEventListener("beforeunload", () => save(false));

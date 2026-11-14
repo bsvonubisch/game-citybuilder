@@ -17,9 +17,13 @@ All raster artwork in `public/` was generated with the built-in image generation
 | `people-directions.png` | Four residents × four directional views, including walking away |
 | `terrain-options.png` | Garden Cobble, Woodland Lane, and selected Alpine Slate concepts |
 | `water-options.png` | Selected Clear Brook, Emerald River, and Silver-Blue Lake concepts |
-| `alpine-surfaces.png` | Four grass and four slate pavement top-down texture cells |
+| `alpine-surfaces.png` | Earlier terrain source, retained for reference |
+| `meadow-hd.png` / `slate-hd.png` | Detailed meadow and broad beveled slate material, regenerated from the selected C reference |
+| `brook-hd.png` | Continuous detailed turquoise surface from the selected A water reference |
+| `shore-details.png` | Four pebble clusters and four reed/cattail clusters with transparency |
+| `bridge-wood.png` | Deck planks and timber grain used on raised bridge geometry |
 | `alpine-deposits.png` | Four stone and four copper-bearing metal deposit cutouts |
-| `clear-brook-water.png` | Turquoise water texture distributed across an 8×8-tile repeat |
+| `clear-brook-water.png` | Earlier water source, retained for reference |
 | `pedestrian-walk.png` | Two costumes × four directions × four walking poses; runtime corrects one reversed view and excludes one mismatched bag pose |
 | `windmill-parts.png` | Separate stationary mill and front-facing rotor; 96 projected rotor views are cached at startup |
 
@@ -29,7 +33,9 @@ The quarry and mine currently reuse tinted industrial/lodge artwork and have exp
 
 `src/building-art.ts` records ground-contact landmarks in original atlas-cell pixels for every building frame and each cottage rotation. Include the feet of steps, log piles, barrels, conveyor legs, and other props; exclude roofs and elevated foliage. Source cells are 418×418 for the original buildings, 627×627 for cottages, and 887×887 for the separate windmill. A narrow piece of the neighboring warehouse is excluded from the workshop runtime frame.
 
-Terrain source textures are projected to exact 2:1 diamond tiles and baked into a single map texture after edits. Water glints, fountain droplets, chimney puffs, saw motion, conveyor cargo, and wheel spokes are small runtime overlays. Machinery requires an enabled, staffed, road-connected factory with inputs and output capacity; pauses freeze its phase. Windmill rotation uses a cached atlas rather than rerasterizing the sails each frame. Pedestrian gait follows traveled distance, and all animation timing uses simulation speed.
+Slate is projected to exact 2:1 tiles; grass and water use continuous screen-space fields so blades and ripples retain their camera orientation. Terrain is baked after edits at four source pixels per world pixel, in chunks no larger than 2048 pixels. Pebbles, shallows, curbs, and reeds dress the edges. Bridges use textured decks, shared ramp heights for agents and geometry, support posts, and independently depth-sorted railings. Their openings follow road connections. The generation prompts for the new materials are recorded in `terrain-hd-prompts.json`.
+
+Water glints, fountain droplets, chimney puffs, saw motion, conveyor cargo, and wheel spokes are small runtime overlays. Machinery requires an enabled, staffed, road-connected factory with inputs and output capacity; pauses freeze its phase. Windmill rotation uses a cached atlas rather than rerasterizing the sails each frame. Pedestrian gait follows traveled distance, and all animation timing uses simulation speed.
 
 `fitGround` converts the contacts to both isometric tile axes, fits their extents uniformly inside the logical footprint with a 0.08-tile curb clearance, and centers the result. Alpha trimming only affects the texture crop; it never decides the plot anchor or scale. Placement previews and finished buildings use the same transform. Rectangular industrial plots retain their existing dimensions and save compatibility. Elevated roofs and canopies may visually occlude ground behind them; their bases and ground-level props stay in the plot.
 

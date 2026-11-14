@@ -18,6 +18,8 @@ import {
 } from "./rendering.js";
 import { buildingArt, atlasContentWidth } from "./building-art.js";
 import { TerrainArt } from "./terrain-art.js";
+import { BridgeArt } from "./bridge-art.js";
+import { roadHeight } from "./bridges.js";
 import {
   TownAnimation,
   createRotorFrames,
@@ -67,6 +69,7 @@ export class TownScene extends Phaser.Scene {
   onHover: (p: Point | null) => void = () => {};
   onCamera: () => void = () => {};
   private terrainArt!: TerrainArt;
+  private bridgeArt!: BridgeArt;
   private gridCache!: Phaser.GameObjects.RenderTexture;
   private overlay!: Phaser.GameObjects.Graphics;
   private trees: Phaser.GameObjects.Image[] = [];
@@ -100,9 +103,12 @@ export class TownScene extends Phaser.Scene {
     this.load.image("houses", "/house-rotations.png");
     this.load.image("vehicles", "/vehicles-directions.png");
     this.load.image("walkers", "/pedestrian-walk.png");
-    this.load.image("surfaces", "/alpine-surfaces.png");
+    this.load.image("meadow", "/meadow-hd.png");
+    this.load.image("slate", "/slate-hd.png");
+    this.load.image("shore", "/shore-details.png");
+    this.load.image("bridge-wood", "/bridge-wood.png");
     this.load.image("deposits", "/alpine-deposits.png");
-    this.load.image("brook", "/clear-brook-water.png");
+    this.load.image("brook", "/brook-hd.png");
     this.load.image("mill", "/windmill-parts.png");
   }
   create() {
@@ -111,6 +117,7 @@ export class TownScene extends Phaser.Scene {
     this.trimAtlas("vehicles", 4, 4);
     this.trimAtlas("walkers", 8, 4);
     this.trimAtlas("deposits", 4, 2);
+    this.trimAtlas("shore", 4, 2);
     this.trimAtlas("mill", 2, 1);
     createRotorFrames(this);
     this.animation = new TownAnimation(this, (b, x, y) =>
@@ -128,10 +135,7 @@ export class TownScene extends Phaser.Scene {
         Math.floor(gardenImage.height / 4),
       );
     this.terrainArt = new TerrainArt(this);
-    this.add
-      .image(-SIZE * 32, -16, "terrain-art")
-      .setOrigin(0, 0)
-      .setDepth(-1000);
+    this.bridgeArt = new BridgeArt(this);
     this.gridCache = this.add
       .renderTexture(-SIZE * 32, -16, SIZE * 64, SIZE * 32 + 32)
       .setOrigin(0, 0)
@@ -321,6 +325,7 @@ export class TownScene extends Phaser.Scene {
   redraw() {
     this.renderRevision = this.simulation.state.revision;
     this.terrainArt.redraw(this.simulation);
+    this.bridgeArt.redraw(this.simulation);
     this.trees.forEach((t) => t.destroy());
     this.trees = [];
     this.waterPoints = [];
@@ -331,6 +336,29 @@ export class TownScene extends Phaser.Scene {
           water = terrain(x, y) === "water",
           road = this.simulation.roads.has(key({ x, y }));
         const occupied = this.simulation.buildingAt(x, y);
+        if (water && !road && h > 0.3) {
+          const bank = [
+            { x: x - 1, y },
+            { x, y: y - 1 },
+            { x: x + 1, y },
+            { x, y: y + 1 },
+          ].find(
+            (n) =>
+              inside(n.x, n.y) &&
+              terrain(n.x, n.y) === "land" &&
+              !this.simulation.roads.has(key(n)),
+          );
+          if (bank) {
+            const foot = iso(x + (bank.x - x) * 0.4, y + (bank.y - y) * 0.4);
+            const reeds = this.add
+              .image(foot.x, foot.y + 2, "shore", 4 + Math.floor(h * 4))
+              .setOrigin(0.5, 1);
+            reeds
+              .setScale((12 + h * 8) / reeds.frame.height)
+              .setDepth((x + y) * 32 + 5);
+            this.trees.push(reeds);
+          }
+        }
         if (water && !road && h > 0.45) this.waterPoints.push(p);
         if (water || road || occupied) continue;
         if (DEPOSITS[key({ x, y })]) {
@@ -459,14 +487,16 @@ export class TownScene extends Phaser.Scene {
           ? footprint(b.kind, b.x, b.y)
           : this.tool !== "inspect" &&
               this.tool !== "bulldoze" &&
-              this.tool !== "road"
+              this.tool !== "road" &&
+              this.tool !== "bridge"
             ? footprint(this.tool, this.hover.x, this.hover.y)
             : [this.hover];
       for (const p of cells) this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
       if (
         this.tool !== "inspect" &&
         this.tool !== "bulldoze" &&
-        this.tool !== "road"
+        this.tool !== "road" &&
+        this.tool !== "bridge"
       ) {
         this.ghost ??= this.add.image(0, 0, "buildings", 0).setDepth(5001);
         this.placeSprite(
@@ -561,7 +591,10 @@ export class TownScene extends Phaser.Scene {
             : 0;
       s.setPosition(
         Math.round(v.x) + (a.kind === "person" ? 10 : 0),
-        Math.round(v.y) + (a.kind === "person" ? 3 : 0) + bob,
+        Math.round(v.y) -
+          roadHeight(this.simulation.roads, p.x, p.y) +
+          (a.kind === "person" ? 3 : 0) +
+          bob,
       )
         .setDepth((p.x + p.y) * 32 + 16)
         .setFlipX(a.kind === "person" && walk.flip);

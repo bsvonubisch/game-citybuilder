@@ -12,7 +12,7 @@ export type BuildingKind =
   | "park"
   | "quarry"
   | "mine";
-export type Tool = BuildingKind | "road" | "bulldoze" | "inspect";
+export type Tool = BuildingKind | "road" | "bridge" | "bulldoze" | "inspect";
 export interface Definition {
   name: string;
   cost: number;

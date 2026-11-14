@@ -11,6 +11,7 @@
     "src/catalog.ts",
     "src/simulation.ts",
     "src/rendering.ts",
+    "src/bridges.ts",
     "src/animation.ts"
   ]
 }

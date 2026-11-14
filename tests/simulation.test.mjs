@@ -16,6 +16,12 @@ import {
 } from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
+import {
+  bridgeRails,
+  roadHeight,
+  BRIDGE_HEIGHT,
+  isBridge,
+} from "../.test-dist/bridges.js";
 const execute = (sim, command, id = "test-" + sim.state.revision) =>
   sim.execute({
     id,
@@ -26,6 +32,101 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+
+test("bridges connect people and deliveries across an inlet and survive a save roundtrip", () => {
+  const seed = new Simulation().snapshot();
+  seed.buildings = [
+    { ...seed.buildings.find((b) => b.kind === "house"), x: 18, y: 10 },
+    { ...seed.buildings.find((b) => b.kind === "forester"), x: 19, y: 8 },
+    { ...seed.buildings.find((b) => b.kind === "warehouse"), x: 18, y: 16 },
+  ];
+  seed.roads = [
+    "20,10",
+    ...Array.from({ length: 7 }, (_, i) => `21,${10 + i}`),
+  ].filter((p) => p !== "21,13");
+  seed.agents = [];
+  seed.residents = [];
+  const sim = new Simulation(seed),
+    money = sim.state.money;
+  assert.equal(sim.path({ x: 21, y: 10 }, { x: 21, y: 16 }), null);
+  assert.equal(
+    execute(sim, { type: "place", kind: "bridge", x: 20, y: 12 }).ok,
+    false,
+    "bridge tool requires water",
+  );
+  assert.equal(
+    execute(sim, { type: "place", kind: "bridge", x: 21, y: 13 }).ok,
+    true,
+  );
+  assert.equal(sim.state.money, money - 35);
+  assert.equal(sim.path({ x: 21, y: 10 }, { x: 21, y: 16 }).length, 7);
+  assert.equal(sim.state.residents.length, 3);
+  assert.ok(
+    sim.state.agents.some((a) =>
+      a.path.some((p) => isBridge(sim.roads, p.x, p.y)),
+    ),
+  );
+  advance(sim, 70);
+  assert.ok(
+    sim.stored("wood") > 60,
+    "delivery trucks carry wood across the bridge",
+  );
+  const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+  assert.ok(restored.path({ x: 21, y: 10 }, { x: 21, y: 16 }));
+  assert.equal(roadHeight(restored.roads, 21, 13), BRIDGE_HEIGHT);
+  assert.equal(execute(restored, { type: "demolish", x: 21, y: 13 }).ok, true);
+  assert.equal(restored.path({ x: 21, y: 10 }, { x: 21, y: 16 }), null);
+  assert.equal(
+    restored.state.buildings.find((b) => b.kind === "forester").connected,
+    false,
+  );
+  assert.ok(
+    restored.state.agents.every((a) =>
+      a.path.every((p) => restored.roads.has(key(p))),
+    ),
+  );
+});
+
+test("bridge ramps join land and neighboring spans continuously in both orientations", () => {
+  const sim = new Simulation();
+  const samples = [
+    [21, 10.5, 0],
+    [21, 11, 6],
+    [21, 11.5, 6],
+    [21, 14.5, 6],
+    [21, 15, 6],
+    [21, 15.5, 0],
+    [22.5, 18, 0],
+    [23, 18, 6],
+  ];
+  for (const [x, y, z] of samples) assert.equal(roadHeight(sim.roads, x, y), z);
+  for (const [x, y, dx, dy] of [
+    [21, 10.5, 0, 1],
+    [21, 11.5, 0, 1],
+    [21, 15.5, 0, 1],
+    [22.5, 18, 1, 0],
+  ]) {
+    const before = roadHeight(sim.roads, x - dx * 0.0001, y - dy * 0.0001),
+      after = roadHeight(sim.roads, x + dx * 0.0001, y + dy * 0.0001);
+    assert.ok(
+      Math.abs(before - after) < 0.002,
+      "no height pop at tile boundaries",
+    );
+  }
+  const roads = new Set(["24,10", "23,10", "25,10", "24,11"]);
+  assert.deepEqual(
+    bridgeRails(roads, { x: 24, y: 10 }),
+    [false, false, false, true],
+    "junctions have no rails blocking exits",
+  );
+  roads.delete("24,11");
+  assert.deepEqual(bridgeRails(roads, { x: 24, y: 10 }), [
+    false,
+    true,
+    false,
+    true,
+  ]);
+});
 
 test("walking cycles stay within their directional row and stop cycling while waiting", () => {
   for (let direction = 0; direction < 4; direction++)
