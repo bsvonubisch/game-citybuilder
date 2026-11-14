@@ -12,6 +12,13 @@ import {
 } from "../.test-dist/rendering.js";
 import { buildingArt } from "../.test-dist/building-art.js";
 import {
+  foundationGeometry,
+  FOUNDATION_HEIGHT,
+  STONES_PER_TILE,
+} from "../.test-dist/foundation.js";
+import { plazaLayout } from "../.test-dist/park-art.js";
+import { rotorView } from "../.test-dist/windmill.js";
+import {
   BUILDINGS,
   FOOTPRINTS,
   STEP,
@@ -390,7 +397,7 @@ test("bridges connect people and deliveries across an inlet and survive a save r
     },
     {
       ...seed.buildings.find((b) => b.kind === "warehouse"),
-      x: 18,
+      x: 19,
       y: 16,
       rotation: 1,
     },
@@ -1153,7 +1160,7 @@ test("front access distinguishes the entrance from side and back roads", () => {
   );
 });
 
-test("a rotated rectangular plot cannot overlap a road and rejection changes nothing", () => {
+test("a compact production plot cannot move onto a road and rejection changes nothing", () => {
   const sim = new Simulation();
   assert.equal(
     execute(sim, { type: "place", kind: "farm", x: 8, y: 20 }).ok,
@@ -1165,7 +1172,10 @@ test("a rotated rectangular plot cannot overlap a road and rejection changes not
     true,
   );
   const before = sim.snapshot();
-  assert.equal(execute(sim, { type: "rotate", id: b.id }).ok, false);
+  assert.equal(
+    execute(sim, { type: "move", id: b.id, x: 8, y: 21, rotation: 1 }).ok,
+    false,
+  );
   assert.deepEqual(sim.snapshot(), before);
 });
 
@@ -1440,4 +1450,131 @@ test("invalid terrain, unaffordable edits, and occupied flood areas leave towns 
       ),
     /terrain/,
   );
+});
+
+test("all 52 building views share exact raised plot bounds and stone density", () => {
+  let count = 0;
+  for (const kind of Object.keys(BUILDINGS))
+    for (const tier of kind === "house" ? [1, 2, 3] : [1])
+      for (let rotation = 0; rotation < 4; rotation++) {
+        const [w, h] = dimensions(kind, rotation),
+          g = foundationGeometry(w, h);
+        assert.equal(g.height, FOUNDATION_HEIGHT);
+        assert.equal(g.columns / w, STONES_PER_TILE);
+        assert.equal(g.rows / h, STONES_PER_TILE);
+        const corners = g.base.map((p) => groundCoordinates(p.x, p.y));
+        assert.deepEqual(corners, [
+          { x: -0.5, y: -0.5 },
+          { x: w - 0.5, y: -0.5 },
+          { x: w - 0.5, y: h - 0.5 },
+          { x: -0.5, y: h - 0.5 },
+        ]);
+        assert.ok(
+          buildingArt(kind, rotation, tier).texture.startsWith(
+            kind === "park" ? "park-" : "building-",
+          ),
+        );
+        count++;
+      }
+  assert.equal(count, 52);
+});
+test("rotating the plaza preserves objects, shapes and benches facing the fountain", () => {
+  const reference = plazaLayout(0);
+  for (let rotation = 0; rotation < 4; rotation++) {
+    const objects = plazaLayout(rotation);
+    assert.equal(objects.length, 8);
+    assert.deepEqual(
+      objects.map((p) => p.id).sort(),
+      reference.map((p) => p.id).sort(),
+    );
+    assert.equal(objects.filter((p) => p.kind === "flowers").length, 2);
+    for (const obj of objects) {
+      const original = reference.find((p) => p.id === obj.id);
+      assert.ok(
+        Math.abs(
+          Math.hypot(obj.x - 0.5, obj.y - 0.5) -
+            Math.hypot(original.x - 0.5, original.y - 0.5),
+        ) < 1e-10,
+      );
+      if (obj.kind === "bench") {
+        assert.ok(obj.dx * (0.5 - obj.x) + obj.dy * (0.5 - obj.y) > 0);
+        assert.ok(
+          Math.abs(obj.dx * (0.5 - obj.y) - obj.dy * (0.5 - obj.x)) < 1e-10,
+        );
+      }
+      if(obj.kind==="lamp") assert.ok(Math.abs((obj.x-obj.y)*32)>24,"lanterns must not align with the central spout in any view");
+    }
+  }
+  assert.deepEqual(plazaLayout(4), reference);
+});
+test("windmill rear sails sit behind the tower on their own far-side hubs", () => {
+  const views = Array.from({ length: 4 }, (_, r) => rotorView(r));
+  assert.equal(new Set(views.map((v) => JSON.stringify(v))).size, 4);
+  assert.ok(views[0].depthOffset > 0 && views[1].depthOffset > 0);
+  assert.ok(views[2].depthOffset < 0 && views[3].depthOffset < 0);
+  assert.ok(
+    buildingArt("mill", 2).mechanism[0] > buildingArt("mill", 0).mechanism[0],
+  );
+  assert.ok(
+    buildingArt("mill", 3).mechanism[0] < buildingArt("mill", 1).mechanism[0],
+  );
+});
+
+test("compact industry lots migrate inside the old footprint while keeping frontage, stock and work", () => {
+  for (const kind of ["farm", "sawmill", "workshop", "warehouse"])
+    for (let rotation = 0; rotation < 4; rotation++)
+      for (const plot of [
+        [3, 2],
+        [2, 3],
+      ]) {
+        const save = new Simulation().snapshot();
+        const warehouse = save.buildings.find((b) => b.kind === "warehouse");
+        const building = {
+          ...structuredClone(warehouse),
+          id: 1000,
+          kind,
+          x: 8,
+          y: 20,
+          rotation,
+          plot,
+          inventory: { planks: 17, wood: 11 },
+          progress: 0.37,
+          produced: 14,
+          construction: { required: 240, completed: 93 },
+        };
+        save.buildings =
+          kind === "warehouse" ? [building] : [warehouse, building];
+        save.decorations = [];
+        save.residents = [];
+        save.agents = [];
+        const front = frontage(kind, 8, 20, rotation, plot);
+        save.roads = [key(front.at(-1))];
+        const oldCells = new Set(
+          footprint(kind, 8, 20, rotation, plot).map(key),
+        );
+        const restored = parseSave(JSON.stringify(save)),
+          b = restored.buildings.find((b) => b.id === 1000);
+        assert.deepEqual(b.plot, [2, 2]);
+        assert.ok(
+          footprint(kind, b.x, b.y, rotation, b.plot).every((p) =>
+            oldCells.has(key(p)),
+          ),
+        );
+        assert.ok(
+          frontage(kind, b.x, b.y, rotation, b.plot).some((p) =>
+            save.roads.includes(key(p)),
+          ),
+        );
+        for (const field of [
+          "inventory",
+          "progress",
+          "produced",
+          "construction",
+          "enabled",
+          "id",
+        ])
+          assert.deepEqual(b[field], building[field]);
+        assert.equal(restored.money, save.money);
+        assert.doesNotThrow(() => parseSave(JSON.stringify(restored)));
+      }
 });

@@ -2,17 +2,25 @@ import type Phaser from "phaser";
 import { buildingArt, type BuildingArt } from "./building-art.js";
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
 import { iso, plotTransform, plotOutline } from "./rendering.js";
+import { drawFoundation } from "./foundation.js";
+import { drawPlaza } from "./park-art.js";
 
 const RESOLUTION = 4;
-/** A grid-aligned paved lot beneath an undistorted building. Cached at 4x. */
+/** One raised stone foundation material, shared by all plot sizes and views. */
 export function drawPlot(
   ctx: CanvasRenderingContext2D,
   source: HTMLImageElement,
   art: BuildingArt,
   w: number,
   h: number,
-  slate: HTMLImageElement,
+  benches?: HTMLImageElement,
+  stone?: HTMLImageElement,
 ) {
+  drawFoundation(ctx, w, h, stone);
+  if (art.texture === "park-parts") {
+    if (benches) drawPlaza(ctx, source, benches, art.frame);
+    return;
+  }
   const t = plotTransform(art.ground, w, h),
     [cw, ch] = art.size;
   const sw = Math.floor(source.width / art.columns),
@@ -23,22 +31,6 @@ export function drawPlot(
     sy = Math.floor(
       (Math.floor(art.frame / art.columns) * source.height) / art.rows,
     );
-  ctx.save();
-  // Only the flat paving is projected. Its edges coincide with occupancy and
-  // road tiles, even when the source building has a different base aspect.
-  ctx.transform(32, 16, -32, 16, 0, 0);
-  ctx.fillStyle = "#aaa899";
-  ctx.fillRect(-0.5, -0.5, w, h);
-  const paving = ctx.createPattern(slate, "repeat")!;
-  paving.setTransform(new DOMMatrix().scale(2 / slate.width, 2 / slate.height));
-  ctx.fillStyle = paving;
-  ctx.fillRect(-0.5, -0.5, w, h);
-  // A restrained stone border makes the complete lot readable, including its
-  // loading apron, without drawing a second raised platform around the sprite.
-  ctx.strokeStyle = "#d5cbb1";
-  ctx.lineWidth = 0.035;
-  ctx.strokeRect(-0.4825, -0.4825, w - 0.035, h - 0.035);
-  ctx.restore();
   ctx.imageSmoothingEnabled = false;
   const top = t.point(0, 0);
   ctx.drawImage(
@@ -58,6 +50,12 @@ export function plotBounds(art: BuildingArt, w: number, h: number) {
   const t = plotTransform(art.ground, w, h),
     [cw, ch] = art.size;
   const corners = [t.point(0, 0), t.point(cw, ch), ...plotOutline(w, h)];
+  // The sails extend above the tower. Include their swept envelope in cached
+  // previews and visibility bounds, even though gameplay animates them separately.
+  if(art.texture==="building-mill" && art.mechanism) {
+    const p=t.point(...art.mechanism),r=350*t.scale;
+    corners.push({x:p.x-r,y:p.y-r},{x:p.x+r,y:p.y+r});
+  }
   return {
     left: Math.floor(Math.min(...corners.map((p) => p.x))),
     top: Math.floor(Math.min(...corners.map((p) => p.y))),
@@ -100,7 +98,12 @@ export class PlotArt {
         art,
         w,
         h,
-        this.scene.textures.get("slate").getSourceImage() as HTMLImageElement,
+        this.scene.textures
+          .get("park-benches")
+          .getSourceImage() as HTMLImageElement,
+        this.scene.textures
+          .get("foundation-stone")
+          .getSourceImage() as HTMLImageElement,
       );
       texture.refresh();
       fit = { texture: key, x: left, y: top };

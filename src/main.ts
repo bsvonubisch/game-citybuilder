@@ -31,7 +31,7 @@ import { builderCapacity, constructionWork } from "./construction.js";
 import { TownScene } from "./scene.js";
 import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
-import { buildingArt } from "./building-art.js";
+import { buildingPreview } from "./previews.js";
 import { alertIcon } from "./building-alerts.js";
 import { cameraViewport } from "./rendering.js";
 import { productionActivity, type GoodsConnection } from "./logistics.js";
@@ -50,6 +50,16 @@ let restoreError = "";
 let simulation: Simulation;
 try {
   const save = localStorage.getItem(SAVE_KEY);
+  if (
+    save &&
+    JSON.parse(save).buildings?.some(
+      (b: { kind: string; plot?: number[] }) =>
+        ["farm", "sawmill", "workshop", "warehouse"].includes(b.kind) &&
+        b.plot?.includes(3),
+    )
+  ) {
+    localStorage.setItem(SAVE_KEY + ".before-compact-plots", save);
+  }
   if (save && JSON.parse(save).version < 3)
     localStorage.setItem(SAVE_KEY + ".before-front-entrances", save);
   if (save && JSON.parse(save).version === 1)
@@ -106,15 +116,13 @@ const frame = (
   rotation = 0,
   houseTier: HouseTier = 1,
 ) => {
-  const art = buildingArt(kind, rotation, houseTier);
-  return atlasIcon(
-    `/${art.texture}.png`,
-    art.columns,
-    art.rows,
-    ...art.size,
-    rotation,
-    cls,
+  const { key, promise } = buildingPreview(kind, rotation, houseTier);
+  void promise.then((src) =>
+    document
+      .querySelectorAll<HTMLImageElement>(`[data-preview="${key}"]`)
+      .forEach((image) => (image.src = src)),
   );
+  return `<img class="building-icon ${cls}" data-preview="${key}" alt="" aria-hidden="true">`;
 };
 $("#app").innerHTML = `
  <header class="topbar"><a class="brand" href="#" aria-label="Center town">${icon("tree")}<span>LITTLE WORKS<small>PINE & COPPER</small></span></a><button id="mobile-menu" class="mobile-menu" aria-controls="town-sidebar" aria-expanded="false">${icon("hammer")} Build & town</button><div class="resource-bar">

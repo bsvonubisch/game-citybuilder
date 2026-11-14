@@ -12,8 +12,8 @@ export interface BuildingArt {
   chimney?: GroundPoint;
   mechanism?: GroundPoint;
 }
-// Full stone foundations measured independently in all four views. These bound
-// the rigid sprite inside the lot; the separate paving fills the occupied grid.
+// Original ground contacts align the base-free cutouts without shearing them.
+// The shared raised foundation fills the exact occupied grid in every view.
 const grounds: Record<BuildingKind, readonly PlotCorners[]> = {
   house: [
     [
@@ -127,24 +127,24 @@ const grounds: Record<BuildingKind, readonly PlotCorners[]> = {
   ],
   sawmill: [
     [
-      [150, 408],
-      [393, 497],
-      [715, 360],
+      [64, 360],
+      [384, 520],
+      [704, 360],
     ],
     [
-      [128, 285],
-      [307, 493],
-      [608, 443],
+      [35, 350],
+      [355, 510],
+      [675, 350],
     ],
     [
-      [165, 389],
-      [401, 472],
-      [715, 340],
+      [88, 330],
+      [408, 490],
+      [728, 330],
     ],
     [
-      [119, 366],
-      [356, 470],
-      [609, 286],
+      [38, 340],
+      [358, 500],
+      [678, 340],
     ],
   ],
   workshop: [
@@ -300,8 +300,8 @@ const mechanisms: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
   mill: [
     [270, 172],
     [362, 172],
-    [252, 180],
-    [363, 184],
+    [377, 147],
+    [252, 147],
   ],
   park: [
     [320, 304],
@@ -327,6 +327,20 @@ export function buildingArt(
   rotation = 0,
   houseTier: HouseTier = 1,
 ): BuildingArt {
+  if (kind === "park")
+    return {
+      texture: "park-parts",
+      frame: rotation,
+      columns: 2,
+      rows: 2,
+      size: [512, 512],
+      ground: [
+        [0, 256],
+        [256, 384],
+        [512, 256],
+      ],
+      mechanism: [256, 132],
+    };
   if (kind === "house" && houseTier > 1) {
     const upgradedGrounds: Record<2 | 3, readonly PlotCorners[]> = {
       2: [
@@ -389,7 +403,7 @@ export function buildingArt(
       ],
     };
     return {
-      texture: `plot-house-${houseTier}`,
+      texture: `building-house-${houseTier}`,
       frame: rotation,
       columns: 2,
       rows: 2,
@@ -399,7 +413,7 @@ export function buildingArt(
     };
   }
   return {
-    texture: `plot-${kind}${kind === "warehouse" || kind === "park" ? "-v2" : ""}`,
+    texture: `building-${kind}`,
     frame: rotation,
     columns: kind === "mine" || kind === "quarry" ? 4 : 2,
     rows: 2,

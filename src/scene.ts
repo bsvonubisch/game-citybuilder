@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { rotorView } from "./windmill.js";
 import {
   BUILDINGS,
   SIZE,
@@ -187,8 +188,10 @@ export class TownScene extends Phaser.Scene {
       const art = buildingArt(kind);
       this.load.image(art.texture, `/${art.texture}.png`);
     }
-    this.load.image("plot-house-2", "/plot-house-2.png");
-    this.load.image("plot-house-3", "/plot-house-3.png");
+    this.load.image("building-house-2", "/building-house-2.png");
+    this.load.image("building-house-3", "/building-house-3.png");
+    this.load.image("park-benches", "/park-benches.png");
+    this.load.image("foundation-stone", "/foundation-stone.png");
     this.load.image("garden", "/garden-sprites.png");
     this.load.image("props", "/town-props.png");
     this.load.image("vehicles", "/vehicles-directions.png");
@@ -756,7 +759,7 @@ export class TownScene extends Phaser.Scene {
       }
       if (isBuilding(kind)) {
         this.drawFront(kind, this.hover.x, this.hover.y, this.rotation, plot);
-        this.ghost ??= this.add.image(0, 0, "plot-house").setDepth(5001);
+        this.ghost ??= this.add.image(0, 0, "building-house").setDepth(5001);
         this.placeSprite(
           this.ghost,
           kind,
@@ -790,8 +793,8 @@ export class TownScene extends Phaser.Scene {
                 ),
             )
             .setScale((p.scale * 0.7) / ROTOR_SCALE)
-            .setFlipX(this.rotation % 2 === 1)
-            .setDepth(5002)
+            .setFlipX(rotorView(this.rotation).flipX)
+            .setDepth(5001 + rotorView(this.rotation).depthOffset)
             .setAlpha(0.6)
             .setTint(valid ? 0xffffff : 0xe99385);
         }

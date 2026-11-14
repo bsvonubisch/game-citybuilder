@@ -322,13 +322,13 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
   house: [2, 2],
-  farm: [3, 2],
+  farm: [2, 2],
   mill: [2, 2],
   bakery: [2, 2],
   forester: [2, 2],
-  sawmill: [3, 2],
-  workshop: [3, 2],
-  warehouse: [3, 2],
+  sawmill: [2, 2],
+  workshop: [2, 2],
+  warehouse: [2, 2],
   park: [2, 2],
   quarry: [2, 2],
   mine: [2, 2],

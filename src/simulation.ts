@@ -294,15 +294,15 @@ export class Simulation {
       [7, 13],
       [7, 15],
     ].forEach(([x, y]) => add("house", x, y));
-    add("warehouse", 10, 11);
+    add("warehouse", 11, 11);
     add("park", 11, 15);
     add("park", 4, 13);
     add("farm", 14, 4);
     add("mill", 14, 7);
     add("bakery", 14, 11);
     add("forester", 14, 14);
-    add("sawmill", 18, 11);
-    add("workshop", 18, 14);
+    add("sawmill", 19, 11);
+    add("workshop", 19, 14);
     add("quarry", 19, 4);
     add("mine", 19, 7);
     this.state.buildings.find((b) => b.kind === "warehouse")!.inventory = {
@@ -1364,6 +1364,46 @@ export function parseSave(raw: string): World {
         );
         if (facing !== undefined) b.rotation = facing as 0 | 1 | 2 | 3;
       }
+    }
+    // The old six-cell lots were larger than the actual artwork. Shrink only
+    // those known lots inside their existing land, retaining road frontage,
+    // IDs, inventories and construction/production progress.
+    if (
+      ["farm", "sawmill", "workshop", "warehouse"].includes(b.kind) &&
+      Array.isArray(b.plot) &&
+      ["3,2", "2,3"].includes(b.plot.join(",")) &&
+      [0, 1, 2, 3].includes(b.rotation)
+    ) {
+      const [ow, oh] = b.plot,
+        oldFront = new Set(
+          frontage(b.kind, b.x, b.y, b.rotation, b.plot).map(key),
+        );
+      const candidates = [];
+      for (let dx = 0; dx <= ow - 2; dx++)
+        for (let dy = 0; dy <= oh - 2; dy++) {
+          const front = frontage(
+            b.kind,
+            b.x + dx,
+            b.y + dy,
+            b.rotation,
+            [2, 2],
+          );
+          candidates.push({
+            dx,
+            dy,
+            score: front.reduce(
+              (sum, p) =>
+                sum +
+                (s.roads.includes(key(p)) ? 100 : 0) +
+                (oldFront.has(key(p)) ? 1 : 0),
+              0,
+            ),
+          });
+        }
+      candidates.sort((a, b) => b.score - a.score);
+      b.x += candidates[0].dx;
+      b.y += candidates[0].dy;
+      b.plot = [2, 2];
     }
     if (
       !inside(b.x, b.y) ||

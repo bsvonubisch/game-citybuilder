@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
 import { buildingArt } from "./building-art.js";
+import { rotorView } from "./windmill.js";
 import {
   key,
   type Building,
@@ -61,7 +62,7 @@ export function createRotorFrames(scene: Phaser.Scene) {
       (frame % 12) * ROTOR_SIZE + ROTOR_SIZE / 2,
       Math.floor(frame / 12) * ROTOR_SIZE + ROTOR_SIZE / 2,
     );
-    ctx.transform(0.88, 0.38, 0, 1, 0, 0);
+    ctx.transform(0.894427, 0.447214, 0, 1, 0, 0);
     ctx.rotate((frame * Math.PI * 2) / ROTOR_FRAMES);
     ctx.drawImage(
       source,
@@ -186,14 +187,19 @@ export class TownAnimation {
           rotor = this.scene.add.image(0, 0, "mill-rotor", 0);
           this.rotors.set(b.id, rotor);
         }
-        const p = this.point(b, ...art.mechanism!);
+        const p = this.point(b, ...art.mechanism!),
+          view = rotorView(b.rotation);
         rotor
           .setVisible(true)
           .setPosition(p.x, p.y)
           .setScale((p.scale * 0.7) / ROTOR_SCALE)
-          .setFlipX(b.rotation % 2 === 1)
-          .setDepth(p.depth + 0.2)
-          .setFrame(Math.floor(phase * 12) % ROTOR_FRAMES)
+          .setFlipX(view.flipX)
+          .setDepth(p.depth + view.depthOffset)
+          .setFrame(
+            (((Math.floor(phase * 12) * view.spin) % ROTOR_FRAMES) +
+              ROTOR_FRAMES) %
+              ROTOR_FRAMES,
+          )
           .setAlpha(b.enabled ? 1 : 0.55);
       }
       if (!visible(b.id)) continue;
