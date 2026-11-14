@@ -2331,3 +2331,668 @@ dialog p.muted {
     max-width: calc(100vw - 120px);
   }
 }
+
+/* The town fills the screen; catalogs open above the bottom toolbar. */
+#app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+#app > main {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.topbar {
+  flex: none;
+  height: 68px;
+  padding: 0 20px;
+  gap: 18px;
+}
+.topbar .brand {
+  width: 194px;
+}
+.resource-bar {
+  min-width: 0;
+  gap: clamp(10px, 1.5vw, 26px);
+}
+.resource {
+  flex-shrink: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.resource.builders.shortage > .icon,
+.resource.builders.shortage > span {
+  color: #ac723b;
+}
+.townbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  min-height: 46px;
+  padding: 0 22px;
+  background: #f2f1e6;
+  border-bottom: 1px solid #d4ddc9;
+  z-index: 12;
+}
+.town-identity {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+.town-identity h1 {
+  font:
+    500 22px "Fraunces",
+    Georgia,
+    serif;
+  white-space: nowrap;
+}
+.town-identity .eyebrow {
+  font-size: 8px;
+}
+.town-motto {
+  font-size: 10px;
+  color: #8a957d;
+}
+.townbar .town-season {
+  margin: 0;
+  white-space: nowrap;
+}
+.townbar .town-progress {
+  margin: 0;
+  border: 0;
+  position: relative;
+}
+.townbar .town-progress summary {
+  min-height: 44px;
+  padding: 0 8px;
+}
+.townbar .town-progress summary > span {
+  margin: 0;
+  transform: none;
+}
+.townbar .town-progress-content {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 280px;
+  padding: 20px;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px #233e3422;
+  border-radius: 0 0 10px 10px;
+}
+.save-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  color: #8a957d;
+  white-space: nowrap;
+}
+.save-indicator button {
+  width: 34px;
+  height: 40px;
+  border-radius: 6px;
+}
+.save-indicator .icon {
+  width: 16px;
+}
+.world {
+  min-width: 0;
+}
+.map-corner {
+  top: 14px;
+  left: 14px;
+  bottom: auto;
+  right: auto;
+}
+.bottom-area {
+  width: min(1120px, calc(100% - 32px));
+  bottom: 16px;
+  padding: 0;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 6;
+}
+.bottom-area > * {
+  pointer-events: auto;
+}
+.bottom-area [hidden] {
+  display: none !important;
+}
+.toolbar {
+  width: auto;
+  flex-wrap: nowrap;
+}
+.tool-group {
+  width: auto;
+}
+.tool-button {
+  min-width: 64px;
+  font-size: 9px;
+}
+.speed-controls {
+  width: auto;
+}
+.placement-hint {
+  max-width: 100%;
+  white-space: normal;
+}
+.build-drawer {
+  width: 100%;
+  position: relative;
+  background: #f8f6edfa;
+  border: 1px solid #fffdf4;
+  border-radius: 14px;
+  box-shadow: 0 10px 35px #24402d35;
+  white-space: normal;
+  overflow: hidden;
+}
+#close-panel {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 1;
+}
+#panel-content {
+  padding: 12px 16px;
+  overflow-y: auto;
+  max-height: min(370px, calc(100dvh - 230px));
+  scrollbar-width: thin;
+  scrollbar-color: #b9c7a8 transparent;
+  overscroll-behavior: contain;
+}
+.build-drawer .category-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin: 0 36px 10px 0;
+  gap: 6px;
+  scrollbar-width: thin;
+}
+.build-drawer .category-tabs button {
+  white-space: nowrap;
+  padding: 9px 14px;
+  font-size: 11px;
+  flex: none;
+}
+.build-drawer .catalog-heading {
+  display: none;
+}
+.build-drawer .building-grid {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  padding: 3px 2px 9px;
+  scrollbar-width: thin;
+  scrollbar-color: #b9c7a8 transparent;
+  overscroll-behavior-x: contain;
+}
+.build-drawer .building-card {
+  flex: 0 0 124px;
+  min-height: 138px;
+  padding: 6px 6px 10px;
+}
+.build-drawer .building-card .building-icon {
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+}
+.build-drawer .building-card b {
+  font-size: 11px;
+}
+.build-drawer .build-note {
+  display: inline-flex;
+  vertical-align: middle;
+  padding: 0;
+  margin: 7px 0 0;
+  max-width: calc(100% - 190px);
+}
+.build-drawer .build-note b {
+  display: none;
+}
+.build-drawer .build-note p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.build-drawer .build-note > .icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+.build-drawer .chain-button {
+  display: inline-flex;
+  width: auto;
+  float: right;
+  margin: 3px 0 0;
+  border: 0;
+  padding: 7px 0 7px 10px;
+}
+.build-drawer .housing-ladder {
+  flex: 0 0 420px;
+  margin: 0 0 0 10px;
+  border-left: 1px solid var(--line);
+  padding: 4px 16px;
+}
+.build-drawer .housing-ladder h4 {
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+.build-drawer .housing-ladder .building-icon {
+  width: 72px;
+  height: 65px;
+}
+.build-drawer .housing-ladder figcaption {
+  gap: 1px;
+}
+.build-drawer .housing-ladder figcaption span {
+  display: none;
+}
+.build-drawer .town-overview {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 40px;
+  padding: 5px 30px 5px 4px;
+}
+.town-overview h3 {
+  font:
+    500 23px "Fraunces",
+    Georgia,
+    serif;
+  margin: 6px 0 14px;
+}
+.build-drawer .town-overview h4 {
+  margin: 0;
+  font-size: 15px;
+}
+.build-drawer #inventory {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0 24px;
+}
+.build-drawer .terrain-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px 16px;
+  padding-right: 30px;
+}
+.build-drawer .terrain-tools > .eyebrow {
+  grid-column: 1/-1;
+}
+.build-drawer .terrain-tools h3 {
+  grid-column: 1/-1;
+  margin: 0;
+  font-size: 22px;
+}
+.build-drawer .terrain-tools > p:first-of-type {
+  display: none;
+}
+.build-drawer .terrain-modes {
+  grid-column: 1/-1;
+  grid-template-columns: repeat(5, 1fr);
+  margin: 0;
+}
+.build-drawer .terrain-modes button {
+  min-height: 54px;
+  flex-direction: row;
+  justify-content: center;
+  padding: 8px;
+}
+.build-drawer .terrain-tools label {
+  grid-column: 1;
+  align-items: center;
+}
+.build-drawer .terrain-tools input {
+  grid-column: 1;
+  grid-row: 5;
+}
+.build-drawer .terrain-tools > p.muted {
+  margin: 0;
+  font-size: 10px;
+  grid-row: 4/6;
+  align-self: center;
+}
+.build-drawer .terrain-tools > button {
+  margin: 0;
+}
+#performance {
+  top: 122px !important;
+  left: auto !important;
+  right: 14px !important;
+}
+@media (max-width: 1200px) {
+  .topbar .brand {
+    width: 154px;
+    gap: 6px;
+  }
+  .topbar .brand > span {
+    font-size: 12px;
+    letter-spacing: 1.2px;
+  }
+  .topbar {
+    padding: 0 14px;
+    gap: 14px;
+  }
+  .resource-bar {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 8px 0;
+    scrollbar-width: thin;
+  }
+  .town-motto,
+  .town-identity > .eyebrow {
+    display: none;
+  }
+  .townbar {
+    gap: 16px;
+  }
+  .save-indicator #save-status {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .topbar {
+    height: 102px;
+    padding: 0 12px;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 50px 48px;
+    gap: 2px 8px;
+  }
+  .topbar .brand {
+    width: auto;
+    gap: 8px;
+  }
+  .topbar .brand > span {
+    display: block;
+    font-size: 11px;
+  }
+  .topbar .brand small {
+    font-size: 6px;
+    margin-top: 4px;
+  }
+  .topbar .header-actions {
+    grid-column: 2;
+  }
+  .resource-bar {
+    grid-column: 1/-1;
+    grid-row: 2;
+    padding: 2px 0 6px;
+    gap: 17px;
+  }
+  .resource {
+    font-size: 13px;
+  }
+  .townbar {
+    min-height: 42px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .town-identity {
+    flex: none;
+  }
+  .town-identity h1 {
+    font-size: 18px;
+  }
+  .town-star {
+    font-size: 12px;
+  }
+  .townbar .town-season {
+    flex: 1;
+    gap: 6px;
+    display: grid;
+    grid-template-columns: 16px auto;
+    row-gap: 0;
+    font-size: 9px;
+  }
+  .townbar .town-season > .icon {
+    grid-row: span 2;
+  }
+  .townbar .town-season > span {
+    font-size: 8px;
+  }
+  .townbar .town-progress summary {
+    width: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+  .townbar .town-progress summary > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .townbar .town-progress-content {
+    right: -42px;
+  }
+  .save-indicator {
+    gap: 0;
+  }
+  .save-indicator .status-dot {
+    display: none;
+  }
+  .save-indicator button {
+    min-width: 40px;
+    min-height: 44px;
+  }
+  .map-corner {
+    top: 8px;
+    left: 8px;
+    right: auto;
+    padding: 3px;
+  }
+  #minimap {
+    display: block;
+    width: 132px;
+    height: 80px;
+  }
+  .zoom-controls button {
+    min-height: 36px;
+  }
+  .bottom-area {
+    width: calc(100% - 16px);
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 6px;
+  }
+  .toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+    padding: 4px;
+  }
+  .tool-group {
+    width: 100%;
+    gap: 0;
+  }
+  .tool-button {
+    min-width: 0;
+    flex: 1;
+    height: 48px;
+    font-size: 8px;
+  }
+  .tool-button > .icon {
+    width: 18px;
+    height: 18px;
+  }
+  .speed-controls {
+    width: 100%;
+    border-left: 0;
+  }
+  .speed-controls button {
+    min-height: 40px;
+  }
+  #panel-content {
+    padding: 8px 10px;
+    max-height: min(340px, calc(100dvh - 280px));
+  }
+  #close-panel {
+    right: 4px;
+    top: 7px;
+    width: 40px;
+    height: 40px;
+  }
+  .build-drawer .category-tabs {
+    margin-bottom: 6px;
+  }
+  .build-drawer .category-tabs button {
+    min-height: 42px;
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .build-drawer .building-card {
+    flex-basis: 116px;
+    min-height: 126px;
+  }
+  .build-drawer .building-card .building-icon {
+    width: 76px;
+    height: 76px;
+  }
+  .build-drawer .building-card b {
+    font-size: 10px;
+  }
+  .build-drawer .build-note {
+    display: none;
+  }
+  .build-drawer .chain-button {
+    float: none;
+    margin: 0;
+    padding: 2px 6px;
+    min-height: 34px;
+    font-size: 10px;
+  }
+  .build-drawer .housing-ladder {
+    flex-basis: 340px;
+  }
+  .build-drawer .town-overview {
+    display: block;
+    padding: 3px 12px 8px;
+  }
+  .build-drawer .town-overview > section + section {
+    margin-top: 20px;
+  }
+  .build-drawer #inventory {
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+  }
+  .town-overview h3 {
+    font-size: 20px;
+  }
+  .build-drawer .terrain-tools {
+    display: block;
+    padding: 0;
+  }
+  .build-drawer .terrain-tools h3 {
+    margin: 5px 0 10px;
+  }
+  .build-drawer .terrain-modes {
+    gap: 4px;
+  }
+  .build-drawer .terrain-modes button {
+    flex-direction: column;
+    font-size: 9px;
+    padding: 8px 2px;
+  }
+  .build-drawer .terrain-tools label {
+    margin-top: 10px;
+  }
+  .build-drawer .terrain-tools > p.muted {
+    margin: 8px 0;
+  }
+  .build-drawer .terrain-tools > button {
+    display: inline-flex;
+    width: auto;
+    font-size: 10px;
+    padding: 8px;
+  }
+  .placement-hint {
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+  #performance {
+    top: 150px !important;
+    max-width: calc(100vw - 165px);
+    font-size: 8px !important;
+    padding: 4px !important;
+  }
+}
+@media (max-height: 540px) {
+  .topbar {
+    height: 52px;
+    display: flex;
+  }
+  .topbar .brand {
+    width: auto;
+  }
+  .topbar .brand > span {
+    display: none;
+  }
+  .resource-bar {
+    flex: 1;
+    width: auto;
+  }
+  .townbar {
+    min-height: 36px;
+  }
+  .townbar .town-season {
+    display: flex;
+    flex: none;
+  }
+  .town-identity {
+    flex: 1;
+  }
+  .townbar .town-progress summary {
+    min-height: 36px;
+  }
+  .bottom-area {
+    bottom: 7px;
+    width: min(900px, calc(100% - 16px));
+  }
+  .toolbar {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+  .tool-group,
+  .speed-controls {
+    width: auto;
+  }
+  .tool-button {
+    min-width: 46px;
+    height: 44px;
+  }
+  .speed-controls {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    margin: 0;
+    padding: 0 0 0 5px;
+    gap: 0;
+  }
+  .speed-controls button {
+    width: 30px;
+  }
+  #panel-content {
+    max-height: calc(100dvh - 165px);
+    padding: 6px 12px;
+  }
+  .build-drawer .building-card {
+    min-height: 108px;
+    padding: 4px;
+  }
+  .build-drawer .building-card .building-icon {
+    height: 60px;
+    width: 70px;
+  }
+  .build-drawer .build-note,
+  .build-drawer .chain-button {
+    display: none;
+  }
+  #minimap {
+    width: 108px;
+    height: 66px;
+  }
+  #performance {
+    top: 100px !important;
+  }
+}

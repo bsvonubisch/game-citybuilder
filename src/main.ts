@@ -80,6 +80,7 @@ let category: "homes" | "production" | "town" | "decorations" = "homes",
   selectedDecoration: number | null = null,
   hovered: Point | null = null,
   tool: Tool = "inspect",
+  panelOpen = false,
   lastSave = Date.now(),
   toastTimer = 0,
   modalPreviousSpeed = 1;
@@ -125,7 +126,7 @@ const frame = (
   return `<img class="building-icon ${cls}" data-preview="${key}" alt="" aria-hidden="true">`;
 };
 $("#app").innerHTML = `
- <header class="topbar"><a class="brand" href="#" aria-label="Center town">${icon("tree")}<span>LITTLE WORKS<small>PINE & COPPER</small></span></a><button id="mobile-menu" class="mobile-menu" aria-controls="town-sidebar" aria-expanded="false">${icon("hammer")} Build & town</button><div class="resource-bar">
+ <header class="topbar"><a class="brand" href="#" aria-label="Center town">${icon("tree")}<span>LITTLE WORKS<small>PINE & COPPER</small></span></a><div class="resource-bar">
  ${[
    ["coin", "gold", "Gold"],
    ["wood", "wood", "Wood in warehouses"],
@@ -142,22 +143,22 @@ $("#app").innerHTML = `
    )
    .join("")}
  </div><div class="header-actions"><button class="quiet" id="cloud-button" title="Sign in & cloud saves">${icon("cloud")}<span id="cloud-label">Connect</span></button><button class="icon-button" id="settings" aria-label="Save and settings">${icon("settings")}</button></div></header>
- <main><button class="sidebar-scrim" id="sidebar-scrim" aria-label="Close town menu" hidden></button><aside class="sidebar" id="town-sidebar"><button id="close-sidebar" class="mobile-menu icon-button" aria-label="Close build menu">${icon("close")}</button><div class="side-heading"><span class="eyebrow">THE EMERALD VALLEY</span><h1>Pinehaven <span class="town-star">✦</span></h1><p>A little industry. A lovely life.</p><div class="town-season">${icon("sun")}<b id="day">Day 1</b><span>Spring · Year 1</span></div></div>
- <div class="side-tabs"><button id="build-tab" class="active">${icon("hammer")} Build</button><button id="town-tab">${icon("leaf")} Your town</button></div>
- <div id="sidebar-content"></div><details class="town-progress"><summary>${icon("flag")} Town progress <span>+</span></summary><div class="town-progress-content"><h3>Small town. Big possibilities.</h3><p id="goal-copy">Let your first deliveries find their way home.</p><div class="goal-progress"><span id="goal-progress"></span></div><small id="goal-count">0 / 30 goods delivered</small></div></details><div class="sidebar-footer"><span class="status-dot"></span><span id="save-status">Saved on this device</span><button id="save-now" title="Save now" aria-label="Save town">${icon("save")}</button></div></aside>
+ <div class="townbar"><div class="town-identity"><span class="eyebrow">THE EMERALD VALLEY</span><h1>Pinehaven <span class="town-star">✦</span></h1><span class="town-motto">A little industry. A lovely life.</span></div><div class="town-season">${icon("sun")}<b id="day">Day 1</b><span>Spring · Year 1</span></div><details class="town-progress"><summary>${icon("flag")}<span>Town progress</span></summary><div class="town-progress-content"><h3>Small town. Big possibilities.</h3><p id="goal-copy">Let your first deliveries find their way home.</p><div class="goal-progress"><span id="goal-progress"></span></div><small id="goal-count">0 / 30 goods delivered</small></div></details><div class="save-indicator"><span class="status-dot"></span><span id="save-status">Saved on this device</span><button id="save-now" title="Save now" aria-label="Save town">${icon("save")}</button></div></div>
+ <main>
  <section class="world" aria-label="Interactive town map"><div id="game"></div><div id="building-alerts" role="group" aria-label="Building alerts"></div>
  <div id="inspector" class="inspector" hidden></div>
  <div class="map-corner"><canvas id="minimap" width="168" height="102" aria-label="Town minimap"></canvas><div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><button id="center" title="Center town">${icon("map")}<span id="zoom-level">100%</span></button><button id="zoom-in" aria-label="Zoom in">+</button></div></div>
- <div class="bottom-area"><div id="placement-hint" class="placement-hint">${icon("inspect")} Tap a building to explore · Drag to pan · Pinch to zoom</div><nav class="toolbar" aria-label="Town tools"><div class="tool-group">${[
+ <div class="bottom-area"><section id="build-drawer" class="build-drawer" aria-label="Build and town menu" hidden><button id="close-panel" class="icon-button" aria-label="Close town menu">${icon("close")}</button><div id="panel-content"></div></section><div id="placement-hint" class="placement-hint" hidden></div><nav class="toolbar" aria-label="Town tools"><div class="tool-group">${[
    ["inspect", "inspect", "Explore", "V"],
+   ["build", "hammer", "Build", "B"],
    ["road", "road", "Road", "R"],
-   ["bridge", "bridge", "Bridge", "B"],
    ["terrain", "terrain", "Terrain", "T"],
    ["bulldoze", "hammer", "Remove", "X"],
+   ["town", "leaf", "Your town", "U"],
  ]
    .map(
      ([id, i, label, k]) =>
-       `<button data-tool="${id}" class="tool-button ${id === "inspect" ? "active" : ""}" title="${label} (${k})">${icon(i)}<span>${label}</span><kbd>${k}</kbd></button>`,
+       `<button ${id === "build" || id === "town" ? `id="${id}-tab" aria-controls="build-drawer" aria-expanded="false"` : `data-tool="${id}"`} class="tool-button ${id === "inspect" ? "active" : ""}" title="${label} (${k})">${icon(i)}<span>${label}</span><kbd>${k}</kbd></button>`,
    )
    .join(
      "",
@@ -225,10 +226,11 @@ function toast(message: string) {
 function setTool(next: Tool) {
   if (next !== "move") scene.movingBuilding = null;
   const wasTerrain = tool === "terrain";
-  setMobileMenu(false);
+  setPanelOpen(false);
   if (next !== "inspect") closeInspection();
   tool = next;
   scene.tool = next;
+  $("#placement-hint").hidden = next === "inspect";
   document
     .querySelectorAll<HTMLElement>("[data-tool]")
     .forEach((e) => e.classList.toggle("active", e.dataset.tool === tool));
@@ -274,21 +276,40 @@ function setTool(next: Tool) {
       const c = scene.terrainCommand();
       if (c) scene.onTerrainApply(c);
     };
-    renderSidebar();
-    if (matchMedia("(max-width:760px)").matches) setMobileMenu(true);
-  } else if (wasTerrain) renderSidebar();
+    renderPanel();
+    setPanelOpen(true);
+  } else if (wasTerrain) renderPanel();
   updateEntranceHint();
   scene.drawOverlay();
 }
-function setMobileMenu(open: boolean) {
-  document.body.classList.toggle("menu-open", open);
-  $("#mobile-menu").setAttribute("aria-expanded", String(open));
-  $("#sidebar-scrim").hidden = !open;
+function setPanelOpen(open: boolean) {
+  panelOpen = open;
+  $("#build-drawer").hidden = !open;
+  $('[data-tool="inspect"]').classList.toggle(
+    "active",
+    !open && tool === "inspect",
+  );
+  for (const name of ["build", "town"] as const) {
+    const active = open && tab === name && tool !== "terrain";
+    $("#" + name + "-tab").setAttribute("aria-expanded", String(active));
+    $("#" + name + "-tab").classList.toggle("active", active);
+  }
 }
-$("#mobile-menu").onclick = () =>
-  setMobileMenu(!document.body.classList.contains("menu-open"));
-$("#close-sidebar").onclick = () => setMobileMenu(false);
-$("#sidebar-scrim").onclick = () => setMobileMenu(false);
+function togglePanel(next: typeof tab) {
+  if (panelOpen && tab === next && tool !== "terrain") {
+    setPanelOpen(false);
+    return;
+  }
+  setTool("inspect");
+  closeInspection();
+  tab = next;
+  renderPanel();
+  setPanelOpen(true);
+}
+$("#close-panel").onclick = () => {
+  setPanelOpen(false);
+  $(tool === "terrain" ? '[data-tool="terrain"]' : `#${tab}-tab`).focus();
+};
 function rotatePlacement() {
   scene.rotation = ((scene.rotation + 1) % 4) as 0 | 1 | 2 | 3;
   scene.drawOverlay();
@@ -330,12 +351,11 @@ function updateEntranceHint() {
     : "Front entrance needs a road";
   el.className = connected ? "front-connected" : "front-missing";
 }
-function renderSidebar() {
-  $("#build-tab").classList.toggle("active", tab === "build");
-  $("#town-tab").classList.toggle("active", tab === "town");
+function renderPanel() {
+  setPanelOpen(panelOpen);
   if (tab === "town") {
-    $("#sidebar-content").innerHTML =
-      `<div class="town-overview"><span class="eyebrow">GROWING TOGETHER</span><h3>Life in Pinehaven</h3><div id="town-stats"></div><h4>Town inventory</h4><p class="muted">Across buildings and deliveries.</p><div id="inventory"></div><div class="chain-note">${icon("cloud")} Single-player foundation<br><small>Firebase cloud saves · Shared worlds planned</small></div></div>`;
+    $("#panel-content").innerHTML =
+      `<div class="town-overview"><section><span class="eyebrow">GROWING TOGETHER</span><h3>Life in Pinehaven</h3><div id="town-stats"></div></section><section><h4>Town inventory</h4><p class="muted">Across buildings and deliveries.</p><div id="inventory"></div></section></div>`;
     updateUI();
     return;
   }
@@ -347,7 +367,7 @@ function renderSidebar() {
       water: "Add water",
       land: "Add ground",
     };
-    $("#sidebar-content").innerHTML =
+    $("#panel-content").innerHTML =
       `<section class="terrain-tools"><span class="eyebrow">SHAPE THE VALLEY</span><h3>Land & water</h3><p>Choose a brush, then preview it on the map.</p><div class="terrain-modes">${Object.entries(
         modes,
       )
@@ -362,7 +382,7 @@ function renderSidebar() {
       (el) =>
         (el.onclick = () => {
           scene.terrainMode = el.dataset.terrainMode as TerrainMode;
-          renderSidebar();
+          renderPanel();
           scene.drawOverlay();
         }),
     );
@@ -372,8 +392,8 @@ function renderSidebar() {
         `${scene.terrainSize} × ${scene.terrainSize}`;
       scene.drawOverlay();
     };
-    $("#use-terrain").onclick = () => setMobileMenu(false);
-    $("#terrain-back").onclick = () => setTool("inspect");
+    $("#use-terrain").onclick = () => setPanelOpen(false);
+    $("#terrain-back").onclick = () => togglePanel("build");
     $("#undo-terrain").onclick = async () => {
       const result = await gateway.command({ type: "undoTerrain" });
       toast(result.message);
@@ -381,7 +401,7 @@ function renderSidebar() {
         scene.redraw();
         save(false);
         updateUI();
-        renderSidebar();
+        renderPanel();
       }
     };
     return;
@@ -407,29 +427,30 @@ function renderSidebar() {
               `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="${d.description}">${frame(kind)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}${d.materials ? "<small>+ materials</small>" : ""}</span></button>`,
           )
           .join("");
-  $("#sidebar-content").innerHTML =
-    `<div class="category-tabs">${Object.entries(names)
-      .map(
-        ([id, name]) =>
-          `<button data-category="${id}" class="${category === id ? "active" : ""}">${name}</button>`,
-      )
-      .join(
-        "",
-      )}</div><div class="catalog-heading"><h3>${names[category]}</h3></div><div class="building-grid">${cards}</div><div class="build-note">${icon("leaf")}<div><b>${category === "decorations" ? "Make the streets your own." : "Connect the front entrance."}</b><p>${category === "decorations" ? "Plant trees, add benches and lights. Use Remove (X) to clear decorations." : "Rotate with R. The entrance arrow turns green when a road reaches the front."}</p></div></div><button class="chain-button" id="production-guide">See production chains ${icon("arrow")}</button>`;
+  $("#panel-content").innerHTML = `<div class="category-tabs">${Object.entries(
+    names,
+  )
+    .map(
+      ([id, name]) =>
+        `<button data-category="${id}" class="${category === id ? "active" : ""}">${name}</button>`,
+    )
+    .join(
+      "",
+    )}</div><div class="catalog-heading"><h3>${names[category]}</h3></div><div class="building-grid">${cards}</div><div class="build-note">${icon("leaf")}<div><b>${category === "decorations" ? "Make the streets your own." : "Connect the front entrance."}</b><p>${category === "decorations" ? "Plant trees, add benches and lights. Use Remove (X) to clear decorations." : "Rotate with R. The entrance arrow turns green when a road reaches the front."}</p></div></div><button class="chain-button" id="production-guide">See production chains ${icon("arrow")}</button>`;
   document.querySelectorAll<HTMLElement>("[data-category]").forEach(
     (el) =>
       (el.onclick = () => {
         category = el.dataset.category as typeof category;
-        renderSidebar();
+        renderPanel();
       }),
   );
   if (category === "homes") {
-    $("#sidebar-content .building-grid").insertAdjacentHTML(
-      "afterend",
+    $("#panel-content .building-grid").insertAdjacentHTML(
+      "beforeend",
       `<section class="housing-ladder" aria-label="House upgrades"><h4>Grow your homes</h4><p>Build a cottage, then select it to upgrade.</p><div>${([1, 2, 3] as HouseTier[]).map((tier) => `<figure>${frame("house", "", 0, tier)}<figcaption><small>Tier ${tier}</small><b>${HOUSE_TIERS[tier].name}</b><span>${HOUSE_TIERS[tier].capacity} residents</span></figcaption></figure>`).join("")}</div></section>`,
     );
   } else if (category === "decorations") {
-    $("#sidebar-content .build-note p").textContent =
+    $("#panel-content .build-note p").textContent =
       "Place fence pieces side by side to join them. Corners and junctions connect automatically. Use Remove (X) to clear decorations.";
   }
   document
@@ -499,7 +520,7 @@ scene.onTerrainApply = async (command) => {
     scene.redraw();
     save(false);
     updateUI();
-    renderSidebar();
+    renderPanel();
   }
 };
 scene.onHover = (p) => {
@@ -866,13 +887,19 @@ function updateUI() {
   const s = simulation.state;
   const employed = s.residents.filter((r) => r.job !== null).length;
   const sites = s.buildings.filter((b) => b.construction && b.enabled);
-  const buildersNeeded = sites.reduce((total, b) => total + builderCapacity(b), 0);
+  const buildersNeeded = sites.reduce(
+    (total, b) => total + builderCapacity(b),
+    0,
+  );
   const buildersAssigned = sites.reduce((total, b) => total + b.workers, 0);
   $("#builders").textContent = `${buildersAssigned} / ${buildersNeeded}`;
   const builderSummary = `${buildersAssigned} builders assigned of ${buildersNeeded} needed at ${sites.length} active construction sites · ${Math.max(0, buildersNeeded - buildersAssigned)} more builders needed. Paused sites excluded; sites awaiting road access included.`;
   $(".resource.builders").title = builderSummary;
   $(".resource.builders").setAttribute("aria-label", builderSummary);
-  $(".resource.builders").classList.toggle("shortage", buildersAssigned < buildersNeeded);
+  $(".resource.builders").classList.toggle(
+    "shortage",
+    buildersAssigned < buildersNeeded,
+  );
   $("#gold").textContent = Math.floor(s.money).toLocaleString();
   for (const r of ["wood", "planks", "stone", "metal"] as const)
     $("#" + r).textContent = simulation.stored(r).toString();
@@ -1033,14 +1060,8 @@ function showCloud() {
 cloud.subscribe(() => {
   $("#cloud-label").textContent = cloud.user ? "Connected" : "Connect";
 });
-$("#build-tab").onclick = () => {
-  tab = "build";
-  renderSidebar();
-};
-$("#town-tab").onclick = () => {
-  tab = "town";
-  renderSidebar();
-};
+$("#build-tab").onclick = () => togglePanel("build");
+$("#town-tab").onclick = () => togglePanel("town");
 $(".brand").onclick = (e) => {
   e.preventDefault();
   scene.centerTown();
@@ -1085,7 +1106,7 @@ document
   .forEach((el) => (el.onclick = () => setTool(el.dataset.tool as Tool)));
 $("#help").onclick = () =>
   openModal(
-    `<span class="eyebrow">WELCOME TO PINEHAVEN</span><h2>Settle in. Build a little.</h2><div class="help-list"><p><b>Build & rotate</b> Choose any building, then use Rotate or R to turn it. The footprint turns too. A green front arrow means road access; amber means the entrance still needs a road. That road must reach a warehouse for the building to work.</p><p><b>Explore</b> Click buildings for workers, stock and production. Click a person or vehicle to see their destination, cargo and route. Drag the map to move. Scroll to zoom.</p><p><b>Gardens & streets</b> Add trees, benches, lights, planters and fences from the build catalog. Select a decoration to remove it, or use Remove (X).</p><p><b>Gather</b> Quarries need stone deposits; metal mines need metal deposits. Unbuilt deposits are marked on the map.</p><p><b>Automate</b> Trucks deliver inputs and outputs. Cars keep right, queue behind traffic and take turns at junctions. Production stops without front road access or workers.</p><p><b>Bridges</b> Choose Bridge (B), then place spans over water for 35 gold each. Connect both banks to roads for workers and deliveries.</p><p><b>Shortcuts</b> V explore · R rotate while building, otherwise road · B bridge · X remove · G grid · Esc cancel · WASD / arrows move · Space + drag pan</p></div>`,
+    `<span class="eyebrow">WELCOME TO PINEHAVEN</span><h2>Settle in. Build a little.</h2><div class="help-list"><p><b>Build & rotate</b> Choose any building, then use Rotate or R to turn it. The footprint turns too. A green front arrow means road access; amber means the entrance still needs a road. That road must reach a warehouse for the building to work.</p><p><b>Explore</b> Click buildings for workers, stock and production. Click a person or vehicle to see their destination, cargo and route. Drag the map to move. Scroll to zoom.</p><p><b>Gardens & streets</b> Add trees, benches, lights, planters and fences from the build catalog. Select a decoration to remove it, or use Remove (X).</p><p><b>Gather</b> Quarries need stone deposits; metal mines need metal deposits. Unbuilt deposits are marked on the map.</p><p><b>Automate</b> Trucks deliver inputs and outputs. Cars keep right, queue behind traffic and take turns at junctions. Production stops without front road access or workers.</p><p><b>Bridges</b> Choose Road (R), then place spans over water for 35 gold each. Connect both banks to roads for workers and deliveries.</p><p><b>Shortcuts</b> V explore · R rotate while building, otherwise road · B build catalog · U your town · T terrain · X remove · G grid · Esc cancel · WASD / arrows move · Space + drag pan</p></div>`,
   );
 $<HTMLInputElement>("#import-file").onchange = async (e) => {
   const input = e.target as HTMLInputElement,
@@ -1121,7 +1142,8 @@ window.addEventListener("keydown", (e) => {
     else setTool("road");
   }
   if (k === "x") setTool("bulldoze");
-  if (k === "b") setTool("bridge");
+  if (k === "b") togglePanel("build");
+  if (k === "u") togglePanel("town");
   if (k === "t") setTool("terrain");
   if (k === "g") $("#grid").click();
 });
@@ -1133,6 +1155,6 @@ setInterval(() => {
   updateUI();
   if (Date.now() - lastSave > 15000) save(false);
 }, 500);
-renderSidebar();
+renderPanel();
 updateUI();
 if (restoreError) toast(restoreError);
