@@ -24,6 +24,7 @@ import {
   type OccludingPlot,
 } from "./rendering.js";
 import { buildingArt } from "./building-art.js";
+import { fisheryCells } from "./shoreline.js";
 import { PlotArt } from "./plot-art.js";
 import { ConstructionArt } from "./construction-art.js";
 import { builderPosition, builderFrame } from "./construction.js";
@@ -743,7 +744,24 @@ export class TownScene extends Phaser.Scene {
           : isBuilding(kind)
             ? footprint(kind, this.hover.x, this.hover.y, this.rotation, plot)
             : [this.hover];
-      for (const p of cells) this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
+      if (kind === "fishery" && this.tool !== "bulldoze") {
+        for (const p of fisheryCells(
+          this.hover.x,
+          this.hover.y,
+          this.rotation,
+        )) {
+          const matches =
+            terrainCell(p.x, p.y, this.simulation.state.terrain).kind ===
+            p.kind;
+          this.diamond(
+            p,
+            matches ? (p.kind === "water" ? 0x6bd4e4 : 0xe5cb85) : 0xd78069,
+            0.42,
+          );
+        }
+      } else
+        for (const p of cells)
+          this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
       if (isDecoration(this.tool)) {
         const def = DECORATIONS[this.tool],
           p = iso(this.hover.x, this.hover.y);

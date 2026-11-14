@@ -129,6 +129,7 @@ $("#app").innerHTML = `
  <header class="topbar"><a class="brand" href="#" aria-label="Center town">${icon("tree")}<span>LITTLE WORKS<small>PINE & COPPER</small></span></a><div class="resource-bar">
  ${[
    ["coin", "gold", "Gold"],
+   ["bread", "food-stock", "Food in warehouses"],
    ["wood", "wood", "Wood in warehouses"],
    ["planks", "planks", "Planks in warehouses"],
    ["stone", "stone", "Stone in warehouses"],
@@ -261,6 +262,11 @@ function setTool(next: Tool) {
             ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if (next === "fishery")
+    $("#placement-hint").insertAdjacentHTML(
+      "beforeend",
+      '<span class="shore-hint"><b>Sand: 2 land tiles</b> · <b>Blue: 2 water tiles</b> · Entrance faces land</span>',
+    );
   if (next === "move") {
     const b = simulation.building(scene.movingBuilding!);
     $("#placement-hint").innerHTML =
@@ -901,6 +907,15 @@ function updateUI() {
     buildersAssigned < buildersNeeded,
   );
   $("#gold").textContent = Math.floor(s.money).toLocaleString();
+  const bread = simulation.stored("bread"),
+    fish = simulation.stored("fish");
+  $("#food-stock").textContent = String(bread + fish);
+  $(".resource.food-stock").title =
+    `${bread} bread + ${fish} fish in warehouses · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
+  $(".resource.food-stock").setAttribute(
+    "aria-label",
+    $(".resource.food-stock").title,
+  );
   for (const r of ["wood", "planks", "stone", "metal"] as const)
     $("#" + r).textContent = simulation.stored(r).toString();
   $("#population").textContent = `${employed} / ${s.residents.length}`;
@@ -928,7 +943,7 @@ function updateUI() {
     const totals = simulation.totals();
     $("#inventory").innerHTML = RESOURCES.map(
       (r) =>
-        `<div class="inventory-row">${icon(r === "bread" ? "bread" : r === "wood" || r === "stone" || r === "metal" ? r : "box")}<span>${RESOURCE_NAMES[r]}</span><b>${totals[r]}</b></div>`,
+        `<div class="inventory-row">${icon(r === "bread" || r === "fish" || r === "wood" || r === "stone" || r === "metal" ? r : "box")}<span>${RESOURCE_NAMES[r]}</span><b>${totals[r]}</b></div>`,
     ).join("");
   }
   updateInspector();
@@ -969,7 +984,7 @@ function closeModal() {
 }
 function showChains() {
   openModal(
-    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat farm → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Residents eat bread each day.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Workshop → Warehouse</span><small>Wood becomes planks, then tools. Tools sell for 35 gold each.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
+    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat farm → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per three residents each day.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Workshop → Warehouse</span><small>Wood becomes planks, then tools. Tools sell for 35 gold each.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
   );
 }
 function showSettings() {

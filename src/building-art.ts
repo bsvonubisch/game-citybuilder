@@ -1,4 +1,5 @@
 import type { BuildingKind, HouseTier } from "./catalog.js";
+import { fisheryLayout } from "./shoreline.js";
 export type GroundPoint = readonly [number, number];
 export type PlotCorners = readonly [GroundPoint, GroundPoint, GroundPoint];
 export interface BuildingArt {
@@ -11,10 +12,15 @@ export interface BuildingArt {
   ground: PlotCorners;
   chimney?: GroundPoint;
   mechanism?: GroundPoint;
+  /** A shoreline hut uses only the land rectangle within its full plot. */
+  land?: { x: number; y: number; width: number; height: number };
 }
 // Original ground contacts align the base-free cutouts without shearing them.
 // The shared raised foundation fills the exact occupied grid in every view.
-const grounds: Record<BuildingKind, readonly PlotCorners[]> = {
+const grounds: Record<
+  Exclude<BuildingKind, "fishery">,
+  readonly PlotCorners[]
+> = {
   house: [
     [
       [0, 443],
@@ -327,6 +333,41 @@ export function buildingArt(
   rotation = 0,
   houseTier: HouseTier = 1,
 ): BuildingArt {
+  if (kind === "fishery") {
+    // Atlas frames are mirrored pairs; map them to the four road-facing edges.
+    const frame = [1, 0, 3, 2][rotation];
+    const ground: PlotCorners[] = [
+      [
+        [53, 495],
+        [239, 558],
+        [596, 415],
+      ],
+      [
+        [26, 415],
+        [374, 558],
+        [560, 495],
+      ],
+      [
+        [53, 482],
+        [239, 550],
+        [596, 407],
+      ],
+      [
+        [26, 407],
+        [374, 550],
+        [560, 482],
+      ],
+    ];
+    return {
+      texture: "building-fishery",
+      frame,
+      columns: 2,
+      rows: 2,
+      size: [627, 627],
+      ground: ground[frame],
+      land: fisheryLayout(rotation).land,
+    };
+  }
   if (kind === "park")
     return {
       texture: "park-parts",

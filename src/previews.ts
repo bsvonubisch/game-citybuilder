@@ -27,11 +27,12 @@ export function buildingPreview(
     promise = (async () => {
       const art = buildingArt(kind, rotation, tier),
         [w, h] = dimensions(kind, rotation);
-      const [image, benches, rotor, stone] = await Promise.all([
+      const [image, benches, rotor, stone, wood] = await Promise.all([
         artImage(`/${art.texture}.png`),
         kind === "park" ? artImage("/park-benches.png") : undefined,
         kind === "mill" ? artImage("/windmill-parts.png") : undefined,
         artImage("/foundation-stone.png"),
+        kind === "fishery" ? artImage("/bridge-wood.png") : undefined,
       ]);
       const bounds = plotBounds(art, w, h),
         canvas = document.createElement("canvas");
@@ -47,7 +48,7 @@ export function buildingPreview(
           drawRotor(ctx, rotor, p.x, p.y, t.scale * 0.7, rotation, 0.5);
       };
       if (rotorView(rotation).rear) sail();
-      drawPlot(ctx, image, art, w, h, benches, stone);
+      drawPlot(ctx, image, art, w, h, benches, stone, wood);
       if (!rotorView(rotation).rear) sail();
       return canvas.toDataURL();
     })();

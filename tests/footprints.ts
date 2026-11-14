@@ -10,6 +10,7 @@ import { buildingArt } from "../src/building-art.js";
 import { plotTransform, iso } from "../src/rendering.js";
 import { drawPlot, plotBounds } from "../src/plot-art.js";
 import { drawRotor, rotorView } from "../src/windmill.js";
+import { fisheryCells } from "../src/shoreline.js";
 
 const contacts = document.querySelector<HTMLInputElement>("#contacts")!;
 const drawCases: (() => void)[] = [];
@@ -24,7 +25,14 @@ const rotor = new Image();
 rotor.src = "/windmill-parts.png";
 const stone = new Image();
 stone.src = "/foundation-stone.png";
-await Promise.all([benches.decode(), rotor.decode(), stone.decode()]);
+const wood = new Image();
+wood.src = "/bridge-wood.png";
+await Promise.all([
+  benches.decode(),
+  rotor.decode(),
+  stone.decode(),
+  wood.decode(),
+]);
 for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
   if (filter && !filter.includes(kind)) continue;
   for (const tier of (kind === "house"
@@ -62,7 +70,7 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
         }
       };
       if (rotorView(rotation).rear) sail();
-      drawPlot(sc, image, art, w, h, benches, stone);
+      drawPlot(sc, image, art, w, h, benches, stone, wood);
       if (!rotorView(rotation).rear) sail();
       const draw = () => {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -100,6 +108,20 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
               x < 0 || y < 0 || x === w || y === h ? "#b5b2a1" : "#8da778",
               "#d7cfb8",
             );
+        if (kind === "fishery")
+          for (const p of fisheryCells(0, 0, rotation)) {
+            if (p.kind === "water")
+              poly(
+                [
+                  iso(p.x - 0.5, p.y - 0.5),
+                  iso(p.x + 0.5, p.y - 0.5),
+                  iso(p.x + 0.5, p.y + 0.5),
+                  iso(p.x - 0.5, p.y + 0.5),
+                ],
+                "#40a7ac",
+                "#a5cbd0",
+              );
+          }
         ctx.drawImage(sprite, left, top, right - left, bottom - top);
         if (contacts.checked) {
           poly(

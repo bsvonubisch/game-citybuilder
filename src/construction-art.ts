@@ -3,13 +3,20 @@ import { dimensions } from "./catalog.js";
 import { iso, plotOutline } from "./rendering.js";
 import { groundHeight } from "./terrain.js";
 import type { Building, Simulation } from "./simulation.js";
+import { fisheryLayout } from "./shoreline.js";
+import { drawFisheryDock } from "./fishery-art.js";
 
 /** Modular scaffold props keep their proportions; only the dirt plot changes size. */
 export class ConstructionArt {
   private fronts = new Map<number, Phaser.GameObjects.Image>();
   constructor(private scene: Phaser.Scene) {}
-  private texture(w: number, h: number, front: boolean) {
-    const name = `construction-${w}-${h}-${front}`;
+  private texture(
+    w: number,
+    h: number,
+    front: boolean,
+    shoreRotation?: number,
+  ) {
+    const name = `construction-${w}-${h}-${front}-${shoreRotation ?? "land"}`;
     const left = -h * 32 - 3,
       top = -64,
       width = (w + h) * 32 + 6,
@@ -25,7 +32,24 @@ export class ConstructionArt {
       ctx.translate(-left, -top);
       ctx.imageSmoothingEnabled = false;
       if (!front) {
-        const corners = plotOutline(w, h);
+        const land =
+          shoreRotation === undefined
+            ? { x: 0, y: 0, width: w, height: h }
+            : fisheryLayout(shoreRotation).land;
+        if (shoreRotation !== undefined)
+          drawFisheryDock(
+            ctx,
+            shoreRotation,
+            this.scene.textures
+              .get("bridge-wood")
+              .getSourceImage() as HTMLImageElement,
+            0,
+          );
+        const offset = iso(land.x, land.y);
+        const corners = plotOutline(land.width, land.height).map((p) => ({
+          x: p.x + offset.x,
+          y: p.y + offset.y,
+        }));
         ctx.beginPath();
         corners.forEach((p, i) =>
           i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
@@ -87,7 +111,12 @@ export class ConstructionArt {
       p = iso(b.x, b.y);
     const height = groundHeight(b.x, b.y, sim.state.terrain);
     const place = (s: Phaser.GameObjects.Image, front: boolean) => {
-      const t = this.texture(w, h, front);
+      const t = this.texture(
+        w,
+        h,
+        front,
+        b.kind === "fishery" ? b.rotation : undefined,
+      );
       s.setTexture(t.name)
         .setOrigin(0, 0)
         .setScale(0.25)

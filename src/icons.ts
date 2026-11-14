@@ -1,4 +1,5 @@
 const paths: Record<string, string> = {
+  fish: "M3 12c4-8 12-8 16 0-4 8-12 8-16 0Zm0 0L1 7v10l2-5Zm11-2h.1M10 5l2-3 3 4M10 19l2 3 3-4",
   tree: "M12 2 5 12h4l-5 6h6v4h4v-4h6l-5-6h4L12 2Z",
   terrain: "m2 19 6-12 5 7 3-4 6 9H2Zm5-10 4 1",
   water: "M2 7q3-4 6 0t6 0 6 0M2 12q3-4 6 0t6 0 6 0M2 17q3-4 6 0t6 0 6 0",

@@ -23,6 +23,7 @@ import {
 import { initialDecorations, type Decoration } from "./decorations.js";
 import { Traffic } from "./traffic.js";
 import { canSupply } from "./logistics.js";
+import { fisherySiteError } from "./shoreline.js";
 import {
   builderCapacity,
   constructionWork,
@@ -585,6 +586,10 @@ export class Simulation {
       !Number.isInteger(y)
     )
       return "Choose a valid tile and direction.";
+    if (b.kind === "fishery") {
+      const error = fisherySiteError(x, y, facing, this.state.terrain);
+      if (error) return error;
+    }
     for (const p of footprint(
       b.kind,
       x,
@@ -592,7 +597,11 @@ export class Simulation {
       facing,
       this.relocationPlot(b, facing),
     )) {
-      if (!inside(p.x, p.y) || terrain(p.x, p.y, this.state.terrain) !== "land")
+      if (
+        !inside(p.x, p.y) ||
+        (b.kind !== "fishery" &&
+          terrain(p.x, p.y, this.state.terrain) !== "land")
+      )
         return "The whole footprint needs dry land inside the valley.";
       if (
         groundHeight(p.x, p.y, this.state.terrain) !==
@@ -619,6 +628,10 @@ export class Simulation {
     rotation = 0,
   ): string | null {
     if (!inside(x, y)) return "Choose a tile inside the valley.";
+    if (kind === "fishery") {
+      const error = fisherySiteError(x, y, rotation, this.state.terrain);
+      if (error) return error;
+    }
     if (kind === "bridge" && terrain(x, y, this.state.terrain) !== "water")
       return "Place bridges over water. Use roads on dry land.";
     const cells = isBuilding(kind)
@@ -660,7 +673,8 @@ export class Simulation {
       if (
         terrain(p.x, p.y, this.state.terrain) === "water" &&
         kind !== "road" &&
-        kind !== "bridge"
+        kind !== "bridge" &&
+        kind !== "fishery"
       )
         return "The whole building needs dry land. Roads can form bridges.";
     }
@@ -940,12 +954,15 @@ export class Simulation {
       const rotation = ((b.rotation + 1) % 4) as 0 | 1 | 2 | 3;
       const cells = footprint(b.kind, b.x, b.y, rotation);
       if (
+        (b.kind === "fishery" &&
+          fisherySiteError(b.x, b.y, rotation, this.state.terrain)) ||
         cells.some(
           (p) =>
             !inside(p.x, p.y) ||
             groundHeight(p.x, p.y, this.state.terrain) !==
               groundHeight(b.x, b.y, this.state.terrain) ||
-            terrain(p.x, p.y, this.state.terrain) === "water" ||
+            (b.kind !== "fishery" &&
+              terrain(p.x, p.y, this.state.terrain) === "water") ||
             this.roads.has(key(p)) ||
             this.state.buildings.some(
               (other) =>
@@ -1137,9 +1154,11 @@ export class Simulation {
       for (const w of this.state.buildings.filter(
         (b) => b.kind === "warehouse",
       )) {
-        const n = Math.min(demand, w.inventory.bread ?? 0);
-        w.inventory.bread = (w.inventory.bread ?? 0) - n;
-        demand -= n;
+        for (const food of ["bread", "fish"] as const) {
+          const n = Math.min(demand, w.inventory[food] ?? 0);
+          w.inventory[food] = (w.inventory[food] ?? 0) - n;
+          demand -= n;
+        }
       }
       this.state.food = needed
         ? Math.round(((needed - demand) / needed) * 100)
@@ -1407,7 +1426,7 @@ export function parseSave(raw: string): World {
     }
     if (
       !inside(b.x, b.y) ||
-      terrain(b.x, b.y, s.terrain) !== "land" ||
+      (b.kind !== "fishery" && terrain(b.x, b.y, s.terrain) !== "land") ||
       !Object.hasOwn(BUILDINGS, b.kind) ||
       !Number.isInteger(b.id) ||
       b.id < 1 ||
@@ -1439,6 +1458,11 @@ export function parseSave(raw: string): World {
           ].includes(b.plot.join(","))))
     )
       throw new Error("Invalid building.");
+    if (
+      b.kind === "fishery" &&
+      fisherySiteError(b.x, b.y, b.rotation, s.terrain)
+    )
+      throw new Error("Invalid fishery shoreline.");
     for (const [k, v] of Object.entries(b.inventory)) {
       if (!RESOURCES.includes(k as Resource) || !finite(v))
         throw new Error("Invalid inventory.");
@@ -1451,7 +1475,7 @@ export function parseSave(raw: string): World {
         !inside(p.x, p.y) ||
         groundHeight(p.x, p.y, s.terrain) !==
           groundHeight(b.x, b.y, s.terrain) ||
-        terrain(p.x, p.y, s.terrain) !== "land" ||
+        (b.kind !== "fishery" && terrain(p.x, p.y, s.terrain) !== "land") ||
         occupied.has(key(p))
       )
         throw new Error("Building footprint overlaps.");

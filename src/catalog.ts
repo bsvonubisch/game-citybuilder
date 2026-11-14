@@ -2,6 +2,7 @@ export type Resource =
   | "grain"
   | "flour"
   | "bread"
+  | "fish"
   | "wood"
   | "stone"
   | "metal"
@@ -10,6 +11,7 @@ export type Resource =
 export type BuildingKind =
   | "house"
   | "farm"
+  | "fishery"
   | "mill"
   | "bakery"
   | "forester"
@@ -187,6 +189,17 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     description: "Golden fields, busy hands. Grows grain for the flour mill.",
     recipe: { output: "grain", count: 3, seconds: 8 },
   },
+  fishery: {
+    name: "Shoreline fishery",
+    cost: 180,
+    jobs: 2,
+    frame: 0,
+    materials: { wood: 12, planks: 4, stone: 6 },
+    category: "production",
+    description:
+      "Fresh fish for the town. Place two tiles on shore and two in water, with the entrance facing land.",
+    recipe: { output: "fish", count: 3, seconds: 10 },
+  },
   mill: {
     name: "Flour mill",
     cost: 220,
@@ -267,7 +280,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     frame: 7,
     category: "town",
     description:
-      "The heart of a road network. Receives bread and exports tools.",
+      "The heart of a road network. Receives food and materials, and exports tools.",
   },
   park: {
     name: "Fountain square",
@@ -307,6 +320,7 @@ export const RESOURCES: Resource[] = [
   "grain",
   "flour",
   "bread",
+  "fish",
   "planks",
   "tools",
 ];
@@ -314,6 +328,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   grain: "Grain",
   flour: "Flour",
   bread: "Bread",
+  fish: "Fish",
   wood: "Wood",
   stone: "Stone",
   metal: "Metal",
@@ -323,6 +338,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
   house: [2, 2],
   farm: [2, 2],
+  fishery: [2, 2],
   mill: [2, 2],
   bakery: [2, 2],
   forester: [2, 2],

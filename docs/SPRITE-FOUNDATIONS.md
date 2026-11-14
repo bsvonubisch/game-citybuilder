@@ -4,9 +4,9 @@ Generated with the built-in image generation tool. All project assets are in `pu
 
 ## Geometry and footprints
 
-Every building now uses the same four-world-pixel raised stone foundation, with six stones per tile along both grid axes. Its lower outside corners coincide exactly with the occupied footprint. Building artwork uses only uniform scaling and translation; no shearing, rotation of the upright image, or independent axis scaling. Menu thumbnails use the same composition as the game.
+Every land building now uses the same four-world-pixel raised stone foundation, with six stones per tile along both grid axes. Its lower outside corners coincide exactly with the occupied footprint. Building artwork uses only uniform scaling and translation; no shearing, rotation of the upright image, or independent axis scaling. Menu thumbnails use the same composition as the game.
 
-The sawmill, warehouse, copper workshop and wheat farm now use compact 2×2 plots, matching the near-square ground envelopes of the art. All current buildings therefore occupy 2×2. The rendering/placement system still supports rectangular footprints for future larger buildings. Old six-cell lots shrink only inside their previously occupied area; the preferred retained area keeps their road frontage. IDs, stocks, work, enabled state, residents and money are retained. Local saves are backed up before this migration.
+The sawmill, warehouse, copper workshop and wheat farm now use compact 2×2 plots, matching the near-square ground envelopes of the art. All current buildings occupy 2×2. The shoreline fishery uses this shared stone base only on its land half, with a timber pier over the other half. The rendering/placement system still supports rectangular footprints for future larger buildings. Old six-cell lots shrink only inside their previously occupied area; the preferred retained area keeps their road frontage. IDs, stocks, work, enabled state, residents and money are retained. Local saves are backed up before this migration.
 
 ## Assets
 
@@ -58,5 +58,5 @@ Each direction has its own hub location. The front two views draw sails ahead of
 
 ## Verification
 
-The local `tests/footprints.html` gallery displays all 52 views (11 types plus the two extra house tiers). Tests cover rigid sprite proportions, exact foundation bounds, equal tile density/height, plaza object counts and facing, windmill layering, migration preserving inventories/work/frontage, and normal construction/logistics/traffic behavior.
+The local `tests/footprints.html` gallery displays all 56 views (12 types plus the two extra house tiers). Tests cover rigid sprite proportions, exact foundation bounds, equal tile density/height, plaza object counts and facing, windmill layering, migration preserving inventories/work/frontage, and normal construction/logistics/traffic behavior.
 

@@ -4,6 +4,24 @@ import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
 import { iso, plotTransform, plotOutline } from "./rendering.js";
 import { drawFoundation } from "./foundation.js";
 import { drawPlaza } from "./park-art.js";
+import { drawFisheryPlatform } from "./fishery-art.js";
+import { FOUNDATION_HEIGHT } from "./foundation.js";
+
+export function artTransform(art: BuildingArt, w: number, h: number) {
+  const land = art.land;
+  const t = plotTransform(art.ground, land?.width ?? w, land?.height ?? h);
+  const offset = land ? iso(land.x, land.y) : { x: 0, y: 0 };
+  return {
+    scale: t.scale,
+    point: (x: number, y: number) => {
+      const p = t.point(x, y);
+      return {
+        x: p.x + offset.x,
+        y: p.y + offset.y - (land ? FOUNDATION_HEIGHT : 0),
+      };
+    },
+  };
+}
 
 const RESOLUTION = 4;
 /** One raised stone foundation material, shared by all plot sizes and views. */
@@ -15,13 +33,17 @@ export function drawPlot(
   h: number,
   benches?: HTMLImageElement,
   stone?: HTMLImageElement,
+  wood?: HTMLImageElement,
 ) {
-  drawFoundation(ctx, w, h, stone);
+  if (art.land && wood) {
+    const rotation = [1, 0, 3, 2].indexOf(art.frame);
+    drawFisheryPlatform(ctx, rotation, stone, wood);
+  } else drawFoundation(ctx, w, h, stone);
   if (art.texture === "park-parts") {
     if (benches) drawPlaza(ctx, source, benches, art.frame);
     return;
   }
-  const t = plotTransform(art.ground, w, h),
+  const t = artTransform(art, w, h),
     [cw, ch] = art.size;
   const sw = Math.floor(source.width / art.columns),
     sh = Math.floor(source.height / art.rows);
@@ -47,20 +69,22 @@ export function drawPlot(
 }
 
 export function plotBounds(art: BuildingArt, w: number, h: number) {
-  const t = plotTransform(art.ground, w, h),
+  const t = artTransform(art, w, h),
     [cw, ch] = art.size;
   const corners = [t.point(0, 0), t.point(cw, ch), ...plotOutline(w, h)];
   // The sails extend above the tower. Include their swept envelope in cached
   // previews and visibility bounds, even though gameplay animates them separately.
-  if(art.texture==="building-mill" && art.mechanism) {
-    const p=t.point(...art.mechanism),r=350*t.scale;
-    corners.push({x:p.x-r,y:p.y-r},{x:p.x+r,y:p.y+r});
+  if (art.texture === "building-mill" && art.mechanism) {
+    const p = t.point(...art.mechanism),
+      r = 350 * t.scale;
+    corners.push({ x: p.x - r, y: p.y - r }, { x: p.x + r, y: p.y + r });
   }
   return {
     left: Math.floor(Math.min(...corners.map((p) => p.x))),
     top: Math.floor(Math.min(...corners.map((p) => p.y))),
     right: Math.ceil(Math.max(...corners.map((p) => p.x))),
-    bottom: Math.ceil(Math.max(...corners.map((p) => p.y))),
+    bottom:
+      Math.ceil(Math.max(...corners.map((p) => p.y))) + (art.land ? 6 : 0),
   };
 }
 export class PlotArt {
@@ -104,6 +128,9 @@ export class PlotArt {
         this.scene.textures
           .get("foundation-stone")
           .getSourceImage() as HTMLImageElement,
+        this.scene.textures
+          .get("bridge-wood")
+          .getSourceImage() as HTMLImageElement,
       );
       texture.refresh();
       fit = { texture: key, x: left, y: top };
@@ -126,7 +153,7 @@ export class PlotArt {
   ) {
     const art = buildingArt(kind, rotation, houseTier),
       [w, h] = dimensions(kind, rotation, plot),
-      t = plotTransform(art.ground, w, h);
+      t = artTransform(art, w, h);
     return { ...t.point(x, y), scale: t.scale };
   }
 }

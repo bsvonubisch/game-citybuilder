@@ -1,4 +1,5 @@
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
+import { fisheryLayout } from "./shoreline.js";
 
 export interface Construction {
   /** Labour in worker-seconds; only builders who reached the site contribute. */
@@ -9,6 +10,7 @@ export interface Construction {
 const LABOUR: Record<BuildingKind, number> = {
   house: 120,
   farm: 160,
+  fishery: 220,
   mill: 240,
   bakery: 200,
   forester: 140,
@@ -57,8 +59,12 @@ export function builderPosition(
   slot: number,
 ) {
   const [w, h] = dimensions(b.kind, b.rotation, b.plot);
+  const land =
+    b.kind === "fishery"
+      ? fisheryLayout(b.rotation).land
+      : { x: 0, y: 0, width: w, height: h };
   return {
-    x: b.x - 0.5 + w * (slot % 2 ? 0.72 : 0.28),
-    y: b.y - 0.5 + h * (slot < 2 ? 0.7 : 0.38),
+    x: b.x + land.x - 0.5 + land.width * (slot % 2 ? 0.72 : 0.28),
+    y: b.y + land.y - 0.5 + land.height * (slot < 2 ? 0.7 : 0.38),
   };
 }

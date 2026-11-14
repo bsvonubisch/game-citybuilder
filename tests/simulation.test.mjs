@@ -18,6 +18,7 @@ import {
 } from "../.test-dist/foundation.js";
 import { plazaLayout } from "../.test-dist/park-art.js";
 import { rotorView } from "../.test-dist/windmill.js";
+import { fisheryCells } from "../.test-dist/shoreline.js";
 import {
   BUILDINGS,
   FOOTPRINTS,
@@ -1100,10 +1101,19 @@ test("every building can be placed in every orientation, with rectangular plots 
         wood: 1000,
         stone: 1000,
         metal: 1000,
+        planks: 1000,
       });
       const sim = new Simulation(seed),
         x = kind === "quarry" || kind === "mine" ? 19 : 8,
         y = kind === "quarry" ? 4 : kind === "mine" ? 7 : 20;
+      if (kind === "fishery") {
+        sim.state.terrain = Object.fromEntries(
+          fisheryCells(x, y, rotation).map((p) => [
+            key(p),
+            { kind: p.kind, height: 0 },
+          ]),
+        );
+      }
       assert.equal(
         execute(sim, { type: "place", kind, x, y, rotation }).ok,
         true,
@@ -1120,7 +1130,10 @@ test("every building can be placed in every orientation, with rectangular plots 
       assert.equal(restored.building(b.id).rotation, rotation);
       assert.deepEqual(restored.building(b.id).plot, [w, h]);
       for (let i = 0; i < 4; i++)
-        assert.equal(execute(sim, { type: "rotate", id: b.id }).ok, true);
+        assert.equal(
+          execute(sim, { type: "rotate", id: b.id }).ok,
+          kind !== "fishery",
+        );
       assert.equal(b.rotation, rotation);
     }
 });
@@ -1476,7 +1489,7 @@ test("all 52 building views share exact raised plot bounds and stone density", (
         );
         count++;
       }
-  assert.equal(count, 52);
+  assert.equal(count, (Object.keys(BUILDINGS).length + 2) * 4);
 });
 test("rotating the plaza preserves objects, shapes and benches facing the fountain", () => {
   const reference = plazaLayout(0);
@@ -1502,7 +1515,11 @@ test("rotating the plaza preserves objects, shapes and benches facing the founta
           Math.abs(obj.dx * (0.5 - obj.y) - obj.dy * (0.5 - obj.x)) < 1e-10,
         );
       }
-      if(obj.kind==="lamp") assert.ok(Math.abs((obj.x-obj.y)*32)>24,"lanterns must not align with the central spout in any view");
+      if (obj.kind === "lamp")
+        assert.ok(
+          Math.abs((obj.x - obj.y) * 32) > 24,
+          "lanterns must not align with the central spout in any view",
+        );
     }
   }
   assert.deepEqual(plazaLayout(4), reference);
