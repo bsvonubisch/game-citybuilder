@@ -69,7 +69,7 @@ export class BuildingAlerts {
           badge.button.querySelector("strong")!.textContent = label;
           badge.button.querySelector(
             ".building-alert-tip > span",
-          )!.textContent = alert.message;
+          )!.textContent = `${alert.message} Click for next steps.`;
           badge.button.setAttribute("aria-label", label);
           badge.button.setAttribute(
             "aria-describedby",

@@ -9,6 +9,7 @@
   },
   "include": [
     "src/catalog.ts",
+    "src/building-guidance.ts",
     "src/simulation.ts",
     "src/rendering.ts",
     "src/bridges.ts",

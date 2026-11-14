@@ -1262,6 +1262,44 @@ kbd {
 .primary:hover {
   background: #486741;
 }
+.building-actions {
+  margin: 12px 0 18px;
+}
+.building-actions [hidden] {
+  display: none !important;
+}
+.building-actions .next-step {
+  color: #53694d;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.building-actions .primary {
+  margin-top: 0;
+}
+#building-more {
+  margin-top: 8px;
+  border: 1px solid #dde2d2;
+  border-radius: 7px;
+}
+#building-more summary {
+  cursor: pointer;
+  padding: 11px 12px;
+  font-size: 12px;
+  color: #65775d;
+}
+#building-menu-items button {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  border-top: 1px solid #e5e8dd;
+  font-size: 12px;
+  color: #345544;
+}
+#building-menu-items button:hover {
+  background: #e8eddf;
+}
 .residents {
   margin-top: 12px;
 }

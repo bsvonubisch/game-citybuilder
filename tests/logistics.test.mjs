@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Simulation, key } from "../.test-dist/simulation.js";
 import { BUILDINGS } from "../.test-dist/catalog.js";
+import { buildingGuidance } from "../.test-dist/building-guidance.js";
 import {
   canSupply,
   productionConnections,
@@ -218,4 +219,101 @@ test("every dispatched shipment is represented by its source and destination pro
         productionActivity(sim, to).incoming.some((truck) => truck.id === a.id),
       );
   }
+});
+
+test("warning guidance checks existing suppliers before recommending construction", () => {
+  const sim = new Simulation(),
+    mill = building(sim, "mill"),
+    farm = building(sim, "farm");
+  let advice = buildingGuidance(sim, mill, productionConnections(sim, mill.id));
+  assert.deepEqual(advice.action, { type: "inspect", id: farm.id });
+  sim.state.buildings = sim.state.buildings.filter((b) => b.id !== farm.id);
+  advice = buildingGuidance(sim, mill, productionConnections(sim, mill.id));
+  assert.deepEqual(advice.action, { type: "build", kind: "farm" });
+  farm.construction = { completed: 0, required: 200 };
+  sim.state.buildings.push(farm);
+  advice = buildingGuidance(sim, mill, productionConnections(sim, mill.id));
+  assert.deepEqual(advice.action, { type: "inspect", id: farm.id });
+});
+
+test("guidance follows a delivery already on its way without changing the town", () => {
+  const sim = new Simulation(),
+    mill = building(sim, "mill"),
+    farm = building(sim, "farm");
+  sim.state.agents.push({
+    id: 999,
+    kind: "truck",
+    path: sim.route(farm, mill),
+    segment: 0,
+    progress: 0,
+    resident: null,
+    source: farm.id,
+    target: mill.id,
+    cargo: "grain",
+    amount: 3,
+    returning: false,
+    wait: 0,
+  });
+  const snapshot = sim.snapshot();
+  assert.deepEqual(
+    buildingGuidance(sim, mill, productionConnections(sim, mill.id)).action,
+    { type: "agent", id: 999 },
+  );
+  assert.deepEqual(sim.snapshot(), snapshot);
+});
+
+test("road and paused warnings lead to their actual fixes", () => {
+  const sim = new Simulation(),
+    mill = building(sim, "mill");
+  mill.connected = false;
+  assert.deepEqual(buildingGuidance(sim, mill).action, {
+    type: "build",
+    kind: "road",
+  });
+  sim.state.buildings = sim.state.buildings.filter(
+    (b) => b.kind !== "warehouse",
+  );
+  assert.deepEqual(buildingGuidance(sim, mill).action, {
+    type: "build",
+    kind: "warehouse",
+  });
+  mill.connected = true;
+  mill.enabled = false;
+  assert.deepEqual(buildingGuidance(sim, mill).action, { type: "toggle" });
+  mill.construction = { completed: 10, required: 200 };
+  assert.equal(buildingGuidance(sim, mill).label, "Resume construction");
+});
+
+test("output and exhausted deposits suggest useful destinations and relocation", () => {
+  const sim = new Simulation(),
+    farm = building(sim, "farm"),
+    mill = building(sim, "mill");
+  farm.inventory.grain = 20;
+  assert.deepEqual(
+    buildingGuidance(sim, farm, productionConnections(sim, farm.id)).action,
+    { type: "inspect", id: mill.id },
+  );
+  sim.state.buildings = sim.state.buildings.filter((b) => b.kind !== "mill");
+  assert.deepEqual(
+    buildingGuidance(sim, farm, productionConnections(sim, farm.id)).action,
+    { type: "build", kind: "mill" },
+  );
+  const quarry = building(sim, "quarry");
+  sim.state.deposits[key(quarry)] = 0;
+  assert.deepEqual(buildingGuidance(sim, quarry).action, { type: "move" });
+});
+
+test("worker and construction advice accounts for available residents", () => {
+  const sim = new Simulation(),
+    mill = building(sim, "mill");
+  mill.workers = 0;
+  assert.deepEqual(buildingGuidance(sim, mill).action, {
+    type: "build",
+    kind: "house",
+  });
+  mill.construction = { completed: 0, required: 200 };
+  const advice = buildingGuidance(sim, mill);
+  assert.equal(advice.action.type, "inspect");
+  assert.notEqual(advice.action.id, mill.id);
+  assert.ok(sim.building(advice.action.id).workers > 0);
 });

@@ -102,6 +102,7 @@ export class TownScene extends Phaser.Scene {
   tool: Tool = "inspect";
   movingBuilding: number | null = null;
   selected: number | null = null;
+  guidanceBuilding: number | null = null;
   selectedAgent: number | null = null;
   onSelectAgent: (id: number) => void = () => {};
   onSelectBoat: (id: number) => void = () => {};
@@ -718,8 +719,10 @@ export class TownScene extends Phaser.Scene {
       this.onTerrainPreview(plan);
       return;
     }
-    if (this.selected) {
-      const b = this.simulation.building(this.selected);
+    if (this.selected ?? this.guidanceBuilding) {
+      const b = this.simulation.building(
+        (this.selected ?? this.guidanceBuilding)!,
+      );
       if (b) {
         for (const p of footprint(b.kind, b.x, b.y, b.rotation, b.plot))
           this.diamond(p, 0xf3ce7b, 0.23);
@@ -1093,6 +1096,15 @@ export class TownScene extends Phaser.Scene {
       const [w, h] = dimensions(b.kind, b.rotation, b.plot),
         p = iso(b.x + (w - 1) / 2, b.y + (h - 1) / 2);
       this.cameras.main.centerOn(p.x, p.y - 20);
+    }
+  }
+  focusAgent(id: number) {
+    const sprite = this.people.get(id);
+    if (sprite?.visible) this.cameras.main.centerOn(sprite.x, sprite.y - 20);
+    else {
+      const agent = this.simulation.state.agents.find((a) => a.id === id);
+      if (agent)
+        this.focusBuilding(agent.returning ? agent.target : agent.source);
     }
   }
   update(_time: number, delta: number) {

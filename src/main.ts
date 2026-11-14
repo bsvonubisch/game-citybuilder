@@ -39,6 +39,7 @@ import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
 import { buildingPreview } from "./previews.js";
 import { alertIcon } from "./building-alerts.js";
+import { buildingGuidance, type GuidanceAction } from "./building-guidance.js";
 import { cameraViewport } from "./rendering.js";
 import { productionActivity, type GoodsConnection } from "./logistics.js";
 import { CloudSaves, cloudError } from "./cloud.js";
@@ -232,6 +233,7 @@ function toast(message: string) {
   );
 }
 function setTool(next: Tool) {
+  scene.guidanceBuilding = null;
   if (next !== "move") scene.movingBuilding = null;
   const wasTerrain = tool === "terrain";
   setPanelOpen(false);
@@ -590,6 +592,15 @@ function renderInspector() {
       scene.onSelect(id);
       scene.focusBuilding(id);
     };
+  $("#building-status").insertAdjacentHTML(
+    "afterend",
+    '<div class="building-actions"><p id="building-next-step" class="next-step" hidden></p><div id="building-primary"></div><button id="resolve-issue" hidden></button><details id="building-more"><summary>More actions</summary><div id="building-menu-items"></div></details></div>',
+  );
+  if (b.construction && !d.recipe)
+    panel.insertAdjacentHTML(
+      "beforeend",
+      '<button id="toggle-production"></button>',
+    );
   if (b.kind === "house") {
     $("#house-upgrade").hidden = !!b.construction;
     const tier = b.houseTier ?? 1;
@@ -629,11 +640,12 @@ function renderInspector() {
     panel.hidden = true;
     scene.drawOverlay();
   };
-  if (d.recipe)
+  if (d.recipe || b.construction)
     $("#toggle-production").onclick = async () => {
       const result = await gateway.command({ type: "toggle", id: b.id });
       toast(result.message);
       scene.redraw();
+      save(false);
       updateInspector();
     };
   updateInspector();
@@ -646,6 +658,86 @@ function closeInspection() {
   scene.selectedAgent = null;
   $("#inspector").hidden = true;
   scene.drawOverlay();
+}
+
+function updateBuildingActions(b: Building) {
+  const guide = buildingGuidance(simulation, b, scene.productionView(b.id));
+  const resolve = $<HTMLButtonElement>("#resolve-issue");
+  resolve.hidden = !guide;
+  $("#building-next-step").hidden = !guide;
+  if (guide) {
+    $("#building-next-step").textContent = guide.message;
+    resolve.textContent = guide.label;
+    resolve.onclick = () => {
+      const current = buildingGuidance(
+        simulation,
+        b,
+        scene.productionView(b.id),
+      );
+      if (current) runGuidance(b, current.action);
+      else updateInspector();
+    };
+  }
+  const buttons = [
+    "resolve-issue",
+    "upgrade-house",
+    "toggle-production",
+    "move-building",
+  ]
+    .map((id) => document.getElementById(id) as HTMLButtonElement | null)
+    .filter((button): button is HTMLButtonElement => !!button);
+  const primary = buttons.find(
+    (button) =>
+      button.id ===
+      (guide
+        ? "resolve-issue"
+        : b.construction
+          ? "toggle-production"
+          : b.kind === "house" && (b.houseTier ?? 1) < 3
+            ? "upgrade-house"
+            : BUILDINGS[b.kind].recipe
+              ? "toggle-production"
+              : "move-building"),
+  )!;
+  for (const button of buttons) {
+    const isPrimary = button === primary;
+    button.classList.toggle("primary", isPrimary);
+    const parent = $(isPrimary ? "#building-primary" : "#building-menu-items");
+    if (button.parentElement !== parent) parent.append(button);
+    button.hidden =
+      button.id === "resolve-issue"
+        ? !guide
+        : (button.id === "upgrade-house" && !!b.construction) ||
+          (button.id === "toggle-production" &&
+            guide?.action.type === "toggle") ||
+          (button.id === "move-building" && guide?.action.type === "move");
+  }
+  $("#building-more").hidden = !buttons.some(
+    (button) => button !== primary && !button.hidden,
+  );
+}
+function runGuidance(b: Building, action: GuidanceAction) {
+  if (action.type === "toggle") $("#toggle-production").click();
+  else if (action.type === "move") $("#move-building").click();
+  else if (action.type === "inspect") {
+    scene.onSelect(action.id);
+    scene.focusBuilding(action.id);
+  } else if (action.type === "agent") {
+    scene.onSelectAgent(action.id);
+    scene.focusAgent(action.id);
+  } else if (action.type === "workforce") togglePanel("town");
+  else {
+    scene.focusBuilding(b.id);
+    if (action.type === "water") {
+      scene.terrainMode = "water";
+      setTool("terrain");
+    } else if (action.type === "build") setTool(action.kind);
+    if (action.type === "build" && action.kind === "road") {
+      scene.guidanceBuilding = b.id;
+      scene.drawOverlay();
+      toast("Connect the front entrance to the warehouse road network.");
+    }
+  }
 }
 function renderDecorationInspector() {
   const d = simulation.state.decorations.find(
@@ -800,13 +892,12 @@ function updateInspector() {
       .map((r) => escapeHtml(r.name));
     $("#building-detail").innerHTML =
       `<h4>${b.construction.upgradeTo ? "Home improvements" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Builders assigned</span><b>${b.workers} / ${builderCapacity(b)}</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div><p class="muted">${names.join(", ") || "Waiting for available residents."}</p>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
-    if (d.recipe) {
-      $("#production-logistics").hidden = true;
-      $("#toggle-production").textContent = b.enabled
-        ? "Pause construction"
-        : "Resume construction";
-    }
+    if (d.recipe) $("#production-logistics").hidden = true;
+    $("#toggle-production").textContent = b.enabled
+      ? "Pause construction"
+      : "Resume construction";
   }
+  updateBuildingActions(b);
 }
 function updateLogistics(b: Building) {
   const view = scene.productionView(b.id);
