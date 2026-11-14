@@ -7,5 +7,5 @@
     "skipLibCheck": true,
     "outDir": ".test-dist"
   },
-  "include": ["src/catalog.ts", "src/simulation.ts"]
+  "include": ["src/catalog.ts", "src/simulation.ts", "src/rendering.ts"]
 }

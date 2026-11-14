@@ -139,12 +139,23 @@ function setTool(next: Tool) {
         d.materials ?? {},
       )
         .map(([r, n]) => `· ${n} ${r}`)
-        .join(" ")} <kbd>Esc</kbd>`
+        .join(
+          " ",
+        )} · ${FOOTPRINTS[next as BuildingKind].join("×")} tiles ${next === "house" ? `<button id="rotate-placement" class="rotate-placement" title="Rotate cottage (R)">${icon("reset")} Rotate <kbd>R</kbd></button>` : ""} <kbd>Esc</kbd>`
     : next === "road"
       ? `${icon("road")} Click to lay roads · 12 gold · Bridges 35 gold <kbd>Esc</kbd>`
       : next === "bulldoze"
         ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
         : `${icon("inspect")} Click a building to explore. Drag to look around.`;
+  if (next === "house") $("#rotate-placement").onclick = rotatePlacement;
+  scene.drawOverlay();
+}
+function rotatePlacement() {
+  scene.rotation = ((scene.rotation + 1) % 4) as 0 | 1 | 2 | 3;
+  scene.drawOverlay();
+  toast(
+    `Cottage facing ${["southeast", "southwest", "northwest", "northeast"][scene.rotation]}.`,
+  );
 }
 function renderSidebar() {
   $("#build-tab").classList.toggle("active", tab === "build");
@@ -209,7 +220,7 @@ scene.onTile = async (p: Point) => {
   const result = await gateway.command(
     tool === "bulldoze"
       ? { type: "demolish", ...p }
-      : { type: "place", kind: tool, ...p },
+      : { type: "place", kind: tool, rotation: scene.rotation, ...p },
   );
   toast(result.message);
   if (result.ok) {
@@ -241,6 +252,18 @@ function renderInspector() {
   if (!b) return;
   const d = BUILDINGS[b.kind];
   panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art")}<h3>${d.name}</h3><p>${d.description}</p><div id="building-status" class="building-status"></div><div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  if (b.kind === "house") {
+    panel.insertAdjacentHTML(
+      "beforeend",
+      `<button id="rotate-house" class="primary">${icon("reset")} Rotate cottage · R</button>`,
+    );
+    $("#rotate-house").onclick = async () => {
+      const result = await gateway.command({ type: "rotate", id: b.id });
+      toast(result.message);
+      scene.redraw();
+      save(false);
+    };
+  }
   $("#close-inspector").onclick = () => {
     selected = null;
     scene.selected = null;
@@ -567,7 +590,16 @@ window.addEventListener("keydown", (e) => {
     return;
   const k = e.key.toLowerCase();
   if (k === "escape" || k === "v") setTool("inspect");
-  if (k === "r") setTool("road");
+  if (k === "r") {
+    if (tool === "house") rotatePlacement();
+    else if (
+      tool === "inspect" &&
+      selected &&
+      simulation.building(selected)?.kind === "house"
+    )
+      $("#rotate-house").click();
+    else setTool("road");
+  }
   if (k === "x") setTool("bulldoze");
   if (k === "g") $("#grid").click();
 });

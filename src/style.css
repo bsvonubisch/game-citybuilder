@@ -11,6 +11,20 @@
   --green: #4a6a50;
   --copper: #b77e54;
 }
+.rotate-placement {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  border: 1px solid #cbd5bc;
+  border-radius: 5px;
+  background: #e4ecd6;
+  padding: 4px 7px;
+  font-size: 9px;
+}
+.rotate-placement .icon {
+  width: 12px;
+  height: 12px;
+}
 * {
   box-sizing: border-box;
 }

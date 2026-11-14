@@ -22,6 +22,7 @@ export interface Building extends Point {
   connected: boolean;
   enabled: boolean;
   produced: number;
+  rotation: 0 | 1 | 2 | 3;
 }
 export interface Resident {
   id: number;
@@ -65,9 +66,11 @@ export type Command =
       kind: Exclude<Tool, "inspect" | "bulldoze">;
       x: number;
       y: number;
+      rotation?: 0 | 1 | 2 | 3;
     }
   | { type: "demolish"; x: number; y: number }
-  | { type: "toggle"; id: number };
+  | { type: "toggle"; id: number }
+  | { type: "rotate"; id: number };
 export interface CommandEnvelope {
   id: string;
   actorId: string;
@@ -186,6 +189,7 @@ export class Simulation {
         connected: false,
         enabled: true,
         produced: 0,
+        rotation: kind === "house" && x === 7 ? 2 : 0,
       });
     };
     [
@@ -419,8 +423,20 @@ export class Simulation {
         revision: this.state.revision,
       };
     const c = envelope.command;
+    if (!c || !["place", "demolish", "toggle", "rotate"].includes(c.type))
+      return {
+        ok: false,
+        message: "Unknown action.",
+        revision: this.state.revision,
+      };
     let message = "";
     if (c.type === "place") {
+      if (c.rotation !== undefined && ![0, 1, 2, 3].includes(c.rotation))
+        return {
+          ok: false,
+          message: "Invalid rotation.",
+          revision: this.state.revision,
+        };
       if (c.kind !== "road" && !Object.hasOwn(BUILDINGS, c.kind))
         return {
           ok: false,
@@ -453,6 +469,7 @@ export class Simulation {
           connected: false,
           enabled: true,
           produced: 0,
+          rotation: c.kind === "house" ? (c.rotation ?? 0) : 0,
         });
       message =
         c.kind === "road" ? "Road laid." : `${BUILDINGS[c.kind].name} built.`;
@@ -490,6 +507,16 @@ export class Simulation {
           revision: this.state.revision,
         };
       message = "Removed. Half the build cost returned.";
+    } else if (c.type === "rotate") {
+      const b = this.building(c.id);
+      if (!b || b.kind !== "house")
+        return {
+          ok: false,
+          message: "Select a cottage to rotate.",
+          revision: this.state.revision,
+        };
+      b.rotation = ((b.rotation + 1) % 4) as 0 | 1 | 2 | 3;
+      message = "Cottage rotated.";
     } else if (c.type === "toggle") {
       const b = this.building(c.id);
       if (!b)
@@ -502,7 +529,7 @@ export class Simulation {
       message = b.enabled ? "Production resumed." : "Production paused.";
     }
     this.state.revision++;
-    this.reconnect();
+    if (c.type !== "rotate") this.reconnect();
     this.state.history.unshift(message);
     this.state.history = this.state.history.slice(0, 20);
     const result = { ok: true, message, revision: this.state.revision };
@@ -753,6 +780,7 @@ export function parseSave(raw: string): World {
     occupied.add(k);
   }
   for (const b of s.buildings) {
+    b.rotation ??= 0;
     if (
       !inside(b.x, b.y) ||
       terrain(b.x, b.y) !== "land" ||
@@ -763,7 +791,8 @@ export function parseSave(raw: string): World {
       !b.inventory ||
       !finite(b.progress) ||
       !finite(b.produced) ||
-      typeof b.enabled !== "boolean"
+      typeof b.enabled !== "boolean" ||
+      ![0, 1, 2, 3].includes(b.rotation)
     )
       throw new Error("Invalid building.");
     for (const [k, v] of Object.entries(b.inventory)) {

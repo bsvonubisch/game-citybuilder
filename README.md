@@ -26,6 +26,7 @@ npm run build
 ## Playable now
 
 - Isometric 28×28 valley; pan, zoom, grid, building inspection, and speed controls.
+- Four-facing cottage rotation, both before placement and after construction (R or the Rotate button). Cars and pedestrians select front/rear directional sprites as they turn.
 - Explicit 2×2 and 3×2 building footprints. The entire footprint is validated against roads, buildings, water, and map edges; roads connect through the perimeter. Existing one-tile saves migrate without discarding buildings or their inventories.
 - Cottages provide three named residents. Residents walk or drive between home and assigned workplaces. Road routing uses breadth-first search; disconnected or understaffed factories stop.
 - Gold, wood, stone, and metal construction costs. Quarries and metal mines use finite deposits. Delivered warehouse inventory pays material costs.
@@ -35,7 +36,7 @@ npm run build
 
 ## Controls
 
-Choose a building in the sidebar, then click an empty plot. Click a building while exploring to inspect it. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R lays roads, X removes, G toggles the grid, and Escape cancels a tool.
+Choose a building in the sidebar, then click an empty plot. A translucent preview shows its visible sprite and full footprint. Click a building while exploring to inspect it. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R rotates a selected cottage (otherwise selects roads), X removes, G toggles the grid, and Escape cancels a tool.
 
 ## Firebase & GitHub
 
@@ -55,4 +56,4 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 
 This is a single-player foundation, not live multiplayer. Firebase account/save code is implemented; project-specific provider setup and an authenticated Firebase CLI are required. Firestore ownership, schema, and shared-world isolation rules are covered by emulator tests (Java 21 required). See [the multiplayer plan](docs/MULTIPLAYER.md) for the authority and synchronization boundary.
 
-The economy is intentionally forgiving and not balanced for a full game. Vehicles follow routes without traffic queues or physical vehicle collisions. Residents currently use static directional sprites with movement bobbing; full walk animation cycles, seasons, terrain editing, power, zoning, and advanced logistics are future work. Decorative tree canopies can overhang neighboring ground; building base footprints cannot overlap roads.
+The economy is intentionally forgiving and not balanced for a full game. Vehicles follow routes without traffic queues or physical vehicle collisions. Residents use four directional views with movement bobbing; full walk animation cycles, seasons, terrain editing, power, zoning, and advanced logistics are future work. Decorative tree canopies can overhang neighboring ground; building base footprints cannot overlap roads. Atlas alpha padding is removed at runtime and visible ground-contact anchors align buildings with their plots.

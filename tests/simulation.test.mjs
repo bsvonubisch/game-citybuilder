@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { facing, opaqueBounds } from "../.test-dist/rendering.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 const execute = (sim, command, id = "test-" + sim.state.revision) =>
   sim.execute({
@@ -11,6 +12,60 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+test("each road direction selects a distinct matching atlas view", () => {
+  assert.equal(facing(1, 0), 0);
+  assert.equal(facing(0, 1), 1);
+  assert.equal(facing(-1, 0), 2);
+  assert.equal(facing(0, -1), 3);
+});
+test("transparent atlas padding is excluded from visible ground alignment", () => {
+  const pixels = new Uint8ClampedArray(10 * 12 * 4);
+  for (let y = 2; y <= 8; y++)
+    for (let x = 3; x <= 7; x++) pixels[(y * 10 + x) * 4 + 3] = 255;
+  assert.deepEqual(opaqueBounds(pixels, 10, 12), {
+    x: 3,
+    y: 2,
+    width: 5,
+    height: 7,
+    groundX: 2,
+  });
+});
+test("cottages rotate four ways without changing occupancy, residents, or balances", () => {
+  const sim = new Simulation(),
+    house = sim.state.buildings.find((b) => b.kind === "house"),
+    start = house.rotation,
+    gold = sim.state.money,
+    residents = sim.state.residents.map((r) => r.id);
+  for (let i = 0; i < 4; i++)
+    assert.equal(execute(sim, { type: "rotate", id: house.id }).ok, true);
+  assert.equal(house.rotation, start);
+  assert.equal(sim.state.money, gold);
+  assert.deepEqual(
+    sim.state.residents.map((r) => r.id),
+    residents,
+  );
+  const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+  assert.equal(restored.building(house.id).rotation, start);
+  assert.equal(
+    execute(sim, {
+      type: "rotate",
+      id: sim.state.buildings.find((b) => b.kind === "park").id,
+    }).ok,
+    false,
+  );
+});
+test("placement orientation persists and invalid orientation is rejected", () => {
+  const sim = new Simulation();
+  assert.equal(
+    execute(sim, { type: "place", kind: "house", x: 4, y: 11, rotation: 3 }).ok,
+    true,
+  );
+  assert.equal(sim.buildingAt(4, 11).rotation, 3);
+  assert.equal(
+    execute(sim, { type: "place", kind: "house", x: 4, y: 16, rotation: 9 }).ok,
+    false,
+  );
+});
 test("construction charges gold and delivered materials; commands are idempotent", () => {
   const sim = new Simulation(),
     money = sim.state.money,

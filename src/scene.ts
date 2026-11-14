@@ -5,7 +5,9 @@ import {
   FOOTPRINTS,
   footprint,
   type Tool,
+  type BuildingKind,
 } from "./catalog.js";
+import { facing, opaqueBounds } from "./rendering.js";
 import {
   Simulation,
   key,
@@ -47,6 +49,7 @@ export class TownScene extends Phaser.Scene {
   tool: Tool = "inspect";
   selected: number | null = null;
   showGrid = false;
+  rotation: 0 | 1 | 2 | 3 = 0;
   onTile: (p: Point) => void = () => {};
   onSelect: (id: number) => void = () => {};
   onHover: (p: Point | null) => void = () => {};
@@ -57,6 +60,8 @@ export class TownScene extends Phaser.Scene {
   private buildings = new Map<number, Phaser.GameObjects.Image>();
   private people = new Map<number, Phaser.GameObjects.Image>();
   private smoke!: Phaser.GameObjects.Graphics;
+  private ghost?: Phaser.GameObjects.Image;
+  private groundOrigins = new Map<string, number>();
   private hover: Point | null = null;
   private dragging = false;
   private moved = 0;
@@ -73,21 +78,15 @@ export class TownScene extends Phaser.Scene {
   preload() {
     this.load.image("buildings", "/buildings.png");
     this.load.image("garden", "/garden-sprites.png");
+    this.load.image("houses", "/house-rotations.png");
+    this.load.image("vehicles", "/vehicles-directions.png");
+    this.load.image("villagers", "/people-directions.png");
   }
   create() {
-    const tex = this.textures.get("buildings"),
-      src = tex.getSourceImage() as HTMLImageElement;
-    const w = src.width / 3,
-      h = src.height / 3;
-    for (let i = 0; i < 9; i++)
-      tex.add(
-        i,
-        0,
-        Math.floor((i % 3) * w),
-        Math.floor(Math.floor(i / 3) * h),
-        Math.floor(w),
-        Math.floor(h),
-      );
+    this.trimAtlas("buildings", 3, 3);
+    this.trimAtlas("houses", 2, 2);
+    this.trimAtlas("vehicles", 4, 4);
+    this.trimAtlas("villagers", 4, 4);
     const garden = this.textures.get("garden"),
       gardenImage = garden.getSourceImage() as HTMLImageElement;
     for (let i = 0; i < 16; i++)
@@ -184,6 +183,53 @@ export class TownScene extends Phaser.Scene {
     const c = this.cameras.main;
     c.scrollX = Phaser.Math.Clamp(c.scrollX, -1100, 600);
     c.scrollY = Phaser.Math.Clamp(c.scrollY, -500, 800);
+  }
+  private trimAtlas(name: string, columns: number, rows: number) {
+    const texture = this.textures.get(name),
+      source = texture.getSourceImage() as HTMLImageElement;
+    const canvas = document.createElement("canvas");
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true })!;
+    context.drawImage(source, 0, 0);
+    for (let i = 0; i < columns * rows; i++) {
+      const x = Math.floor(((i % columns) * source.width) / columns),
+        y = Math.floor((Math.floor(i / columns) * source.height) / rows),
+        w = Math.floor(source.width / columns),
+        h = Math.floor(source.height / rows);
+      const bounds = opaqueBounds(context.getImageData(x, y, w, h).data, w, h);
+      texture.add(
+        i,
+        0,
+        x + bounds.x,
+        y + bounds.y,
+        bounds.width,
+        bounds.height,
+      );
+      this.groundOrigins.set(`${name}:${i}`, bounds.groundX / bounds.width);
+    }
+  }
+  private placeSprite(
+    sprite: Phaser.GameObjects.Image,
+    kind: BuildingKind,
+    x: number,
+    y: number,
+    rotation = 0,
+  ) {
+    const [w, h] = FOOTPRINTS[kind],
+      front = iso(x + w - 0.5, y + h - 0.5),
+      width = (w + h) * 32 * 0.98;
+    const texture =
+        kind === "house" && this.textures.exists("houses")
+          ? "houses"
+          : "buildings",
+      frame =
+        texture === "houses" ? [1, 0, 2, 3][rotation] : BUILDINGS[kind].frame;
+    sprite
+      .setTexture(texture, frame)
+      .setOrigin(this.groundOrigins.get(`${texture}:${frame}`) ?? 0.5, 1)
+      .setScale(width / sprite.frame.width)
+      .setPosition(front.x, front.y - 1);
   }
   redraw() {
     this.renderRevision = this.simulation.state.revision;
@@ -386,26 +432,19 @@ export class TownScene extends Phaser.Scene {
     }
     for (const b of this.simulation.state.buildings) {
       let s = this.buildings.get(b.id);
-      const [w, h] = FOOTPRINTS[b.kind],
-        p = iso(b.x + (w - 1) / 2, b.y + (h - 1) / 2),
-        width = (w + h) * 32 * 0.92;
+      const [w, h] = FOOTPRINTS[b.kind];
       if (!s) {
         s = this.add
-          .image(
-            p.x,
-            p.y + (w + h) * 8 - 3,
-            "buildings",
-            BUILDINGS[b.kind].frame,
-          )
+          .image(0, 0, "buildings", BUILDINGS[b.kind].frame)
           .setOrigin(0.5, 1)
           .setData("buildingId", b.id)
           .setInteractive({ pixelPerfect: true });
         this.buildings.set(b.id, s);
       }
-      s.setPosition(p.x, p.y + (w + h) * 8 - 3)
-        .setDisplaySize(width, width)
-        .setDepth((b.x + b.y + w + h - 2) * 32 + 12)
-        .setAlpha(b.enabled ? 1 : 0.55);
+      this.placeSprite(s, b.kind, b.x, b.y, b.rotation);
+      s.setDepth((b.x + b.y + w + h - 2) * 32 + 12).setAlpha(
+        b.enabled ? 1 : 0.55,
+      );
       if (b.kind === "quarry") s.setTint(0xc3c1b3);
       if (b.kind === "mine") s.setTint(0xc7ad8f);
     }
@@ -434,6 +473,7 @@ export class TownScene extends Phaser.Scene {
   drawOverlay() {
     if (!this.overlay) return;
     this.overlay.clear();
+    this.ghost?.setVisible(false);
     if (this.showGrid) {
       this.overlay.lineStyle(0.5, 0xe8e9ca, 0.3);
       for (let y = 0; y < SIZE; y++)
@@ -472,6 +512,24 @@ export class TownScene extends Phaser.Scene {
             ? footprint(this.tool, this.hover.x, this.hover.y)
             : [this.hover];
       for (const p of cells) this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
+      if (
+        this.tool !== "inspect" &&
+        this.tool !== "bulldoze" &&
+        this.tool !== "road"
+      ) {
+        this.ghost ??= this.add.image(0, 0, "buildings", 0).setDepth(5001);
+        this.placeSprite(
+          this.ghost,
+          this.tool,
+          this.hover.x,
+          this.hover.y,
+          this.rotation,
+        );
+        this.ghost
+          .setVisible(true)
+          .setAlpha(0.6)
+          .setTint(valid ? 0xffffff : 0xe99385);
+      }
     }
   }
   position(a: Agent) {
@@ -506,22 +564,26 @@ export class TownScene extends Phaser.Scene {
       }
     for (const a of this.simulation.state.agents) {
       let s = this.people.get(a.id);
+      const p = this.position(a),
+        direction = facing(p.dx, p.dy);
+      const texture = a.kind === "person" ? "villagers" : "vehicles";
+      const row =
+        a.kind === "person"
+          ? a.id % 4
+          : a.kind === "truck"
+            ? 2 + (a.id % 2)
+            : a.id % 2;
+      const frame = row * 4 + direction;
       if (!s) {
-        const frame =
-          a.kind === "person"
-            ? 4 + (a.id % 4)
-            : a.kind === "truck"
-              ? 10 + (a.id % 2)
-              : 8 + (a.id % 2);
-        const size = a.kind === "person" ? 27 : a.kind === "car" ? 35 : 39;
-        s = this.add
-          .image(0, 0, "garden", frame)
-          .setDisplaySize(size, size)
-          .setOrigin(0.5, 0.9);
+        s = this.add.image(0, 0, texture, frame).setOrigin(0.5, 1);
         this.people.set(a.id, s);
       }
-      const p = this.position(a),
-        v = iso(p.x, p.y),
+      s.setTexture(texture, frame).setScale(
+        a.kind === "person"
+          ? 22 / s.frame.height
+          : (a.kind === "truck" ? 37 : 32) / s.frame.width,
+      );
+      const v = iso(p.x, p.y),
         bob =
           a.kind === "person" && a.wait <= 0
             ? Math.sin(this.simulation.state.tick * 1.1 + a.id) * 0.55
@@ -529,9 +591,7 @@ export class TownScene extends Phaser.Scene {
       s.setPosition(
         Math.round(v.x) + (a.kind === "person" ? 10 : 0),
         Math.round(v.y) + (a.kind === "person" ? 3 : 0) + bob,
-      )
-        .setDepth((p.x + p.y) * 32 + 16)
-        .setFlipX(p.dy > 0 || p.dx < 0);
+      ).setDepth((p.x + p.y) * 32 + 16);
     }
     this.smoke.clear();
     for (const b of this.simulation.state.buildings) {
