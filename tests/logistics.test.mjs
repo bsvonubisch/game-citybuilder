@@ -34,13 +34,13 @@ test("production links follow recipe chains, warehouse export rules and front en
     [[forester.id, "wood"]],
   );
   assert.deepEqual(
-    view.outputs.map((l) => [l.target, l.resource]),
-    [[workshop.id, "planks"]],
+    new Set(view.outputs.map((l) => `${l.target}:${l.resource}`)),
+    new Set([`${workshop.id}:planks`, `${warehouse.id}:planks`]),
   );
   assert.equal(
     canSupply(sawmill, warehouse),
-    false,
-    "warehouses do not accept planks in the simulation",
+    true,
+    "warehouses accept planks for construction and upgrades",
   );
   assert.equal(canSupply(forester, warehouse), true);
   const quarry = productionConnections(sim, building(sim, "quarry").id);
@@ -83,6 +83,19 @@ test("production links follow recipe chains, warehouse export rules and front en
     before,
     "inspection must not change goods, routes or jobs",
   );
+});
+
+test("sawmills deliver usable construction planks to warehouses while workshops keep producing", () => {
+  const sim = new Simulation();
+  for (let i=0;i<4800;i++) sim.step();
+  assert.ok(sim.stored('planks') >= 16, 'enough planks must reach storage for a grand house');
+  assert.ok(building(sim,'workshop').produced > 10, 'warehouse deliveries must not starve workshops');
+  const house = building(sim,'house');
+  execute(sim,{type:'upgrade',id:house.id});
+  const before=sim.stored('planks');
+  execute(sim,{type:'upgrade',id:house.id});
+  assert.equal(sim.stored('planks'), before-16);
+  assert.equal(house.houseTier,3);
 });
 
 test("cached routes survive simulation ticks, invalidate after road changes, and respect replaced towns", () => {

@@ -33,7 +33,7 @@ export function canSupply(source: Building, target: Building) {
     source.id !== target.id &&
     (BUILDINGS[target.kind].recipe?.input === output ||
       (target.kind === "warehouse" &&
-        ["bread", "tools", "wood", "stone", "metal"].includes(output)))
+        ["bread", "tools", "wood", "planks", "stone", "metal"].includes(output)))
   );
 }
 
