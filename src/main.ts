@@ -121,12 +121,12 @@ $("#app").innerHTML = `
    ["wood", "wood", "Wood in warehouses"],
    ["stone", "stone", "Stone in warehouses"],
    ["metal", "metal", "Metal in warehouses"],
-   ["people", "population", "Residents"],
+   ["people", "population", "Employed / residents"],
    ["heart", "happiness", "Happiness"],
  ]
    .map(
      ([i, id, title]) =>
-       `<div class="resource ${id}" title="${title}">${icon(i)}<span id="${id}">—</span><small>${title.split(" ")[0]}</small></div>`,
+       `<div class="resource ${id}" title="${title}">${icon(i)}<span id="${id}">—</span><small>${id === "population" ? title : title.split(" ")[0]}</small></div>`,
    )
    .join("")}
  </div><div class="header-actions"><button class="quiet" id="cloud-button" title="Sign in & cloud saves">${icon("cloud")}<span id="cloud-label">Connect</span></button><button class="icon-button" id="settings" aria-label="Save and settings">${icon("settings")}</button></div></header>
@@ -673,10 +673,17 @@ function drawMinimap() {
 }
 function updateUI() {
   const s = simulation.state;
+  const employed = s.residents.filter((r) => r.job !== null).length;
   $("#gold").textContent = Math.floor(s.money).toLocaleString();
   for (const r of ["wood", "stone", "metal"] as const)
     $("#" + r).textContent = simulation.stored(r).toString();
-  $("#population").textContent = s.residents.length.toString();
+  $("#population").textContent = `${employed} / ${s.residents.length}`;
+  $(".resource.population").title =
+    `${employed} of ${s.residents.length} residents have jobs · ${s.residents.length - employed} without an assigned job`;
+  $(".resource.population").setAttribute(
+    "aria-label",
+    $(".resource.population").title,
+  );
   $("#happiness").textContent = simulation.happiness() + "%";
   $("#day").textContent = `Day ${Math.floor(s.tick / 240) + 1}`;
   $("#goal-progress").style.width =
@@ -691,7 +698,7 @@ function updateUI() {
       : "Your little industries are finding their rhythm.";
   if (tab === "town") {
     $("#town-stats").innerHTML =
-      `<div class="detail-row"><span>Employed residents</span><b>${s.residents.filter((r) => r.job).length} / ${s.residents.length}</b></div><div class="detail-row"><span>Deliveries on the road</span><b>${s.agents.filter((a) => a.kind === "truck").length}</b></div><div class="detail-row"><span>Tools exported</span><b>${s.exported}</b></div><div class="detail-row"><span>Food needs met</span><b>${s.food}%</b></div>`;
+      `<div class="detail-row"><span>Employed residents</span><b>${employed} / ${s.residents.length}</b></div><div class="detail-row"><span>Deliveries on the road</span><b>${s.agents.filter((a) => a.kind === "truck").length}</b></div><div class="detail-row"><span>Tools exported</span><b>${s.exported}</b></div><div class="detail-row"><span>Food needs met</span><b>${s.food}%</b></div>`;
     const totals = simulation.totals();
     $("#inventory").innerHTML = RESOURCES.map(
       (r) =>

@@ -41,6 +41,7 @@ npm run build
 - Selecting a production building shows directional road routes to suppliers (teal) and destinations (gold), including bridge heights and front entrances. Matching cargo deliveries and assigned travelling workers (purple) are highlighted live. Its inspector lists partners, route problems, delivery counts and worker names; select a partner to follow the supply chain. Road searches are cached until the selection or network changes.
 - Traffic reserves adjacent junction tiles together, releases crossings before the next stop line, and gives waiting departures priority by queue age. Vehicles keep safe gaps while merging; opposing traffic cannot hold nearby crossings against each other indefinitely.
 - The sidebar holds the town name, day, season and expandable town progress. The minimap outlines the visible area and follows camera panning, zooming and resizing.
+- The resource bar shows employed residents / total residents, updated from real job assignments. Hover for the number without a job; the same breakdown is available in Your town.
 - Gold, wood, stone, and metal construction costs. Quarries and metal mines use finite deposits. Delivered warehouse inventory pays material costs.
 - Farm → mill → bakery → warehouse. Forester → sawmill → workshop → warehouse. Vehicles move inventory in transit, and delivered tools sell for gold.
 - Daily bread consumption, household income, and basic happiness from food and parks.

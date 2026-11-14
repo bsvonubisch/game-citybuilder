@@ -1607,6 +1607,11 @@ dialog p.muted {
     font-size: 6px;
   }
   .resource.population {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-width: 58px;
+  }
+  .resource.population > .icon {
     display: none;
   }
   .header-actions {
