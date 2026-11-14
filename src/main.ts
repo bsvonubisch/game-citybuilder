@@ -133,11 +133,12 @@ $("#app").innerHTML = `
    ["stone", "stone", "Stone in warehouses"],
    ["metal", "metal", "Metal in warehouses"],
    ["people", "population", "Employed / residents"],
+   ["hammer", "builders", "Builders / needed"],
    ["heart", "happiness", "Happiness"],
  ]
    .map(
      ([i, id, title]) =>
-       `<div class="resource ${id}" title="${title}">${icon(i)}<span id="${id}">—</span><small>${id === "population" ? title : title.split(" ")[0]}</small></div>`,
+       `<div class="resource ${id}" title="${title}">${icon(i)}<span id="${id}">—</span><small>${id === "population" || id === "builders" ? title : title.split(" ")[0]}</small></div>`,
    )
    .join("")}
  </div><div class="header-actions"><button class="quiet" id="cloud-button" title="Sign in & cloud saves">${icon("cloud")}<span id="cloud-label">Connect</span></button><button class="icon-button" id="settings" aria-label="Save and settings">${icon("settings")}</button></div></header>
@@ -864,6 +865,14 @@ function drawMinimap() {
 function updateUI() {
   const s = simulation.state;
   const employed = s.residents.filter((r) => r.job !== null).length;
+  const sites = s.buildings.filter((b) => b.construction && b.enabled);
+  const buildersNeeded = sites.reduce((total, b) => total + builderCapacity(b), 0);
+  const buildersAssigned = sites.reduce((total, b) => total + b.workers, 0);
+  $("#builders").textContent = `${buildersAssigned} / ${buildersNeeded}`;
+  const builderSummary = `${buildersAssigned} builders assigned of ${buildersNeeded} needed at ${sites.length} active construction sites · ${Math.max(0, buildersNeeded - buildersAssigned)} more builders needed. Paused sites excluded; sites awaiting road access included.`;
+  $(".resource.builders").title = builderSummary;
+  $(".resource.builders").setAttribute("aria-label", builderSummary);
+  $(".resource.builders").classList.toggle("shortage", buildersAssigned < buildersNeeded);
   $("#gold").textContent = Math.floor(s.money).toLocaleString();
   for (const r of ["wood", "planks", "stone", "metal"] as const)
     $("#" + r).textContent = simulation.stored(r).toString();
