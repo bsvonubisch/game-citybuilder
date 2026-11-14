@@ -132,6 +132,34 @@ test("opposing traffic passes a narrow road bend safely", () => {
     path,
   );
 });
+test("opposing cars clear two nearby junctions instead of holding each other's crossing", () => {
+  for (const spacing of [1, 2]) {
+    const path = line(0, -4, 0, 1, 9 + spacing);
+    const roads = [
+      ...path,
+      ...line(-2, 0, 1, 0, 5),
+      ...line(-2, spacing, 1, 0, 5),
+    ];
+    complete(
+      [vehicle(1, path), vehicle(2, [...path].reverse(), "truck")],
+      roads,
+      500,
+    );
+  }
+});
+test("the oldest queued departure gets the next safe gap instead of newer low-id cars", () => {
+  const path = line(0, 0, 1, 0, 8),
+    older = { ...vehicle(50, path, "truck"), queuedTicks: 30 },
+    newer = { ...vehicle(2, path), queuedTicks: 1 },
+    traffic = new Traffic();
+  traffic.configure(new Set(path.map((p) => `${p.x},${p.y}`)));
+  traffic.plan([newer, older]);
+  assert.equal(older.active, true);
+  assert.equal(newer.active, false);
+  assert.equal(newer.trafficWait, true);
+  noCollisions([older, newer], "fair departure");
+  complete([older, newer], path);
+});
 test("a busy working town remains collision free between simulation ticks and keeps exporting", () => {
   const sim = new Simulation();
   for (let i = 0; i < 2400; i++) {

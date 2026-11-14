@@ -110,9 +110,13 @@ function sweptOverlap(a: Agent, ma: number, b: Agent, mb: number) {
 export class Traffic {
   private junctions = new Map<string, number>();
   private junctionTiles = new Set<string>();
+  private junctionGroups = new Map<string, string>();
+  private groupTiles = new Map<string, Point[]>();
   configure(roads: ReadonlySet<string>) {
     this.junctionTiles.clear();
     this.junctions.clear();
+    this.junctionGroups.clear();
+    this.groupTiles.clear();
     for (const road of roads) {
       const [x, y] = road.split(",").map(Number);
       const exits = [
@@ -129,6 +133,31 @@ export class Traffic {
       )
         this.junctionTiles.add(road);
     }
+    // Adjacent junction tiles form one crossing. Reserving them separately
+    // lets opposing cars each hold half of the crossing forever.
+    for (const tile of this.junctionTiles) {
+      if (this.junctionGroups.has(tile)) continue;
+      const queue = [tile],
+        members: Point[] = [];
+      this.junctionGroups.set(tile, tile);
+      for (let i = 0; i < queue.length; i++) {
+        const [x, y] = queue[i].split(",").map(Number);
+        members.push({ x, y });
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ]) {
+          const next = `${x + dx},${y + dy}`;
+          if (this.junctionTiles.has(next) && !this.junctionGroups.has(next)) {
+            this.junctionGroups.set(next, tile);
+            queue.push(next);
+          }
+        }
+      }
+      this.groupTiles.set(tile, members);
+    }
   }
   plan(agents: Agent[]) {
     for (const a of agents) {
@@ -142,18 +171,32 @@ export class Traffic {
     const cars = agents.filter((a) => a.kind !== "person");
     for (const a of cars) {
       a.active ??= false;
-      if (a.wait > 0) a.active = false;
+      if (a.wait > 0) {
+        a.active = false;
+        a.queuedTicks = 0;
+      }
     }
     for (const [junction, id] of this.junctions) {
-      const a = cars.find((a) => a.id === id),
-        [x, y] = junction.split(",").map(Number);
-      if (!a?.active || Math.hypot(lanePose(a).x - x, lanePose(a).y - y) > 1.1)
+      const a = cars.find((a) => a.id === id);
+      // Release once the rear has cleared, before stopping at the next crossing.
+      // The old 1.1-tile radius overlapped the next crossing's stop line.
+      if (
+        !a?.active ||
+        !a.path.some(
+          (p, i) =>
+            this.junctionGroups.get(key(p)) === junction &&
+            i >= a.segment + a.progress - 0.7 &&
+            i <= a.segment + a.progress + 1.8,
+        )
+      )
         this.junctions.delete(junction);
     }
     // Vehicles wait inside their source building until there is room to join.
     for (const a of cars
       .filter((a) => !a.active && a.wait <= 0)
-      .sort((a, b) => a.id - b.id)) {
+      .sort(
+        (a, b) => (b.queuedTicks ?? 0) - (a.queuedTicks ?? 0) || a.id - b.id,
+      )) {
       if (
         cars.some(
           (b) =>
@@ -162,26 +205,38 @@ export class Traffic {
         )
       ) {
         a.trafficWait = true;
+        a.queuedTicks = (a.queuedTicks ?? 0) + 1;
         continue;
       }
       const p = lanePose(a),
-        near = [...this.junctionTiles].filter((k) => {
-          const [x, y] = k.split(",").map(Number);
-          return Math.hypot(p.x - x, p.y - y) < 1.2;
-        });
+        near = [
+          ...new Set(
+            [...this.junctionTiles]
+              .filter((k) => {
+                const [x, y] = k.split(",").map(Number);
+                return Math.hypot(p.x - x, p.y - y) < 1.2;
+              })
+              .map((k) => this.junctionGroups.get(k)!),
+          ),
+        ];
       const blocked = near.some((k) => {
         const owner = this.junctions.get(k);
         if (owner !== undefined && owner !== a.id) return true;
-        const [x, y] = k.split(",").map(Number);
         return cars.some(
           (b) =>
             b !== a &&
             b.active &&
-            Math.hypot(lanePose(b).x - x, lanePose(b).y - y) < 1.6,
+            this.groupTiles
+              .get(k)!
+              .some(
+                ({ x, y }) =>
+                  Math.hypot(lanePose(b).x - x, lanePose(b).y - y) < 0.7,
+              ),
         );
       });
       if (blocked) {
         a.trafficWait = true;
+        a.queuedTicks = (a.queuedTicks ?? 0) + 1;
         continue;
       }
       a.active = true;
@@ -199,10 +254,10 @@ export class Traffic {
         i <= Math.min(a.path.length - 1, a.segment + 2);
         i++
       ) {
-        const junction = key(a.path[i]),
+        const junction = this.junctionGroups.get(key(a.path[i])),
           distance = i - at;
         if (
-          !this.junctionTiles.has(junction) ||
+          !junction ||
           distance < -0.7 ||
           distance > 1.8 ||
           this.junctions.has(junction)
@@ -245,7 +300,9 @@ export class Traffic {
         i <= Math.min(a.path.length - 1, a.segment + 2);
         i++
       ) {
-        const owner = this.junctions.get(key(a.path[i]));
+        const group = this.junctionGroups.get(key(a.path[i]));
+        const owner =
+          group === undefined ? undefined : this.junctions.get(group);
         if (owner !== undefined && owner !== a.id && i >= at)
           desired = Math.min(desired, Math.max(0, i - at - 1.1));
       }
