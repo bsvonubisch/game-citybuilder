@@ -91,6 +91,7 @@ const poly = (
 export class TownScene extends Phaser.Scene {
   simulation: Simulation;
   tool: Tool = "inspect";
+  movingBuilding: number | null = null;
   selected: number | null = null;
   selectedAgent: number | null = null;
   onSelectAgent: (id: number) => void = () => {};
@@ -669,20 +670,38 @@ export class TownScene extends Phaser.Scene {
       }
     }
     if (this.hover && this.tool !== "inspect") {
+      const moving = this.movingBuilding
+        ? this.simulation.building(this.movingBuilding)
+        : undefined;
+      const kind = this.tool === "move" ? moving?.kind : this.tool;
+      if (!kind) return;
+      const plot = moving
+        ? this.simulation.relocationPlot(moving, this.rotation)
+        : undefined;
       const valid =
         this.tool === "bulldoze" ||
-        !this.simulation.canPlace(
-          this.tool,
-          this.hover.x,
-          this.hover.y,
-          this.rotation,
-        );
+        !(this.tool === "move"
+          ? this.simulation.canMove(
+              moving!.id,
+              this.hover.x,
+              this.hover.y,
+              this.rotation,
+            )
+          : this.simulation.canPlace(
+              kind as Exclude<
+                Tool,
+                "inspect" | "bulldoze" | "terrain" | "move"
+              >,
+              this.hover.x,
+              this.hover.y,
+              this.rotation,
+            ));
       const b = this.simulation.buildingAt(this.hover.x, this.hover.y);
       const cells =
         this.tool === "bulldoze" && b
           ? footprint(b.kind, b.x, b.y, b.rotation, b.plot)
-          : isBuilding(this.tool)
-            ? footprint(this.tool, this.hover.x, this.hover.y, this.rotation)
+          : isBuilding(kind)
+            ? footprint(kind, this.hover.x, this.hover.y, this.rotation, plot)
             : [this.hover];
       for (const p of cells) this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
       if (isDecoration(this.tool)) {
@@ -715,21 +734,23 @@ export class TownScene extends Phaser.Scene {
           this.simulation.state.terrain,
         );
       }
-      if (isBuilding(this.tool)) {
-        this.drawFront(this.tool, this.hover.x, this.hover.y, this.rotation);
+      if (isBuilding(kind)) {
+        this.drawFront(kind, this.hover.x, this.hover.y, this.rotation, plot);
         this.ghost ??= this.add.image(0, 0, "plot-house").setDepth(5001);
         this.placeSprite(
           this.ghost,
-          this.tool,
+          kind,
           this.hover.x,
           this.hover.y,
           this.rotation,
+          plot,
+          moving?.houseTier,
         );
         this.ghost
           .setVisible(true)
           .setAlpha(0.6)
           .setTint(valid ? 0xffffff : 0xe99385);
-        if (this.tool === "mill") {
+        if (kind === "mill") {
           this.ghostRotor ??= this.add
             .image(0, 0, "mill-rotor", 0)
             .setDepth(5002);

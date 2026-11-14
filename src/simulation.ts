@@ -95,7 +95,7 @@ export type Command =
   | { type: "undoTerrain" }
   | {
       type: "place";
-      kind: Exclude<Tool, "inspect" | "bulldoze" | "terrain">;
+      kind: Exclude<Tool, "inspect" | "bulldoze" | "terrain" | "move">;
       x: number;
       y: number;
       rotation?: 0 | 1 | 2 | 3;
@@ -103,6 +103,7 @@ export type Command =
   | { type: "demolish"; x: number; y: number }
   | { type: "toggle"; id: number }
   | { type: "upgrade"; id: number }
+  | { type: "move"; id: number; x: number; y: number; rotation?: 0 | 1 | 2 | 3 }
   | { type: "rotate"; id: number };
 export interface CommandEnvelope {
   id: string;
@@ -388,7 +389,8 @@ export class Simulation {
       }
     return null;
   }
-  reconnect() {
+  reconnect(preserveTravel = false) {
+    const travellers = preserveTravel ? [...this.state.agents] : [];
     this.roadSet = new Set(this.state.roads);
     this.traffic.configure(this.roadSet);
     const warehouses = this.state.buildings.filter(
@@ -421,9 +423,17 @@ export class Simulation {
     );
     for (const r of this.state.residents) {
       const h = this.building(r.home)!;
-      const job = jobs.find(
-        (b) => b.workers < BUILDINGS[b.kind].jobs && this.route(h, b),
+      const previous = jobs.find(
+        (b) =>
+          b.id === r.job &&
+          b.workers < BUILDINGS[b.kind].jobs &&
+          this.route(h, b),
       );
+      const job =
+        (preserveTravel ? previous : undefined) ??
+        jobs.find(
+          (b) => b.workers < BUILDINGS[b.kind].jobs && this.route(h, b),
+        );
       r.job = job?.id ?? null;
       if (job) job.workers++;
     }
@@ -431,6 +441,12 @@ export class Simulation {
       if (a.kind !== "truck") return false;
       const sourceBuilding = this.building(a.source),
         targetBuilding = this.building(a.target);
+      if (
+        preserveTravel &&
+        targetBuilding?.connected &&
+        this.retarget(a, targetBuilding)
+      )
+        return true;
       const valid =
         sourceBuilding?.connected &&
         targetBuilding?.connected &&
@@ -457,6 +473,19 @@ export class Simulation {
           warehouses.find((w) => this.route(home, w));
       if (!destination) continue;
       const p = this.route(home, destination);
+      const existing = travellers.find(
+        (a) =>
+          a.resident === r.id &&
+          a.source === home.id &&
+          a.target === destination.id,
+      );
+      if (
+        existing &&
+        this.retarget(existing, existing.returning ? home : destination)
+      ) {
+        this.state.agents.push(existing);
+        continue;
+      }
       if (p)
         this.state.agents.push({
           id: this.state.nextId++,
@@ -473,11 +502,74 @@ export class Simulation {
           wait: (r.id % 12) * 0.45,
         });
     }
-    for (const a of this.state.agents) a.active = false;
+    if (!preserveTravel) for (const a of this.state.agents) a.active = false;
     this.traffic.plan(this.state.agents);
   }
+  private retarget(a: Agent, destination: Building) {
+    const entrances = this.adjacent(destination);
+    if (entrances.some((p) => key(p) === key(a.path[a.path.length - 1])))
+      return true;
+    const next = Math.min(a.segment + 1, a.path.length - 1);
+    for (const entrance of entrances) {
+      const route = this.path(a.path[next], entrance);
+      if (!route) continue;
+      // Keep the current segment intact so a moving vehicle never teleports.
+      a.path = [...a.path.slice(0, next), ...route];
+      return true;
+    }
+    return false;
+  }
+  relocationPlot(
+    b: Building,
+    rotation = b.rotation,
+  ): readonly [number, number] {
+    const [w, h] = dimensions(b.kind, b.rotation, b.plot);
+    return (rotation - b.rotation) % 2 ? [h, w] : [w, h];
+  }
+  canMove(
+    id: number,
+    x: number,
+    y: number,
+    rotation?: 0 | 1 | 2 | 3,
+  ): string | null {
+    const b = this.building(id);
+    if (!b) return "Select a building to move.";
+    const facing = rotation ?? b.rotation;
+    if (
+      ![0, 1, 2, 3].includes(facing) ||
+      !Number.isInteger(x) ||
+      !Number.isInteger(y)
+    )
+      return "Choose a valid tile and direction.";
+    for (const p of footprint(
+      b.kind,
+      x,
+      y,
+      facing,
+      this.relocationPlot(b, facing),
+    )) {
+      if (!inside(p.x, p.y) || terrain(p.x, p.y, this.state.terrain) !== "land")
+        return "The whole footprint needs dry land inside the valley.";
+      if (
+        groundHeight(p.x, p.y, this.state.terrain) !==
+        groundHeight(x, y, this.state.terrain)
+      )
+        return "Level the whole footprint before moving here.";
+      if (
+        this.roads.has(key(p)) ||
+        (this.buildingAt(p.x, p.y)?.id ?? id) !== id
+      )
+        return "The footprint overlaps a road or another building.";
+    }
+    if (
+      (b.kind === "quarry" || b.kind === "mine") &&
+      DEPOSITS[key({ x, y })] !== (b.kind === "quarry" ? "stone" : "metal")
+    )
+      return "This building must remain on a matching deposit.";
+    return null;
+  }
   canPlace(
-    kind: Exclude<Tool, "inspect" | "bulldoze" | "terrain">,
+    kind: Exclude<Tool, "inspect" | "bulldoze" | "terrain" | "move">,
     x: number,
     y: number,
     rotation = 0,
@@ -602,6 +694,7 @@ export class Simulation {
         "toggle",
         "rotate",
         "upgrade",
+        "move",
         "terrain",
         "undoTerrain",
       ].includes(c.type)
@@ -774,6 +867,20 @@ export class Simulation {
       message = decoration?.natural
         ? "Decoration removed."
         : "Removed. Half the build cost returned.";
+    } else if (c.type === "move") {
+      const error = this.canMove(c.id, c.x, c.y, c.rotation);
+      if (error)
+        return { ok: false, message: error, revision: this.state.revision };
+      const b = this.building(c.id)!;
+      b.plot = this.relocationPlot(b, c.rotation ?? b.rotation);
+      b.x = c.x;
+      b.y = c.y;
+      b.rotation = c.rotation ?? b.rotation;
+      const cells = footprint(b.kind, b.x, b.y, b.rotation, b.plot);
+      this.state.decorations = this.state.decorations.filter(
+        (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
+      );
+      message = `${buildingName(b)} moved. Stock and progress preserved.`;
     } else if (c.type === "rotate") {
       const b = this.building(c.id);
       if (!b)
@@ -840,7 +947,10 @@ export class Simulation {
       message = b.enabled ? "Production resumed." : "Production paused.";
     }
     this.state.revision++;
-    if (networkChanged) this.reconnect();
+    if (networkChanged) this.reconnect(c.type === "move");
+    if (c.type === "move" && !this.building(c.id)?.connected)
+      message +=
+        " Connect the front entrance to the warehouse road network to resume work.";
     this.state.history.unshift(message);
     this.state.history = this.state.history.slice(0, 20);
     const result = { ok: true, message, revision: this.state.revision };
@@ -905,7 +1015,16 @@ export class Simulation {
           }
           this.state.agents = this.state.agents.filter((x) => x.id !== a.id);
         } else {
-          a.path.reverse();
+          const home = this.building(a.source),
+            destination = this.building(a.target);
+          const reverse =
+            home && destination
+              ? this.route(
+                  a.returning ? home : destination,
+                  a.returning ? destination : home,
+                )
+              : null;
+          a.path = reverse ?? [...a.path].reverse();
           a.segment = 0;
           a.progress = 0;
           a.returning = !a.returning;
@@ -1016,7 +1135,7 @@ export class Simulation {
             kind: "road",
             title: "No front road",
             message:
-              "Build a road along the front entrance, or rotate the building toward a road.",
+              "Build a road along the front entrance, or move the building beside a road.",
           }
         : {
             kind: "warehouse",

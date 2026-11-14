@@ -139,6 +139,7 @@ export const DECORATIONS: Record<
   },
 };
 export type Tool =
+  | "move"
   | BuildingKind
   | DecorationKind
   | "road"

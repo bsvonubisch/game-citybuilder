@@ -213,6 +213,7 @@ function toast(message: string) {
   );
 }
 function setTool(next: Tool) {
+  if (next !== "move") scene.movingBuilding = null;
   const wasTerrain = tool === "terrain";
   setMobileMenu(false);
   if (next !== "inspect") closeInspection();
@@ -248,6 +249,12 @@ function setTool(next: Tool) {
             ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if (next === "move") {
+    const b = simulation.building(scene.movingBuilding!);
+    $("#placement-hint").innerHTML =
+      `${icon("inspect")} Move ${b ? buildingName(b) : "building"} · stock & progress kept <span id="front-access"></span><button id="cancel-move" class="rotate-placement">Cancel</button>`;
+    $("#cancel-move").onclick = () => setTool("inspect");
+  }
   if (next === "terrain") {
     tab = "build";
     $("#placement-hint").innerHTML =
@@ -279,10 +286,19 @@ function rotatePlacement() {
 }
 function updateEntranceHint() {
   const el = document.querySelector<HTMLElement>("#front-access");
-  if (!el || !isBuilding(tool)) return;
+  const moving =
+    tool === "move" ? simulation.building(scene.movingBuilding!) : undefined;
+  const kind = moving?.kind ?? tool;
+  if (!el || !isBuilding(kind)) return;
   const connected =
     hovered &&
-    frontage(tool, hovered.x, hovered.y, scene.rotation).some(
+    frontage(
+      kind,
+      hovered.x,
+      hovered.y,
+      scene.rotation,
+      moving ? simulation.relocationPlot(moving, scene.rotation) : undefined,
+    ).some(
       (p) =>
         simulation.roads.has(key(p)) &&
         terrainCell(p.x, p.y, simulation.state.terrain).height ===
@@ -422,12 +438,24 @@ scene.onTile = async (p: Point) => {
     return;
   }
   const result = await gateway.command(
-    tool === "bulldoze"
-      ? { type: "demolish", ...p }
-      : { type: "place", kind: tool, rotation: scene.rotation, ...p },
+    tool === "move"
+      ? {
+          type: "move",
+          id: scene.movingBuilding!,
+          ...p,
+          rotation: scene.rotation,
+        }
+      : tool === "bulldoze"
+        ? { type: "demolish", ...p }
+        : { type: "place", kind: tool, rotation: scene.rotation, ...p },
   );
   toast(result.message);
   if (result.ok) {
+    if (tool === "move") {
+      const id = scene.movingBuilding!;
+      setTool("inspect");
+      scene.onSelect(id);
+    }
     scene.redraw();
     save(false);
     updateUI();
@@ -526,14 +554,12 @@ function renderInspector() {
   {
     panel.insertAdjacentHTML(
       "beforeend",
-      `<button id="rotate-house" class="primary">${icon("reset")} Rotate building · R</button>`,
+      '<button id="move-building" class="primary">Move building</button>',
     );
-    $("#rotate-house").onclick = async () => {
-      const result = await gateway.command({ type: "rotate", id: b.id });
-      toast(result.message);
-      scene.redraw();
-      save(false);
-      renderInspector();
+    $("#move-building").onclick = () => {
+      scene.movingBuilding = b.id;
+      scene.rotation = b.rotation;
+      setTool("move");
     };
   }
   $("#close-inspector").onclick = () => {
@@ -1023,9 +1049,7 @@ window.addEventListener("keydown", (e) => {
   if (k === "escape" || k === "v") setTool("inspect");
   if (k === "r") {
     if (isBuilding(tool)) rotatePlacement();
-    else if (tool === "inspect" && selected && simulation.building(selected))
-      $("#rotate-house").click();
-    else setTool("road");
+    else if (tool !== "move") setTool("road");
   }
   if (k === "x") setTool("bulldoze");
   if (k === "b") setTool("bridge");

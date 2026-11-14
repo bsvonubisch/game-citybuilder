@@ -49,6 +49,95 @@ const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
 
+test("moving preserves a working building, stocks, labour, progress and live deliveries", () => {
+  const sim = new Simulation();
+  advance(sim, 50);
+  const b = sim.state.buildings.find((b) => b.kind === "sawmill");
+  b.progress = 2.5;
+  b.inventory.planks = 13;
+  let destination;
+  for (let y = 0; y < 28 && !destination; y++)
+    for (let x = 0; x < 28; x++) {
+      if (
+        (x !== b.x || y !== b.y) &&
+        !sim.canMove(b.id, x, y) &&
+        sim.state.buildings.some(
+          (w) => w.kind === "warehouse" && sim.route({ ...b, x, y }, w),
+        )
+      ) {
+        destination = { x, y };
+        break;
+      }
+    }
+  assert.ok(destination, "a connected destination exists");
+  const before = structuredClone(b),
+    totals = sim.totals(),
+    money = sim.state.money;
+  const travellers = sim.state.agents.map((a) => ({
+    id: a.id,
+    segment: a.segment,
+    progress: a.progress,
+  }));
+  const result = execute(sim, { type: "move", id: b.id, ...destination });
+  assert.equal(result.ok, true, result.message);
+  assert.equal(sim.building(b.id), b);
+  for (const field of [
+    "inventory",
+    "progress",
+    "produced",
+    "enabled",
+    "workers",
+    "rotation",
+    "plot",
+  ])
+    assert.deepEqual(b[field], before[field], field);
+  assert.deepEqual(sim.totals(), totals);
+  assert.equal(sim.state.money, money);
+  for (const a of travellers) {
+    const current = sim.state.agents.find((c) => c.id === a.id);
+    assert.ok(current, "live traveller identity retained");
+    assert.equal(current.segment, a.segment);
+    assert.equal(current.progress, a.progress);
+  }
+  assert.deepEqual(
+    parseSave(JSON.stringify(sim.state)).buildings.find((c) => c.id === b.id),
+    b,
+  );
+  advance(sim, 120);
+  assert.ok(b.produced > before.produced, "production continues");
+  assert.ok(sim.state.delivered > 0, "deliveries continue");
+});
+
+test("rejected moves are atomic and moving a house keeps its residents and tier", () => {
+  const sim = new Simulation(),
+    b = sim.state.buildings.find((b) => b.kind === "house");
+  b.houseTier = 3;
+  sim.reconnect();
+  const before = structuredClone(sim.state);
+  const road = sim.state.roads[0].split(",").map(Number);
+  assert.equal(
+    execute(sim, { type: "move", id: b.id, x: road[0], y: road[1] }).ok,
+    false,
+  );
+  assert.deepEqual(sim.state, before);
+  const residents = sim.state.residents
+    .filter((r) => r.home === b.id)
+    .map((r) => r.id);
+  let target;
+  for (let y = 0; y < 28 && !target; y++)
+    for (let x = 0; x < 28; x++)
+      if (!sim.canMove(b.id, x, y)) {
+        target = { x, y };
+        break;
+      }
+  assert.equal(execute(sim, { type: "move", id: b.id, ...target }).ok, true);
+  assert.equal(b.houseTier, 3);
+  assert.deepEqual(
+    sim.state.residents.filter((r) => r.home === b.id).map((r) => r.id),
+    residents,
+  );
+});
+
 test("travellers beside both front edges stay in front of multi-tile buildings and behind rear edges", () => {
   const bounds = { left: -500, right: 500, top: -500, bottom: 500 };
   for (const [width, height] of [
