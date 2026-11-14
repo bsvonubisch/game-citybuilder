@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { setupArtworkScaling } from "./artwork-scaling.js";
 import { rotorView } from "./windmill.js";
 import {
   BUILDINGS,
@@ -221,6 +222,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("fishing-boats", "/fishing-boats.png");
   }
   create() {
+    setupArtworkScaling(this.game);
     this.plotArt = new PlotArt(this);
     this.constructionArt = new ConstructionArt(this);
     const builderTexture = this.textures.get("construction-workers"),
@@ -285,7 +287,7 @@ export class TownScene extends Phaser.Scene {
     this.deliveryRoutes = this.add.graphics().setDepth(4998.5);
     this.waterEffects = this.add.graphics().setDepth(-998);
     this.cameras.main.setBackgroundColor("#a7b9ad");
-    this.cameras.main.setRoundPixels(true);
+    this.cameras.main.setRoundPixels(false);
     this.redraw();
     this.centerTown();
     this.ready = true;

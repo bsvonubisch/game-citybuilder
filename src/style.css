@@ -320,7 +320,7 @@ main {
   height: 78px;
   margin: 0 auto;
   overflow: hidden;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 .front-connected {
   color: #287447;
@@ -433,7 +433,36 @@ main {
 }
 #game canvas {
   display: block;
+  image-rendering: auto;
+}
+:root[data-artwork="crisp"] .building-icon {
   image-rendering: pixelated;
+}
+.artwork-setting {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #d7dccb;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+.artwork-setting label {
+  font-weight: 600;
+}
+.artwork-setting select {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #b9c8af;
+  border-radius: 8px;
+  background: #fffdf2;
+  color: #345544;
+  font: inherit;
+}
+.artwork-setting small {
+  grid-column: 1 / -1;
+  color: #78866d;
+  line-height: 1.5;
 }
 #building-alerts {
   position: absolute;

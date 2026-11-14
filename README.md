@@ -78,6 +78,8 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 
 Terrain and roads are baked at 4× resolution into chunks no larger than 2048×2048 pixels when the town changes. Bridge geometry is cached by neighbor connections; the grid and mill rotor frames are cached separately. Static paving geometry is not replayed every frame. Agents and effects render continuously between the deterministic 250 ms ticks, including road turns and pauses. Add `?perf=1` to show a rolling FPS/frame-time counter; add `?qa=performance&perf=1` to measure in an isolated local-save slot. The visual footprint audit at `/tests/footprints.html` is available through the dev server.
 
+Artwork uses smooth linear scaling by default, including fractional camera zoom and menu thumbnails. Settings → Artwork scaling switches instantly between Smooth and Crisp pixels and remembers the preference on this device. Camera positions remain continuous in both modes to avoid snapping while panning or following moving agents. The filter also applies to newly created textures and refreshed terrain/foundation canvases. Source sprites retain their full resolution; this is texture filtering, not a blur over the screen. Verified at 83%, 128% and 270% zoom, on a 390×844 layout, and across reloads.
+
 ## Current scope
 
 This is a single-player foundation, not live multiplayer. Firebase account/save code is implemented; project-specific provider setup and an authenticated Firebase CLI are required. Firestore ownership, schema, and shared-world isolation rules are covered by emulator tests (Java 21 required). See [the multiplayer plan](docs/MULTIPLAYER.md) for the authority and synchronization boundary.

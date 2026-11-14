@@ -30,6 +30,7 @@ import { LocalGateway } from "./gateway.js";
 import { builderCapacity, constructionWork } from "./construction.js";
 import { fishingStatus } from "./fishing.js";
 import { TownScene } from "./scene.js";
+import { smoothArtwork, setArtworkSmoothing } from "./artwork-scaling.js";
 import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
 import { buildingPreview } from "./previews.js";
@@ -171,9 +172,10 @@ const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
   backgroundColor: "#a7b9ad",
-  pixelArt: true,
-  roundPixels: true,
-  antialias: false,
+  pixelArt: false,
+  roundPixels: false,
+  antialias: true,
+  antialiasGL: true,
   scale: {
     mode: Phaser.Scale.RESIZE,
     width: $("#game").clientWidth,
@@ -1005,6 +1007,15 @@ function showSettings() {
   openModal(
     `<span class="eyebrow">MAKE YOURSELF AT HOME</span><h2>Your little world.</h2><p>Your town saves automatically on this device. Export a copy to keep or move it.</p><div class="modal-actions"><button id="modal-save">${icon("save")} Save on this device</button><button id="export">${icon("download")} Export town</button><button id="import">${icon("upload")} Import town</button><button id="cloud-settings">${icon("cloud")} Cloud saves & sign-in</button><button id="art">${icon("leaf")} View art directions</button><button id="reset" class="danger">${icon("reset")} Start a fresh town</button></div><p class="muted">Foundation v0.1 · Phaser + TypeScript · Pine & Copper</p>`,
   );
+  $("#dialog-content").insertAdjacentHTML(
+    "beforeend",
+    `<div class="artwork-setting"><label for="artwork-scaling">Artwork scaling</label><select id="artwork-scaling"><option value="smooth" ${smoothArtwork() ? "selected" : ""}>Smooth</option><option value="crisp" ${smoothArtwork() ? "" : "selected"}>Crisp pixels</option></select><small>Smooth softens jagged edges at different zoom levels. Crisp pixels keeps the original hard edges. Changes apply immediately.</small></div>`,
+  );
+  $<HTMLSelectElement>("#artwork-scaling").onchange = (event) =>
+    setArtworkSmoothing(
+      game,
+      (event.target as HTMLSelectElement).value === "smooth",
+    );
   $("#modal-save").onclick = () => save();
   $("#export").onclick = () => {
     const url = URL.createObjectURL(
