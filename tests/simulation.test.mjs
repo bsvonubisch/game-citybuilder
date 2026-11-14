@@ -1029,3 +1029,41 @@ test("version two towns retain occupied plots, stocks, residents and front-conne
   );
   assert.ok(restored.state.decorations.length > 0);
 });
+
+import { MapTouches, gestureCamera } from "../.test-dist/gestures.js";
+test("touch drags and pinches never place buildings on release", () => {
+  const t = new MapTouches();
+  t.start(1, { x: 100, y: 100 });
+  assert.equal(t.move(1, { x: 103, y: 102 }), null);
+  assert.equal(t.end(1), true);
+  t.start(1, { x: 100, y: 100 });
+  assert.ok(t.move(1, { x: 130, y: 105 }));
+  assert.equal(t.end(1), false);
+  t.start(1, { x: 100, y: 100 });
+  t.start(2, { x: 200, y: 100 });
+  assert.equal(t.move(2, { x: 250, y: 100 }).scale, 1.5);
+  assert.equal(t.end(2), false);
+  t.move(1, { x: 105, y: 100 });
+  assert.equal(t.end(1), false);
+  t.start(1, { x: 20, y: 20 });
+  t.cancel();
+  assert.equal(t.end(1), false);
+  t.start(3, { x: 20, y: 20 });
+  assert.equal(t.end(3), true);
+});
+test("pinch zoom preserves the world point beneath the moving finger midpoint, including limits", () => {
+  const c = { scrollX: 150, scrollY: 300, width: 390, height: 700, zoom: 1.2 };
+  for (const scale of [0.01, 1.5, 100]) {
+    const g = { from: { x: 80, y: 250 }, to: { x: 110, y: 275 }, scale };
+    const n = gestureCamera(c, g);
+    const world = (camera, p) => ({
+      x: camera.scrollX + c.width / 2 + (p.x - c.width / 2) / camera.zoom,
+      y: camera.scrollY + c.height / 2 + (p.y - c.height / 2) / camera.zoom,
+    });
+    const before = world(c, g.from),
+      after = world(n, g.to);
+    assert.ok(Math.abs(before.x - after.x) < 1e-8);
+    assert.ok(Math.abs(before.y - after.y) < 1e-8);
+    assert.ok(n.zoom >= 0.55 && n.zoom <= 2.7);
+  }
+});

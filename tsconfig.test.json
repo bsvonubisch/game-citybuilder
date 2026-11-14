@@ -13,6 +13,7 @@
     "src/rendering.ts",
     "src/bridges.ts",
     "src/animation.ts",
-    "src/fences.ts"
+    "src/fences.ts",
+    "src/gestures.ts"
   ]
 }

@@ -1880,3 +1880,368 @@ dialog p.muted {
     padding: 10px 15px;
   }
 }
+
+.mobile-menu,
+.sidebar-scrim {
+  display: none;
+}
+@media (max-width: 760px) {
+  .topbar {
+    height: 100px;
+    padding: 0 12px;
+    gap: 4px 10px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: 52px 48px;
+  }
+  .brand {
+    width: auto;
+  }
+  .brand > .icon {
+    width: 30px;
+    height: 34px;
+  }
+  .brand > span {
+    display: none;
+  }
+  .mobile-menu {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 44px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  #mobile-menu {
+    justify-self: start;
+  }
+  .header-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .header-actions button,
+  .header-actions .icon-button {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+  }
+  .resource-bar {
+    grid-row: 2;
+    grid-column: 1/-1;
+    overflow-x: auto;
+    justify-content: flex-start;
+    gap: 16px;
+    width: 100%;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+  }
+  .resource {
+    flex-shrink: 0;
+    font-size: 13px;
+    min-width: 50px;
+    grid-template-columns: 18px auto;
+  }
+  .resource small {
+    font-size: 9px;
+    white-space: nowrap;
+  }
+  .resource.population {
+    min-width: 92px;
+  }
+  .resource.happiness {
+    display: grid;
+  }
+  main {
+    position: relative;
+    height: calc(100dvh - 100px);
+  }
+  .world {
+    width: 100%;
+    min-width: 0;
+  }
+  .sidebar {
+    display: none;
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: min(360px, calc(100vw - 24px));
+    z-index: 32;
+    box-shadow: 12px 0 40px #1c332c33;
+  }
+  .menu-open .sidebar {
+    display: flex;
+  }
+  .sidebar-scrim:not([hidden]) {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: #172d2b66;
+    z-index: 31;
+    width: 100%;
+  }
+  #close-sidebar {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    width: 44px;
+    height: 44px;
+  }
+  .side-heading {
+    padding: 16px 22px 12px;
+  }
+  .side-heading .eyebrow {
+    font-size: 8px;
+  }
+  .side-heading h1 {
+    font-size: 27px;
+  }
+  .side-heading p {
+    font-size: 11px;
+  }
+  .town-season {
+    font-size: 11px;
+    margin-top: 10px;
+  }
+  .side-tabs {
+    margin: 0 16px;
+  }
+  .side-tabs button {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .side-tabs button .icon {
+    width: 18px;
+  }
+  #sidebar-content {
+    padding: 16px;
+    overscroll-behavior: contain;
+  }
+  .category-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .category-tabs button {
+    min-height: 44px;
+    padding: 8px;
+    width: auto;
+    font-size: 11px;
+  }
+  .catalog-heading h3 {
+    font-size: 13px;
+  }
+  .building-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .building-card {
+    min-height: 120px;
+    padding: 10px;
+  }
+  .building-card b {
+    font-size: 12px;
+  }
+  .building-icon {
+    width: 80px;
+    height: 80px;
+  }
+  .price {
+    font-size: 11px;
+  }
+  .sidebar-footer {
+    min-height: 48px;
+    font-size: 10px;
+    padding: 6px 16px;
+  }
+  .sidebar-footer button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .sidebar-footer .icon {
+    width: 18px;
+    height: 18px;
+  }
+  .town-progress summary {
+    min-height: 44px;
+  }
+  .chain-button {
+    min-height: 44px;
+    font-size: 12px;
+  }
+  .bottom-area {
+    width: 100%;
+    padding: 0 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 6px;
+  }
+  .toolbar {
+    width: 100%;
+    padding: 4px;
+    border-radius: 12px;
+    flex-wrap: wrap;
+    gap: 0;
+    justify-content: center;
+  }
+  .tool-group {
+    width: 100%;
+    justify-content: space-evenly;
+  }
+  .tool-button {
+    flex: 1;
+    min-width: 44px;
+    height: 48px;
+    font-size: 10px;
+  }
+  .tool-button .icon {
+    width: 20px;
+    height: 20px;
+  }
+  .tool-button kbd,
+  .placement-hint kbd {
+    display: none;
+  }
+  .speed-controls {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    width: 100%;
+    justify-content: center;
+    padding: 2px 0 0;
+    margin-top: 3px;
+    gap: 14px;
+  }
+  .speed-controls button {
+    width: 44px;
+    height: 40px;
+    font-size: 12px;
+  }
+  .placement-hint {
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: normal;
+    max-width: 100%;
+    padding: 6px 10px;
+  }
+  .placement-hint > .icon {
+    display: none;
+  }
+  .rotate-placement {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .map-corner {
+    display: block;
+    top: 10px;
+    bottom: auto;
+    right: 8px;
+    padding: 3px;
+  }
+  #minimap {
+    display: none;
+  }
+  .zoom-controls {
+    gap: 0;
+  }
+  .zoom-controls button {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .help-button,
+  .tile-label {
+    display: none;
+  }
+  .inspector {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 126px;
+    width: auto;
+    max-height: 48dvh;
+    padding: 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 14px;
+  }
+  .inspector h3 {
+    font-size: 23px;
+  }
+  .inspector > p {
+    font-size: 12px;
+  }
+  .inspector .eyebrow {
+    font-size: 9px;
+  }
+  .inspector button {
+    min-height: 44px;
+  }
+  .inspector .close {
+    min-width: 44px;
+  }
+  dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 22px;
+  }
+  dialog button {
+    min-height: 44px;
+  }
+  #toast {
+    bottom: 126px;
+    max-width: calc(100vw - 24px);
+    font-size: 12px;
+  }
+  #performance {
+    top: 102px !important;
+    right: auto !important;
+    left: 6px;
+    max-width: calc(100vw - 160px);
+    font-size: 9px !important;
+  }
+}
+@media (max-width: 760px) and (max-height: 500px) {
+  .topbar {
+    height: 64px;
+    grid-template-rows: 64px;
+    grid-template-columns: 36px 100px 1fr 88px;
+  }
+  .resource-bar {
+    grid-row: 1;
+    grid-column: 3;
+    padding: 0;
+  }
+  .header-actions {
+    grid-column: 4;
+  }
+  main {
+    height: calc(100dvh - 64px);
+  }
+  .bottom-area {
+    width: auto;
+    max-width: calc(100% - 16px);
+  }
+  .toolbar {
+    flex-wrap: nowrap;
+  }
+  .tool-group {
+    width: auto;
+  }
+  .tool-button {
+    min-width: 48px;
+  }
+  .speed-controls {
+    width: auto;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    gap: 0;
+    padding: 0 0 0 5px;
+    margin: 0;
+  }
+  .placement-hint {
+    max-width: 80vw;
+  }
+  .inspector {
+    bottom: 75px;
+    max-height: calc(100dvh - 150px);
+  }
+}

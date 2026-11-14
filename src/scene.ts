@@ -24,6 +24,7 @@ import {
 } from "./rendering.js";
 import { buildingArt } from "./building-art.js";
 import { PlotArt } from "./plot-art.js";
+import { MapTouches, gestureCamera } from "./gestures.js";
 import { BuildingAlerts } from "./building-alerts.js";
 import {
   LogisticsCache,
@@ -117,6 +118,7 @@ export class TownScene extends Phaser.Scene {
   private ghostRotor?: Phaser.GameObjects.Image;
   private hover: Point | null = null;
   private dragging = false;
+  private touches = new MapTouches();
   private moved = 0;
   private lastPointer = { x: 0, y: 0 };
   private acc = 0;
@@ -206,6 +208,10 @@ export class TownScene extends Phaser.Scene {
       "W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE",
     ) as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (p.wasTouch) {
+        this.touches.start(p.id, { x: p.x, y: p.y });
+        return;
+      }
       this.dragging =
         p.rightButtonDown() ||
         p.middleButtonDown() ||
@@ -215,6 +221,18 @@ export class TownScene extends Phaser.Scene {
       this.lastPointer = { x: p.x, y: p.y };
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      if (p.wasTouch && p.isDown) {
+        const gesture = this.touches.move(p.id, { x: p.x, y: p.y });
+        if (gesture) {
+          const c = this.cameras.main,
+            next = gestureCamera(c, gesture);
+          c.setZoom(next.zoom).setScroll(next.scrollX, next.scrollY);
+          this.clampCamera();
+          this.hover = null;
+          this.drawOverlay();
+        }
+        return;
+      }
       if (p.isDown && this.dragging) {
         const dx = p.x - this.lastPointer.x,
           dy = p.y - this.lastPointer.y;
@@ -236,7 +254,14 @@ export class TownScene extends Phaser.Scene {
     this.input.on(
       "pointerup",
       (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-        if (this.moved < 6 && p.button === 0 && !this.keys.SPACE.isDown) {
+        if (p.wasTouch) {
+          if (p.event.type === "touchcancel") this.touches.cancel();
+          else this.touches.move(p.id, {x:p.x,y:p.y});
+        }
+        const tap = p.wasTouch
+          ? this.touches.end(p.id)
+          : this.moved < 6 && p.button === 0 && !this.keys.SPACE.isDown;
+        if (tap) {
           const agentHit =
             this.tool === "inspect"
               ? over.find((o) => o.getData("agentId"))
@@ -262,6 +287,11 @@ export class TownScene extends Phaser.Scene {
         this.dragging = false;
       },
     );
+    this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => {
+      if (p.wasTouch) this.touches.end(p.id);
+      this.dragging = false;
+    });
+    this.game.events.on("blur", () => this.touches.cancel());
     this.input.on("gameout", () => {
       this.hover = null;
       this.drawOverlay();
