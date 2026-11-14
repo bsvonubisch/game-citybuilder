@@ -6,6 +6,7 @@ import {
   fitGround,
   groundCoordinates,
   agentPose,
+  plotTransform,
 } from "../.test-dist/rendering.js";
 import { buildingArt } from "../.test-dist/building-art.js";
 import {
@@ -13,6 +14,10 @@ import {
   FOOTPRINTS,
   STEP,
   AGENT_SPEED,
+  dimensions,
+  footprint,
+  frontage,
+  DECORATIONS,
 } from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
@@ -36,15 +41,31 @@ const advance = (sim, seconds) => {
 test("bridges connect people and deliveries across an inlet and survive a save roundtrip", () => {
   const seed = new Simulation().snapshot();
   seed.buildings = [
-    { ...seed.buildings.find((b) => b.kind === "house"), x: 18, y: 10 },
-    { ...seed.buildings.find((b) => b.kind === "forester"), x: 19, y: 8 },
-    { ...seed.buildings.find((b) => b.kind === "warehouse"), x: 18, y: 16 },
+    {
+      ...seed.buildings.find((b) => b.kind === "house"),
+      x: 18,
+      y: 10,
+      rotation: 1,
+    },
+    {
+      ...seed.buildings.find((b) => b.kind === "forester"),
+      x: 19,
+      y: 8,
+      rotation: 0,
+    },
+    {
+      ...seed.buildings.find((b) => b.kind === "warehouse"),
+      x: 18,
+      y: 16,
+      rotation: 1,
+    },
   ];
   seed.roads = [
     "20,10",
     ...Array.from({ length: 7 }, (_, i) => `21,${10 + i}`),
   ].filter((p) => p !== "21,13");
   seed.agents = [];
+  seed.decorations = [];
   seed.residents = [];
   const sim = new Simulation(seed),
     money = sim.state.money;
@@ -172,24 +193,41 @@ test("factory machinery pauses without inputs, staff, road access, or storage sp
   assert.equal(working(sim, mill), false);
 });
 
-test("ground contacts, including industrial props and all cottage rotations, stay inside their occupied tiles", () => {
+test("all 44 building views fill their whole plot with both foundation edges aligned", () => {
   for (const kind of Object.keys(BUILDINGS))
-    for (let rotation = 0; rotation < (kind === "house" ? 4 : 1); rotation++) {
+    for (let rotation = 0; rotation < 4; rotation++) {
       const art = buildingArt(kind, rotation);
-      const [w, h] = FOOTPRINTS[kind];
-      const fit = fitGround(art.ground, w, h);
-      for (const [x, y] of art.ground) {
-        const p = groundCoordinates(
-          x * fit.scale + fit.x,
-          y * fit.scale + fit.y,
-        );
+      for (const [w, h] of [dimensions(kind, rotation), FOOTPRINTS[kind]]) {
+        const fit = plotTransform(art.ground, w, h),
+          expected = [
+            [-0.5, h - 0.5],
+            [w - 0.5, h - 0.5],
+            [w - 0.5, -0.5],
+          ];
+        art.ground.forEach(([x, y], i) => {
+          const screen = fit.point(x, y),
+            p = groundCoordinates(screen.x, screen.y);
+          assert.ok(
+            Math.abs(p.x - expected[i][0]) < 1e-9 &&
+              Math.abs(p.y - expected[i][1]) < 1e-9,
+            `${kind}/${rotation} must fill corner ${i}`,
+          );
+          assert.equal(
+            fit.point(x, y - 100).x,
+            screen.x,
+            "vertical walls remain upright",
+          );
+        });
+        const line = [
+          [100, 80],
+          [250, 120],
+          [400, 160],
+        ].map(([x, y]) => fit.point(x, y));
+        const [a, b, c] = line;
         assert.ok(
-          p.x >= -0.42 - 1e-9 && p.x <= w - 0.58 + 1e-9,
-          `${kind}/${rotation} crosses the x plot edge`,
-        );
-        assert.ok(
-          p.y >= -0.42 - 1e-9 && p.y <= h - 0.58 + 1e-9,
-          `${kind}/${rotation} crosses the y plot edge`,
+          Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) <
+            1e-8,
+          "roof lines stay straight",
         );
       }
     }
@@ -301,7 +339,7 @@ test("cottages rotate four ways without changing occupancy, residents, or balanc
       type: "rotate",
       id: sim.state.buildings.find((b) => b.kind === "park").id,
     }).ok,
-    false,
+    true,
   );
 });
 test("placement orientation persists and invalid orientation is rejected", () => {
@@ -449,10 +487,177 @@ test("older one-tile saves migrate without losing buildings, inventory, or gold"
   const sim = new Simulation();
   const old = sim.snapshot();
   old.version = 1;
+  delete old.decorations;
   old.buildings.find((b) => b.kind === "park").x = 12;
   const upgraded = parseSave(JSON.stringify(old));
-  assert.equal(upgraded.version, 2);
+  assert.equal(upgraded.version, 3);
   assert.equal(upgraded.buildings.length, old.buildings.length);
   assert.equal(upgraded.money, old.money);
   assert.doesNotThrow(() => parseSave(JSON.stringify(upgraded)));
+});
+
+test("every building can be placed in every orientation, with rectangular plots turning and saves preserving it", () => {
+  for (const kind of Object.keys(BUILDINGS))
+    for (let rotation = 0; rotation < 4; rotation++) {
+      const seed = new Simulation().snapshot();
+      seed.buildings = seed.buildings.filter((b) => b.kind === "warehouse");
+      seed.roads = [];
+      seed.decorations = [];
+      seed.residents = [];
+      seed.agents = [];
+      seed.money = 10000;
+      Object.assign(seed.buildings[0].inventory, {
+        wood: 1000,
+        stone: 1000,
+        metal: 1000,
+      });
+      const sim = new Simulation(seed),
+        x = kind === "quarry" || kind === "mine" ? 19 : 8,
+        y = kind === "quarry" ? 4 : kind === "mine" ? 7 : 20;
+      assert.equal(
+        execute(sim, { type: "place", kind, x, y, rotation }).ok,
+        true,
+        `${kind}/${rotation}`,
+      );
+      const b = sim.buildingAt(x, y),
+        [w, h] = dimensions(kind, rotation);
+      assert.deepEqual(b.plot, [w, h]);
+      assert.equal(sim.buildingAt(x + w - 1, y + h - 1).id, b.id);
+      assert.equal(sim.buildingAt(x + w, y + h), undefined);
+      const restored = new Simulation(
+        parseSave(JSON.stringify(sim.snapshot())),
+      );
+      assert.equal(restored.building(b.id).rotation, rotation);
+      assert.deepEqual(restored.building(b.id).plot, [w, h]);
+      for (let i = 0; i < 4; i++)
+        assert.equal(execute(sim, { type: "rotate", id: b.id }).ok, true);
+      assert.equal(b.rotation, rotation);
+    }
+});
+
+test("front access distinguishes the entrance from side and back roads", () => {
+  const sim = new Simulation();
+  assert.equal(
+    execute(sim, { type: "place", kind: "house", x: 4, y: 11, rotation: 0 }).ok,
+    true,
+  );
+  const b = sim.buildingAt(4, 11);
+  assert.equal(
+    b.connected,
+    false,
+    "a back road and a side road are not entrance access",
+  );
+  assert.deepEqual(sim.adjacent(b), []);
+  assert.equal(execute(sim, { type: "rotate", id: b.id }).ok, true);
+  assert.equal(
+    b.connected,
+    true,
+    "turning the entrance to the existing road connects the house",
+  );
+  const residents = sim.state.residents
+    .filter((r) => r.home === b.id)
+    .map((r) => r.id);
+  assert.equal(residents.length, 3);
+  assert.equal(execute(sim, { type: "rotate", id: b.id }).ok, true);
+  assert.equal(b.connected, true, "the north road also reaches this entrance");
+  assert.equal(execute(sim, { type: "rotate", id: b.id }).ok, true);
+  assert.equal(b.connected, false);
+  assert.deepEqual(
+    sim.state.residents.filter((r) => r.home === b.id).map((r) => r.id),
+    residents,
+    "rotating away from a road does not evict residents",
+  );
+});
+
+test("a rotated rectangular plot cannot overlap a road and rejection changes nothing", () => {
+  const sim = new Simulation();
+  assert.equal(
+    execute(sim, { type: "place", kind: "farm", x: 8, y: 20 }).ok,
+    true,
+  );
+  const b = sim.buildingAt(8, 20);
+  assert.equal(
+    execute(sim, { type: "place", kind: "road", x: 8, y: 22 }).ok,
+    true,
+  );
+  const before = sim.snapshot();
+  assert.equal(execute(sim, { type: "rotate", id: b.id }).ok, false);
+  assert.deepEqual(sim.snapshot(), before);
+});
+
+test("all decoration types can be placed, selected by tile, removed and saved without regrowth", () => {
+  for (const [kind, def] of Object.entries(DECORATIONS)) {
+    const sim = new Simulation(),
+      natural = sim.decorationAt(9, 20);
+    if (natural) execute(sim, { type: "demolish", x: 9, y: 20 });
+    const money = sim.state.money,
+      agents = sim.state.agents.map((a) => a.id);
+    assert.equal(execute(sim, { type: "place", kind, x: 9, y: 20 }).ok, true);
+    assert.equal(sim.state.money, money - def.cost);
+    assert.equal(sim.decorationAt(9, 20).kind, kind);
+    assert.deepEqual(
+      sim.state.agents.map((a) => a.id),
+      agents,
+      "gardening does not reset every journey",
+    );
+    assert.equal(execute(sim, { type: "place", kind, x: 9, y: 20 }).ok, false);
+    let restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+    assert.equal(restored.decorationAt(9, 20).kind, kind);
+    assert.equal(execute(restored, { type: "demolish", x: 9, y: 20 }).ok, true);
+    assert.equal(
+      restored.state.money,
+      money - def.cost + Math.floor(def.cost / 2),
+    );
+    restored = new Simulation(parseSave(JSON.stringify(restored.snapshot())));
+    assert.equal(restored.decorationAt(9, 20), undefined);
+    assert.equal(
+      execute(restored, { type: "place", kind, x: 25, y: 20 }).ok,
+      false,
+    );
+    assert.equal(
+      execute(restored, { type: "place", kind, x: 6, y: 20 }).ok,
+      false,
+    );
+  }
+  const sim = new Simulation(),
+    tree = sim.state.decorations.find((d) => d.kind === "oak"),
+    money = sim.state.money;
+  assert.equal(
+    execute(sim, { type: "demolish", x: tree.x, y: tree.y }).ok,
+    true,
+  );
+  assert.equal(
+    sim.state.money,
+    money,
+    "natural trees are not an unlimited source of gold",
+  );
+  const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+  assert.equal(restored.decorationAt(tree.x, tree.y), undefined);
+});
+
+test("version two towns retain occupied plots, stocks, residents and front-connected access", () => {
+  const sim = new Simulation(),
+    old = sim.snapshot();
+  old.version = 2;
+  delete old.decorations;
+  old.buildings.forEach((b) => {
+    delete b.plot;
+    b.rotation = 0;
+  });
+  const restored = new Simulation(parseSave(JSON.stringify(old)));
+  assert.equal(restored.state.version, 3);
+  for (const b of restored.state.buildings) {
+    const original = old.buildings.find((o) => o.id === b.id);
+    assert.equal(b.x, original.x);
+    assert.equal(b.y, original.y);
+    assert.deepEqual(b.plot, FOOTPRINTS[b.kind]);
+    assert.equal(b.connected, true);
+  }
+  assert.equal(restored.state.money, old.money);
+  assert.deepEqual(restored.totals(), sim.totals());
+  assert.deepEqual(
+    restored.state.residents.map((r) => r.id),
+    old.residents.map((r) => r.id),
+  );
+  assert.ok(restored.state.decorations.length > 0);
 });

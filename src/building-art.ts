@@ -1,165 +1,341 @@
-import { BUILDINGS, type BuildingKind } from "./catalog.js";
-
+import type { BuildingKind } from "./catalog.js";
 export type GroundPoint = readonly [number, number];
+export type PlotCorners = readonly [GroundPoint, GroundPoint, GroundPoint];
 export interface BuildingArt {
-  texture: "buildings" | "houses" | "mill";
+  texture: string;
   frame: number;
-  cellSize: number;
-  /** Ground contacts in untrimmed atlas-cell pixels, including steps and props.
-   * Roofs, tree canopies and other elevated parts are intentionally excluded. */
-  ground: readonly GroundPoint[];
+  columns: number;
+  rows: number;
+  size: readonly [number, number];
+  /** Left, front, right outer foundation corners in reference-cell pixels. */
+  ground: PlotCorners;
+  chimney?: GroundPoint;
+  mechanism?: GroundPoint;
 }
-
-// Calibrated against the actual artwork, not its transparent bounds or bottom pixel.
-// Contacts trace the visible foundation and the feet of ground-level props.
-// The obscured rear corner is inferred by the two isometric-axis extents.
-const buildingGround: readonly (readonly GroundPoint[])[] = [
-  [
-    [56, 374],
-    [130, 400],
-    [228, 410],
-    [366, 355],
+// Full stone foundations measured independently in all four views. Mapping
+// these corners aligns both plot axes and fills the entire reserved plot.
+const grounds: Record<BuildingKind, readonly PlotCorners[]> = {
+  house: [
+    [
+      [0, 443],
+      [292, 590],
+      [584, 443],
+    ],
+    [
+      [37, 442],
+      [329, 589],
+      [624, 441],
+    ],
+    [
+      [9, 445],
+      [306, 591],
+      [598, 445],
+    ],
+    [
+      [30, 443],
+      [328, 590],
+      [623, 443],
+    ],
   ],
-  [
-    [6, 318],
-    [207, 402],
-    [401, 295],
+  farm: [
+    [
+      [32, 461],
+      [316, 572],
+      [600, 405],
+    ],
+    [
+      [45, 421],
+      [279, 571],
+      [594, 436],
+    ],
+    [
+      [17, 375],
+      [288, 559],
+      [594, 436],
+    ],
+    [
+      [29, 397],
+      [275, 551],
+      [605, 370],
+    ],
   ],
-  [
-    [60, 355],
-    [119, 392],
-    [202, 407],
-    [286, 406],
-    [377, 363],
+  mill: [
+    [
+      [49, 451],
+      [316, 585],
+      [584, 451],
+    ],
+    [
+      [35, 452],
+      [301, 586],
+      [576, 450],
+    ],
+    [
+      [52, 455],
+      [318, 586],
+      [584, 455],
+    ],
+    [
+      [33, 456],
+      [299, 588],
+      [574, 453],
+    ],
   ],
-  [
-    [50, 324],
-    [87, 347],
-    [208, 385],
-    [278, 370],
-    [366, 333],
+  bakery: [
+    [
+      [31, 439],
+      [319, 591],
+      [609, 439],
+    ],
+    [
+      [19, 439],
+      [303, 588],
+      [596, 438],
+    ],
+    [
+      [29, 417],
+      [316, 570],
+      [609, 417],
+    ],
+    [
+      [17, 421],
+      [305, 571],
+      [596, 419],
+    ],
   ],
-  [
-    [4, 313],
-    [36, 327],
-    [84, 342],
-    [84, 381],
-    [174, 386],
-    [208, 368],
-    [283, 367],
-    [386, 323],
+  forester: [
+    [
+      [42, 428],
+      [306, 582],
+      [608, 410],
+    ],
+    [
+      [25, 415],
+      [320, 580],
+      [608, 415],
+    ],
+    [
+      [19, 408],
+      [309, 569],
+      [598, 408],
+    ],
+    [
+      [21, 408],
+      [313, 574],
+      [610, 408],
+    ],
   ],
-  [
-    [12, 309],
-    [38, 334],
-    [101, 363],
-    [136, 372],
-    [157, 389],
-    [222, 389],
-    [253, 365],
-    [302, 361],
-    [380, 332],
-    [399, 288],
+  sawmill: [
+    [
+      [150, 408],
+      [393, 497],
+      [715, 360],
+    ],
+    [
+      [128, 285],
+      [307, 493],
+      [608, 443],
+    ],
+    [
+      [165, 389],
+      [401, 472],
+      [715, 340],
+    ],
+    [
+      [119, 366],
+      [356, 470],
+      [609, 286],
+    ],
   ],
-  [
-    [18, 360],
-    [54, 372],
-    [102, 375],
-    [155, 387],
-    [189, 406],
-    [242, 405],
-    [274, 383],
-    [367, 348],
+  workshop: [
+    [
+      [57, 485],
+      [288, 597],
+      [609, 423],
+    ],
+    [
+      [52, 404],
+      [323, 593],
+      [575, 496],
+    ],
+    [
+      [49, 443],
+      [273, 547],
+      [588, 394],
+    ],
+    [
+      [27, 382],
+      [301, 580],
+      [574, 465],
+    ],
   ],
-  [
-    [0, 328],
-    [34, 344],
-    [34, 377],
-    [103, 388],
-    [160, 371],
-    [205, 385],
-    [274, 383],
-    [393, 332],
+  warehouse: [
+    [
+      [175, 395],
+      [442, 499],
+      [713, 364],
+    ],
+    [
+      [0, 348],
+      [273, 494],
+      [525, 389],
+    ],
+    [
+      [150, 344],
+      [448, 484],
+      [714, 371],
+    ],
+    [
+      [28, 379],
+      [287, 489],
+      [561, 334],
+    ],
   ],
-  [
-    [13, 282],
-    [203, 398],
-    [404, 283],
+  park: [
+    [
+      [41, 404],
+      [318, 563],
+      [591, 405],
+    ],
+    [
+      [29, 391],
+      [314, 569],
+      [591, 392],
+    ],
+    [
+      [35, 356],
+      [318, 528],
+      [591, 355],
+    ],
+    [
+      [35, 316],
+      [320, 516],
+      [590, 346],
+    ],
   ],
-];
-
-const houseGround: readonly (readonly GroundPoint[])[] = [
-  [
-    [111, 509],
-    [191, 546],
-    [274, 546],
-    [357, 565],
-    [532, 484],
+  quarry: [
+    [
+      [13, 305],
+      [223, 417],
+      [427, 305],
+    ],
+    [
+      [20, 306],
+      [225, 418],
+      [429, 305],
+    ],
+    [
+      [17, 306],
+      [228, 416],
+      [431, 306],
+    ],
+    [
+      [18, 305],
+      [222, 415],
+      [433, 302],
+    ],
   ],
-  [
-    [85, 482],
-    [191, 534],
-    [274, 565],
-    [357, 551],
-    [437, 548],
-    [521, 518],
+  mine: [
+    [
+      [18, 312],
+      [218, 428],
+      [436, 302],
+    ],
+    [
+      [11, 303],
+      [223, 425],
+      [436, 302],
+    ],
+    [
+      [9, 301],
+      [215, 420],
+      [432, 294],
+    ],
+    [
+      [8, 296],
+      [219, 418],
+      [431, 296],
+    ],
   ],
-  [
-    [112, 471],
-    [244, 533],
-    [285, 551],
-    [321, 547],
-    [368, 550],
-    [535, 473],
+};
+const chimneys: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
+  house: [
+    [221, 16],
+    [391, 16],
+    [359, 22],
+    [255, 25],
   ],
-  [
-    [83, 476],
-    [329, 554],
-    [514, 475],
+  bakery: [
+    [421, 50],
+    [288, 43],
+    [223, 81],
+    [250, 101],
   ],
-];
-
-/** The neighboring warehouse leaks into the workshop's atlas cell. Exclude that
- * fragment from its runtime frame without modifying the original artwork. */
-export function atlasContentWidth(
-  texture: string,
-  frame: number,
-  cellWidth: number,
-) {
-  return texture === "buildings" && frame === 6
-    ? Math.floor((cellWidth * 390) / 418)
-    : cellWidth;
-}
-
+  forester: [
+    [252, 103],
+    [288, 133],
+    [393, 99],
+    [337, 97],
+  ],
+  sawmill: [
+    [563, 62],
+    [246, 38],
+    [308, 125],
+    [260, 52],
+  ],
+  workshop: [
+    [240, 48],
+    [270, 48],
+    [333, 49],
+    [307, 27],
+  ],
+  mine: [
+    [194, 35],
+    [243, 27],
+    [295, 36],
+    [270, 38],
+  ],
+};
+const mechanisms: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
+  mill: [
+    [270, 172],
+    [362, 172],
+    [252, 180],
+    [363, 184],
+  ],
+  park: [
+    [323, 261],
+    [315, 272],
+    [318, 214],
+    [315, 223],
+  ],
+  sawmill: [
+    [392, 302],
+    [424, 315],
+    [244, 252],
+    [234, 325],
+  ],
+  workshop: [
+    [285, 459],
+    [458, 452],
+    [456, 375],
+    [100, 349],
+  ],
+};
 export function buildingArt(kind: BuildingKind, rotation = 0): BuildingArt {
-  if (kind === "mill")
-    return {
-      texture: "mill",
-      frame: 0,
-      cellSize: 887,
-      ground: [
-        [128, 743],
-        [235, 806],
-        [330, 818],
-        [409, 849],
-        [603, 843],
-        [815, 763],
-      ],
-    };
-  if (kind === "house") {
-    const frame = [1, 0, 2, 3][rotation];
-    return {
-      texture: "houses",
-      frame,
-      cellSize: 627,
-      ground: houseGround[frame],
-    };
-  }
-  const frame = BUILDINGS[kind].frame;
   return {
-    texture: "buildings",
-    frame,
-    cellSize: 418,
-    ground: buildingGround[frame],
+    texture: `plot-${kind}`,
+    frame: rotation,
+    columns: kind === "mine" || kind === "quarry" ? 4 : 2,
+    rows: 2,
+    size:
+      kind === "warehouse" || kind === "sawmill"
+        ? [768, 512]
+        : kind === "mine" || kind === "quarry"
+          ? [443, 443]
+          : [627, 627],
+    ground: grounds[kind][rotation],
+    chimney: chimneys[kind]?.[rotation],
+    mechanism: mechanisms[kind]?.[rotation],
   };
 }

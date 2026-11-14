@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
+import { buildingArt } from "./building-art.js";
 import {
   key,
   type Building,
@@ -112,11 +113,12 @@ export class TownAnimation {
       this.wheels.set(a.id, g);
     }
     g.clear().setDepth(sprite.depth + 0.1);
-    const driving = a.wait <= 0;
+    const driving = a.wait <= 0 && a.active !== false && (a.move ?? 1) > 0;
+    g.setVisible(sprite.visible);
     const phase = driving ? time * 13 + a.id : 0;
     sprite.setRotation(driving ? Math.sin(phase) * 0.003 : 0);
     const left = sprite.x - sprite.displayWidth / 2,
-      top = sprite.y - sprite.displayHeight;
+      top = sprite.y - sprite.displayHeight * sprite.originY;
     const positions =
       direction % 2 === 0
         ? [
@@ -166,6 +168,7 @@ export class TownAnimation {
         this.rotors.delete(id);
       }
     for (const b of sim.state.buildings) {
+      const art = buildingArt(b.kind, b.rotation);
       const active = working(sim, b);
       const phase = (this.machineryTime.get(b.id) ?? b.id) + (active ? dt : 0);
       this.machineryTime.set(b.id, phase);
@@ -175,10 +178,11 @@ export class TownAnimation {
           rotor = this.scene.add.image(0, 0, "mill-rotor", 0);
           this.rotors.set(b.id, rotor);
         }
-        const p = this.point(b, 425, 320);
+        const p = this.point(b, ...art.mechanism!);
         rotor
           .setPosition(p.x, p.y)
-          .setScale(p.scale / ROTOR_SCALE)
+          .setScale((p.scale * 0.7) / ROTOR_SCALE)
+          .setFlipX(b.rotation % 2 === 1)
           .setDepth(p.depth + 0.2)
           .setFrame(Math.floor(phase * 12) % ROTOR_FRAMES)
           .setAlpha(b.enabled ? 1 : 0.55);
@@ -208,18 +212,7 @@ export class TownAnimation {
           Math.max(0.8, size * p.scale),
         );
       };
-      let chimney: readonly number[] | undefined;
-      if (b.kind === "house")
-        chimney = [
-          [368, 44],
-          [258, 45],
-          [289, 94],
-          [333, 93],
-        ][b.rotation];
-      if (b.kind === "bakery") chimney = [291, 32];
-      if (b.kind === "sawmill") chimney = [302, 42];
-      if (b.kind === "workshop" || b.kind === "mine") chimney = [115, 22];
-      if (b.kind === "forester") chimney = [110, 68];
+      const chimney = art.chimney;
       if (chimney && b.enabled && (b.kind === "house" || active))
         for (let i = 0; i < 3; i++) {
           const t = (time * 0.3 + i / 3 + b.id * 0.11) % 1;
@@ -232,12 +225,13 @@ export class TownAnimation {
           );
         }
       if (b.kind === "park" && b.enabled) {
+        const center = art.mechanism!;
         for (let i = 0; i < 8; i++) {
           const t = (time * 0.7 + i / 8) % 1,
             side = i % 2 ? 1 : -1;
           dot(
-            205 + side * t * 35,
-            204 - 45 * Math.sin(t * Math.PI) + t * 50,
+            center[0] + side * (20 + t * 28),
+            center[1] + t * 78,
             3,
             0xd9fbf2,
             0.55,
@@ -245,7 +239,7 @@ export class TownAnimation {
         }
       }
       if (b.kind === "sawmill") {
-        const p = this.point(b, 164, 250),
+        const p = this.point(b, ...art.mechanism!),
           r = 22 * p.scale;
         g.lineStyle(0.6, 0xe2ddd0, 0.8);
         for (let i = 0; i < 6; i++) {
@@ -259,9 +253,16 @@ export class TownAnimation {
           );
         }
       }
-      if ((b.kind === "workshop" || b.kind === "mine") && active) {
+      if (b.kind === "workshop" && active && b.rotation < 2) {
         const t = (phase * 0.25) % 1;
-        dot(148 + t * 85, 350 + t * 30, 12, 0xc59352);
+        const center = art.mechanism!;
+        dot(
+          center[0] + t * 50 * (b.rotation === 0 ? 1 : -1),
+          center[1] + t * 20,
+          8,
+          0xe6bd7d,
+          0.7,
+        );
       }
     }
   }

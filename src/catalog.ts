@@ -12,7 +12,76 @@ export type BuildingKind =
   | "park"
   | "quarry"
   | "mine";
-export type Tool = BuildingKind | "road" | "bridge" | "bulldoze" | "inspect";
+export type DecorationKind =
+  | "oak"
+  | "pine"
+  | "birch"
+  | "blossom"
+  | "bench"
+  | "streetlight"
+  | "planter"
+  | "fence";
+export const DECORATIONS: Record<
+  DecorationKind,
+  { name: string; cost: number; texture: string; frame: number; height: number }
+> = {
+  oak: { name: "Oak tree", cost: 18, texture: "garden", frame: 0, height: 62 },
+  pine: {
+    name: "Pine tree",
+    cost: 18,
+    texture: "garden",
+    frame: 1,
+    height: 66,
+  },
+  birch: {
+    name: "Birch tree",
+    cost: 16,
+    texture: "garden",
+    frame: 2,
+    height: 62,
+  },
+  blossom: {
+    name: "Blossom tree",
+    cost: 24,
+    texture: "garden",
+    frame: 3,
+    height: 54,
+  },
+  bench: {
+    name: "Park bench",
+    cost: 12,
+    texture: "props",
+    frame: 0,
+    height: 15,
+  },
+  streetlight: {
+    name: "Copper streetlight",
+    cost: 20,
+    texture: "props",
+    frame: 1,
+    height: 33,
+  },
+  planter: {
+    name: "Flower planter",
+    cost: 10,
+    texture: "props",
+    frame: 2,
+    height: 14,
+  },
+  fence: {
+    name: "Garden fence",
+    cost: 8,
+    texture: "props",
+    frame: 3,
+    height: 18,
+  },
+};
+export type Tool =
+  BuildingKind | DecorationKind | "road" | "bridge" | "bulldoze" | "inspect";
+export const isBuilding = (kind: string): kind is BuildingKind =>
+  Object.hasOwn(BUILDINGS, kind);
+export const isDecoration = (kind: string): kind is DecorationKind =>
+  Object.hasOwn(DECORATIONS, kind);
 export interface Definition {
   name: string;
   cost: number;
@@ -195,11 +264,59 @@ export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
   quarry: [2, 2],
   mine: [2, 2],
 };
-export const footprint = (kind: BuildingKind, x: number, y: number) =>
-  Array.from({ length: FOOTPRINTS[kind][0] * FOOTPRINTS[kind][1] }, (_, i) => ({
-    x: x + (i % FOOTPRINTS[kind][0]),
-    y: y + Math.floor(i / FOOTPRINTS[kind][0]),
+export const dimensions = (
+  kind: BuildingKind,
+  rotation = 0,
+  plot?: readonly [number, number],
+): readonly [number, number] =>
+  plot ??
+  (rotation % 2
+    ? [FOOTPRINTS[kind][1], FOOTPRINTS[kind][0]]
+    : FOOTPRINTS[kind]);
+export const footprint = (
+  kind: BuildingKind,
+  x: number,
+  y: number,
+  rotation = 0,
+  plot?: readonly [number, number],
+) => {
+  const [w, h] = dimensions(kind, rotation, plot);
+  return Array.from({ length: w * h }, (_, i) => ({
+    x: x + (i % w),
+    y: y + Math.floor(i / w),
   }));
+};
+export const FRONT_DIRECTIONS = [
+  { x: 0, y: 1 },
+  { x: 1, y: 0 },
+  { x: 0, y: -1 },
+  { x: -1, y: 0 },
+] as const;
+export const FRONT_NAMES = [
+  "southwest",
+  "southeast",
+  "northeast",
+  "northwest",
+] as const;
+export function frontage(
+  kind: BuildingKind,
+  x: number,
+  y: number,
+  rotation = 0,
+  plot?: readonly [number, number],
+) {
+  const [w, h] = dimensions(kind, rotation, plot),
+    d = FRONT_DIRECTIONS[rotation];
+  return d.x
+    ? Array.from({ length: h }, (_, i) => ({
+        x: x + (d.x > 0 ? w : -1),
+        y: y + i,
+      }))
+    : Array.from({ length: w }, (_, i) => ({
+        x: x + i,
+        y: y + (d.y > 0 ? h : -1),
+      }));
+}
 export const SIZE = 28;
 export const STEP = 0.25;
 export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;

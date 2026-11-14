@@ -28,9 +28,13 @@ npm run build
 - Isometric 28×28 valley; pan, zoom, grid, building inspection, and speed controls.
 - Detailed Alpine Slate paving, continuous meadow grass, and Clear Brook water with shallow riverbed stones, banks, and reeds. Terrain retains four source pixels per world pixel through the maximum zoom.
 - Build wooden bridges with B: 35 gold per water tile. Raised decks, ramps, capped railings, and support posts follow the road connections. Cars, pedestrians, and delivery trucks cross at deck height; existing roads over water become bridges automatically.
-- Four-facing cottage rotation, both before placement and after construction (R or the Rotate button). Cars and pedestrians select front/rear directional sprites as they turn.
+- All eleven buildings rotate four ways before placement and after construction (R or Rotate). Rectangular plots rotate with the building; occupied roads, buildings and water block an invalid turn.
+- The front entrance determines road access. A front edge and arrow show green when a road reaches that side and amber when it does not. The entrance road must connect to a warehouse for employment and production.
 - Pedestrian walk cycles, turning vehicle wheels, windmill sails, working saw/conveyor details, hearth smoke, fountain droplets, and gentle water glints. Pause and speed controls apply to animation as well as the simulation.
-- Explicit 2×2 and 3×2 building footprints. The entire footprint is validated against roads, buildings, water, and map edges; roads connect through the perimeter. Existing one-tile saves migrate without discarding buildings or their inventories.
+- Full paved foundations cover explicit 2×2, 3×2 and rotated 2×3 footprints. Each view is calibrated to its plot, with upright walls and straight roof lines. Existing towns retain their occupied plots, buildings, residents and inventories during migration.
+- Cars and trucks use right-hand lanes, safe following distances, continuous collision checks and fair junction reservations. Vehicles wait inside buildings until there is room to enter the road. Click a pedestrian or vehicle to inspect its destination, route and cargo.
+- Plant and remove oak, pine, birch and blossom trees, benches, streetlights, flower planters and fences through Gardens & streets. Decorations persist in device, exported and cloud saves.
+- Clear Brook water flows beneath fixed shorelines and bridge decks. Bridge support pilings render beneath opaque decks, with separate upper railing posts.
 - Cottages provide three named residents. Residents walk or drive between home and assigned workplaces. Road routing uses breadth-first search; disconnected or understaffed factories stop.
 - Gold, wood, stone, and metal construction costs. Quarries and metal mines use finite deposits. Delivered warehouse inventory pays material costs.
 - Farm → mill → bakery → warehouse. Forester → sawmill → workshop → warehouse. Vehicles move inventory in transit, and delivered tools sell for gold.
@@ -39,7 +43,7 @@ npm run build
 
 ## Controls
 
-Choose a building in the sidebar, then click an empty plot. A translucent preview shows its visible sprite and full footprint. Click a building while exploring to inspect it. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R rotates a selected cottage (otherwise selects roads), B selects bridges, X removes, G toggles the grid, and Escape cancels a tool. Connect bridges to roads at both banks; open-water ends make piers.
+Choose a building, rotate it with R or Rotate, then click an empty plot. The preview shows the full footprint and a front entrance arrow: green for road access, amber for a missing entrance road. Click buildings, people, cars or decorations while exploring to inspect them. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R rotates the building being placed or inspected (otherwise selects roads), B selects bridges, X removes, G toggles the grid, and Escape cancels a tool. Connect bridges to roads at both banks; open-water ends make piers.
 
 ## Firebase & GitHub
 
@@ -51,14 +55,17 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 - `src/simulation.ts`: serializable, deterministic 250 ms simulation, commands, occupancy, routing, production, and logistics. No DOM, Phaser, or Firebase dependency.
 - `src/gateway.ts`: command boundary used by the interface.
 - `src/scene.ts`: Phaser rendering, asset atlas frames, camera, picking, and overlays.
-- `src/building-art.ts`: calibrated foundation/prop contacts for each atlas frame and cottage rotation.
+- `src/building-art.ts` / `src/plot-art.ts`: four-view art, calibrated full foundations, cached projective fitting and animation anchors.
+- `src/traffic.ts`: right-hand lanes, continuous swept collision checks, junction queues and entry spacing.
+- `src/decorations.ts`: persisted decorations and one-time migration of procedural scenery.
 - `src/rendering.ts`: ground fitting and smooth road movement between simulation ticks.
 - `src/terrain-art.ts`: detailed cached terrain chunks, slate curbs, and shoreline transitions.
+- `src/water-art.ts`: one animated water texture masked to the lake silhouette.
 - `src/bridges.ts` / `src/bridge-art.ts`: shared deck elevation, road connections, and cached textured bridge geometry with separate rail depth layers.
 - `src/animation.ts`: walking frames, vehicle details, projected mill rotor, and working-building effects.
 - `src/main.ts`: interface, local saves, and interaction wiring.
 - `src/cloud.ts`: Firebase initialization, account login, and private save storage.
-- `tests/simulation.test.mjs`: economic, routing, persistence, migration, and collision regressions.
+- `tests/simulation.test.mjs` / `tests/traffic.test.mjs`: economy, entrance access, rotations, full footprints, decoration persistence, migrations, traffic queues and continuous collision regressions.
 
 Terrain and roads are baked at 4× resolution into chunks no larger than 2048×2048 pixels when the town changes. Bridge geometry is cached by neighbor connections; the grid and mill rotor frames are cached separately. Static paving geometry is not replayed every frame. Agents and effects render continuously between the deterministic 250 ms ticks, including road turns and pauses. Add `?perf=1` to show a rolling FPS/frame-time counter; add `?qa=performance&perf=1` to measure in an isolated local-save slot. The visual footprint audit at `/tests/footprints.html` is available through the dev server.
 
@@ -66,4 +73,4 @@ Terrain and roads are baked at 4× resolution into chunks no larger than 2048×2
 
 This is a single-player foundation, not live multiplayer. Firebase account/save code is implemented; project-specific provider setup and an authenticated Firebase CLI are required. Firestore ownership, schema, and shared-world isolation rules are covered by emulator tests (Java 21 required). See [the multiplayer plan](docs/MULTIPLAYER.md) for the authority and synchronization boundary.
 
-The economy is intentionally forgiving and not balanced for a full game. Vehicles follow routes without traffic queues or physical vehicle collisions. Seasons, terrain editing, power, zoning, and advanced logistics are future work. Decorative tree canopies and elevated roofs can occlude neighboring ground. Building foundations and ground-level props are fitted inside their plots using both isometric tile axes; atlas padding does not determine their alignment.
+The economy is intentionally forgiving and not balanced for a full game. Traffic uses a deterministic road model rather than a general physics engine; pedestrians use the pavement edge. Seasons, terrain editing, power, zoning, and advanced logistics are future work. Elevated roofs and tree canopies may visually occlude neighboring ground. Foundation corners determine plot alignment; atlas padding does not. Save schema 3 adds decorations and explicit legacy plot dimensions, and migrates versions 1 and 2. Local version 2 saves are backed up before the entrance upgrade.

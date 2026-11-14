@@ -4,7 +4,12 @@ import {
   BUILDINGS,
   RESOURCES,
   RESOURCE_NAMES,
-  FOOTPRINTS,
+  dimensions,
+  frontage,
+  FRONT_NAMES,
+  DECORATIONS,
+  isBuilding,
+  isDecoration,
   type BuildingKind,
   type Tool,
 } from "./catalog.js";
@@ -18,6 +23,7 @@ import {
 import { LocalGateway } from "./gateway.js";
 import { TownScene } from "./scene.js";
 import { icon } from "./icons.js";
+import { buildingArt } from "./building-art.js";
 import { CloudSaves, cloudError } from "./cloud.js";
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
@@ -33,6 +39,8 @@ let restoreError = "";
 let simulation: Simulation;
 try {
   const save = localStorage.getItem(SAVE_KEY);
+  if (save && JSON.parse(save).version < 3)
+    localStorage.setItem(SAVE_KEY + ".before-front-entrances", save);
   if (save && JSON.parse(save).version === 1)
     localStorage.setItem(SAVE_KEY + ".before-footprints", save);
   simulation = new Simulation(save ? parseSave(save) : undefined);
@@ -44,15 +52,54 @@ try {
 const gateway = new LocalGateway(simulation);
 const scene = new TownScene(simulation);
 const cloud = new CloudSaves();
-let category: "homes" | "production" | "town" = "homes",
+let category: "homes" | "production" | "town" | "decorations" = "homes",
   tab: "build" | "town" = "build",
   selected: number | null = null,
+  selectedAgent: number | null = null,
+  selectedDecoration: number | null = null,
+  hovered: Point | null = null,
   tool: Tool = "inspect",
   lastSave = Date.now(),
   toastTimer = 0,
   modalPreviousSpeed = 1;
-const frame = (kind: BuildingKind, cls = "") =>
-  `<span class="building-icon ${cls}" style="--col:${BUILDINGS[kind].frame % 3};--row:${Math.floor(BUILDINGS[kind].frame / 3)}" aria-hidden="true"></span>`;
+const escapeHtml = (text: string) =>
+  text.replace(
+    /[&<>"\x27]/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "\x27": "&#39;",
+      })[c]!,
+  );
+let iconSequence = 0;
+const atlasIcon = (
+  path: string,
+  columns: number,
+  rows: number,
+  w: number,
+  h: number,
+  index: number,
+  cls = "",
+) => {
+  const x = (index % columns) * w,
+    y = Math.floor(index / columns) * h,
+    id = `atlas-${iconSequence++}`;
+  return `<svg class="building-icon ${cls}" viewBox="${x} ${y} ${w} ${h}" aria-hidden="true"><defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" /></clipPath></defs><image href="${path}" width="${w * columns}" height="${h * rows}" clip-path="url(#${id})" /></svg>`;
+};
+const frame = (kind: BuildingKind, cls = "", rotation = 0) => {
+  const art = buildingArt(kind, rotation);
+  return atlasIcon(
+    `/plot-${kind}.png`,
+    art.columns,
+    art.rows,
+    ...art.size,
+    rotation,
+    cls,
+  );
+};
 $("#app").innerHTML = `
  <header class="topbar"><a class="brand" href="#" aria-label="Center town">${icon("tree")}<span>LITTLE WORKS<small>PINE & COPPER</small></span></a><div class="resource-bar">
  ${[
@@ -150,6 +197,7 @@ function toast(message: string) {
   );
 }
 function setTool(next: Tool) {
+  if (next !== "inspect") closeInspection();
   tool = next;
   scene.tool = next;
   document
@@ -163,6 +211,7 @@ function setTool(next: Tool) {
   const d = Object.hasOwn(BUILDINGS, next)
     ? BUILDINGS[next as BuildingKind]
     : null;
+  const decoration = isDecoration(next) ? DECORATIONS[next] : null;
   $("#placement-hint").innerHTML = d
     ? `${icon("hammer")} Place ${d.name.toLowerCase()} · ${d.cost} gold ${Object.entries(
         d.materials ?? {},
@@ -170,23 +219,38 @@ function setTool(next: Tool) {
         .map(([r, n]) => `· ${n} ${r}`)
         .join(
           " ",
-        )} · ${FOOTPRINTS[next as BuildingKind].join("×")} tiles ${next === "house" ? `<button id="rotate-placement" class="rotate-placement" title="Rotate cottage (R)">${icon("reset")} Rotate <kbd>R</kbd></button>` : ""} <kbd>Esc</kbd>`
-    : next === "road"
-      ? `${icon("road")} Click to lay roads · 12 gold · Bridges 35 gold <kbd>Esc</kbd>`
-      : next === "bridge"
-        ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
-        : next === "bulldoze"
-          ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
-          : `${icon("inspect")} Click a building to explore. Drag to look around.`;
-  if (next === "house") $("#rotate-placement").onclick = rotatePlacement;
+        )} · ${dimensions(next as BuildingKind, scene.rotation).join("×")} tiles ${isBuilding(next) ? `<button id="rotate-placement" class="rotate-placement" title="Rotate building (R)">${icon("reset")} Rotate <kbd>R</kbd></button><span id="front-access"></span>` : ""} <kbd>Esc</kbd>`
+    : decoration
+      ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
+      : next === "road"
+        ? `${icon("road")} Click to lay roads · 12 gold · Bridges 35 gold <kbd>Esc</kbd>`
+        : next === "bridge"
+          ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
+          : next === "bulldoze"
+            ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
+            : `${icon("inspect")} Click buildings, people or cars to explore. Drag to look around.`;
+  if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  updateEntranceHint();
   scene.drawOverlay();
 }
 function rotatePlacement() {
   scene.rotation = ((scene.rotation + 1) % 4) as 0 | 1 | 2 | 3;
   scene.drawOverlay();
-  toast(
-    `Cottage facing ${["southeast", "southwest", "northwest", "northeast"][scene.rotation]}.`,
-  );
+  setTool(tool);
+  toast(`Front entrance facing ${FRONT_NAMES[scene.rotation]}.`);
+}
+function updateEntranceHint() {
+  const el = document.querySelector<HTMLElement>("#front-access");
+  if (!el || !isBuilding(tool)) return;
+  const connected =
+    hovered &&
+    frontage(tool, hovered.x, hovered.y, scene.rotation).some((p) =>
+      simulation.roads.has(key(p)),
+    );
+  el.textContent = connected
+    ? "Front connected to road"
+    : "Front entrance needs a road";
+  el.className = connected ? "front-connected" : "front-missing";
 }
 function renderSidebar() {
   $("#build-tab").classList.toggle("active", tab === "build");
@@ -201,7 +265,23 @@ function renderSidebar() {
     homes: "Neighbourhood",
     production: "Make & gather",
     town: "Town essentials",
+    decorations: "Gardens & streets",
   };
+  const cards =
+    category === "decorations"
+      ? Object.entries(DECORATIONS)
+          .map(
+            ([kind, d]) =>
+              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
+          )
+          .join("")
+      : (Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][])
+          .filter(([, d]) => d.category === category)
+          .map(
+            ([kind, d]) =>
+              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="${d.description}">${frame(kind)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}${d.materials ? "<small>+ materials</small>" : ""}</span></button>`,
+          )
+          .join("");
   $("#sidebar-content").innerHTML =
     `<div class="category-tabs">${Object.entries(names)
       .map(
@@ -210,17 +290,7 @@ function renderSidebar() {
       )
       .join(
         "",
-      )}</div><div class="catalog-heading"><h3>${names[category]}</h3><span>${Object.values(BUILDINGS).filter((b) => b.category === category).length} buildings</span></div><div class="building-grid">${(
-      Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][]
-    )
-      .filter(([, d]) => d.category === category)
-      .map(
-        ([kind, d]) =>
-          `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="${d.description}">${frame(kind)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}${d.materials ? `<small>+ materials</small>` : ""}</span></button>`,
-      )
-      .join(
-        "",
-      )}</div><div class="build-note">${icon(category === "production" ? "factory" : "leaf")}<div><b>${category === "production" ? "A town that works together." : "Leave a little room to grow."}</b><p>${category === "production" ? "Roads carry workers and deliveries. Click a building to see what it needs." : "Connect homes to a warehouse by road. Every cottage welcomes three residents."}</p></div></div><button class="chain-button" id="production-guide">${icon("factory")} See production chains ${icon("arrow")}</button>`;
+      )}</div><div class="catalog-heading"><h3>${names[category]}</h3></div><div class="building-grid">${cards}</div><div class="build-note">${icon("leaf")}<div><b>${category === "decorations" ? "Make the streets your own." : "Connect the front entrance."}</b><p>${category === "decorations" ? "Plant trees, add benches and lights. Use Remove (X) to clear decorations." : "Rotate with R. The entrance arrow turns green when a road reaches the front."}</p></div></div><button class="chain-button" id="production-guide">See production chains ${icon("arrow")}</button>`;
   document.querySelectorAll<HTMLElement>("[data-category]").forEach(
     (el) =>
       (el.onclick = () => {
@@ -230,18 +300,20 @@ function renderSidebar() {
   );
   document
     .querySelectorAll<HTMLElement>("[data-building]")
-    .forEach(
-      (el) => (el.onclick = () => setTool(el.dataset.building as BuildingKind)),
-    );
+    .forEach((el) => (el.onclick = () => setTool(el.dataset.building as Tool)));
   $("#production-guide").onclick = showChains;
 }
 scene.onTile = async (p: Point) => {
   if (tool === "inspect") {
+    selectedAgent = null;
+    scene.selectedAgent = null;
+    selectedDecoration = simulation.decorationAt(p.x, p.y)?.id ?? null;
     const b = simulation.buildingAt(p.x, p.y);
     selected = b?.id ?? null;
     scene.selected = selected;
     scene.drawOverlay();
-    renderInspector();
+    if (selectedDecoration) renderDecorationInspector();
+    else renderInspector();
     if (!b && DEPOSITS[key(p)])
       toast(
         `${DEPOSITS[key(p)] === "stone" ? "Stone" : "Metal"} deposit · ${simulation.state.deposits[key(p)]} remaining`,
@@ -261,11 +333,25 @@ scene.onTile = async (p: Point) => {
   }
 };
 scene.onHover = (p) => {
+  hovered = p;
+  updateEntranceHint();
   $("#tile-label").textContent = p
     ? `${p.x}, ${p.y}${DEPOSITS[key(p)] ? " · " + DEPOSITS[key(p)] + " deposit" : ""}`
     : "";
 };
+scene.onSelectAgent = (id) => {
+  selected = null;
+  selectedDecoration = null;
+  scene.selected = null;
+  selectedAgent = id;
+  scene.selectedAgent = id;
+  scene.drawOverlay();
+  renderAgentInspector();
+};
 scene.onSelect = (id) => {
+  selectedAgent = null;
+  selectedDecoration = null;
+  scene.selectedAgent = null;
   selected = id;
   scene.selected = id;
   scene.drawOverlay();
@@ -282,17 +368,18 @@ function renderInspector() {
   panel.hidden = !b;
   if (!b) return;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art")}<h3>${d.name}</h3><p>${d.description}</p><div id="building-status" class="building-status"></div><div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
-  if (b.kind === "house") {
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation)}<h3>${d.name}</h3><p>${d.description}</p><div id="building-status" class="building-status"></div><div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  {
     panel.insertAdjacentHTML(
       "beforeend",
-      `<button id="rotate-house" class="primary">${icon("reset")} Rotate cottage · R</button>`,
+      `<button id="rotate-house" class="primary">${icon("reset")} Rotate building · R</button>`,
     );
     $("#rotate-house").onclick = async () => {
       const result = await gateway.command({ type: "rotate", id: b.id });
       toast(result.message);
       scene.redraw();
       save(false);
+      renderInspector();
     };
   }
   $("#close-inspector").onclick = () => {
@@ -310,7 +397,80 @@ function renderInspector() {
     };
   updateInspector();
 }
+function closeInspection() {
+  selected = null;
+  selectedAgent = null;
+  selectedDecoration = null;
+  scene.selected = null;
+  scene.selectedAgent = null;
+  $("#inspector").hidden = true;
+  scene.drawOverlay();
+}
+function renderDecorationInspector() {
+  const d = simulation.state.decorations.find(
+    (d) => d.id === selectedDecoration,
+  );
+  if (!d) return;
+  $("#inspector").hidden = false;
+  $("#inspector").innerHTML =
+    `<button id="close-inspector" class="icon-button close" aria-label="Close decoration details">${icon("close")}</button><span class="eyebrow">GARDENS & STREETS</span><h3>${DECORATIONS[d.kind].name}</h3><p>A little detail at ${d.x}, ${d.y}.</p><button id="remove-decoration" class="primary">Remove decoration</button>`;
+  $("#close-inspector").onclick = closeInspection;
+  $("#remove-decoration").onclick = async () => {
+    const result = await gateway.command({ type: "demolish", x: d.x, y: d.y });
+    toast(result.message);
+    if (result.ok) {
+      scene.redraw();
+      closeInspection();
+      save(false);
+    }
+  };
+}
+function renderAgentInspector() {
+  $("#inspector").hidden = false;
+  $("#inspector").innerHTML =
+    `<button id="close-inspector" class="icon-button close" aria-label="Close traveller details">${icon("close")}</button><span class="eyebrow">ON THE MOVE</span><h3 id="traveller-name"></h3><p id="traveller-kind"></p><div id="traveller-status" class="building-status"></div><div id="traveller-detail"></div><button id="show-destination" class="primary">Show destination</button>`;
+  $("#close-inspector").onclick = closeInspection;
+  $("#show-destination").onclick = () => {
+    const a = simulation.state.agents.find((a) => a.id === selectedAgent);
+    if (a) scene.focusBuilding(a.returning ? a.source : a.target);
+  };
+  updateAgentInspector();
+}
+function updateAgentInspector() {
+  const a = simulation.state.agents.find((a) => a.id === selectedAgent);
+  if (!a) {
+    $("#traveller-status").textContent = "Journey complete";
+    $("#show-destination").hidden = true;
+    return;
+  }
+  const person = simulation.state.residents.find((r) => r.id === a.resident);
+  $("#traveller-name").textContent = person?.name ?? "Delivery truck";
+  $("#traveller-kind").textContent =
+    a.kind === "person"
+      ? "Walking around Pinehaven"
+      : a.kind === "car"
+        ? "Driving · keeps right"
+        : "Delivering goods · keeps right";
+  const from = simulation.building(a.returning ? a.target : a.source),
+    to = simulation.building(a.returning ? a.source : a.target);
+  const label = (b: typeof from) =>
+    b ? `${BUILDINGS[b.kind].name} · ${b.x}, ${b.y}` : "No destination";
+  $("#traveller-status").textContent =
+    a.wait > 0
+      ? "At the building"
+      : a.trafficWait
+        ? "Waiting for traffic"
+        : a.kind === "person"
+          ? "Walking to destination"
+          : "Driving to destination";
+  $("#traveller-detail").innerHTML =
+    `<div class="detail-row"><span>From</span><b>${escapeHtml(label(from))}</b></div><div class="detail-row"><span>Headed to</span><b>${escapeHtml(label(to))}</b></div>${a.cargo ? `<div class="detail-row"><span>Carrying</span><b>${a.amount} ${RESOURCE_NAMES[a.cargo]}</b></div>` : ""}<p class="muted">The gold line shows this journey on the map.</p>`;
+}
 function updateInspector() {
+  if (selectedAgent !== null) {
+    updateAgentInspector();
+    return;
+  }
   if (!selected) return;
   const b = simulation.building(selected);
   if (!b) {
@@ -324,7 +484,7 @@ function updateInspector() {
     simulation.status(b) !== "Producing" && !!d.recipe,
   );
   $("#building-detail").innerHTML =
-    `<div class="detail-row"><span>Road connection</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${d.jobs}</b></div>` : ""}${
+    `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${d.jobs}</b></div>` : ""}${
       d.recipe
         ? `<div class="recipe">${d.recipe.input ? `${d.recipe.amount} ${d.recipe.input}` : "Gather"} <span>→</span> ${d.recipe.count} ${d.recipe.output}</div><div class="goal-progress"><span style="width:${(b.progress / d.recipe.seconds) * 100}%"></span></div><div class="detail-row"><span>Cycle</span><b>${b.progress.toFixed(1)} / ${d.recipe.seconds}s</b></div>${Object.entries(
             b.inventory,
@@ -341,7 +501,7 @@ function updateInspector() {
               .filter((r) => r.home === b.id)
               .map(
                 (r) =>
-                  `<div>${icon("people")}<span><b>${r.name}</b><small>${r.job ? BUILDINGS[simulation.building(r.job)!.kind].name : "Enjoying town life"}</small></span></div>`,
+                  `<div>${icon("people")}<span><b>${escapeHtml(r.name)}</b><small>${r.job ? BUILDINGS[simulation.building(r.job)!.kind].name : "Enjoying town life"}</small></span></div>`,
               )
               .join("")}</div>`
           : b.kind === "warehouse"
@@ -432,6 +592,8 @@ function replaceTown(next: Simulation) {
   gateway.simulation = next;
   scene.replace(next);
   selected = null;
+  selectedAgent = null;
+  selectedDecoration = null;
   $("#inspector").hidden = true;
   updateUI();
   save(false);
@@ -591,7 +753,7 @@ document
   .forEach((el) => (el.onclick = () => setTool(el.dataset.tool as Tool)));
 $("#help").onclick = () =>
   openModal(
-    `<span class="eyebrow">WELCOME TO PINEHAVEN</span><h2>Settle in. Build a little.</h2><div class="help-list"><p><b>Build</b> Choose a building, then click an empty tile. Connect it to a warehouse with roads.</p><p><b>Explore</b> Click a building for its workers, stock, and production. Drag the map to move. Scroll to zoom.</p><p><b>Gather</b> Quarries need stone deposits; metal mines need metal deposits. Unbuilt deposits are marked on the map.</p><p><b>Automate</b> Trucks deliver inputs and outputs. Residents walk or drive to work. Production stops without roads or workers.</p><p><b>Bridges</b> Choose Bridge (B), then place spans over water for 35 gold each. Connect both banks to roads for workers and deliveries.</p><p><b>Shortcuts</b> V explore · R road · B bridge · X remove · G grid · Esc cancel · WASD / arrows move · Space + drag pan</p></div>`,
+    `<span class="eyebrow">WELCOME TO PINEHAVEN</span><h2>Settle in. Build a little.</h2><div class="help-list"><p><b>Build & rotate</b> Choose any building, then use Rotate or R to turn it. The footprint turns too. A green front arrow means road access; amber means the entrance still needs a road. That road must reach a warehouse for the building to work.</p><p><b>Explore</b> Click buildings for workers, stock and production. Click a person or vehicle to see their destination, cargo and route. Drag the map to move. Scroll to zoom.</p><p><b>Gardens & streets</b> Add trees, benches, lights, planters and fences from the build catalog. Select a decoration to remove it, or use Remove (X).</p><p><b>Gather</b> Quarries need stone deposits; metal mines need metal deposits. Unbuilt deposits are marked on the map.</p><p><b>Automate</b> Trucks deliver inputs and outputs. Cars keep right, queue behind traffic and take turns at junctions. Production stops without front road access or workers.</p><p><b>Bridges</b> Choose Bridge (B), then place spans over water for 35 gold each. Connect both banks to roads for workers and deliveries.</p><p><b>Shortcuts</b> V explore · R rotate while building, otherwise road · B bridge · X remove · G grid · Esc cancel · WASD / arrows move · Space + drag pan</p></div>`,
   );
 $<HTMLInputElement>("#import-file").onchange = async (e) => {
   const input = e.target as HTMLInputElement,
@@ -623,12 +785,8 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (k === "escape" || k === "v") setTool("inspect");
   if (k === "r") {
-    if (tool === "house") rotatePlacement();
-    else if (
-      tool === "inspect" &&
-      selected &&
-      simulation.building(selected)?.kind === "house"
-    )
+    if (isBuilding(tool)) rotatePlacement();
+    else if (tool === "inspect" && selected && simulation.building(selected))
       $("#rotate-house").click();
     else setTool("road");
   }

@@ -5,11 +5,18 @@ import {
   STEP,
   AGENT_SPEED,
   FOOTPRINTS,
+  dimensions,
+  frontage,
+  DECORATIONS,
+  isBuilding,
+  isDecoration,
   footprint,
   type BuildingKind,
   type Resource,
   type Tool,
 } from "./catalog.js";
+import { initialDecorations, type Decoration } from "./decorations.js";
+import { Traffic } from "./traffic.js";
 export interface Point {
   x: number;
   y: number;
@@ -24,6 +31,7 @@ export interface Building extends Point {
   enabled: boolean;
   produced: number;
   rotation: 0 | 1 | 2 | 3;
+  plot?: readonly [number, number];
 }
 export interface Resident {
   id: number;
@@ -44,14 +52,19 @@ export interface Agent {
   amount: number;
   returning: boolean;
   wait: number;
+  move?: number;
+  active?: boolean;
+  trafficWait?: boolean;
+  queuedTicks?: number;
 }
 export interface World {
-  version: 2;
+  version: 3;
   tick: number;
   revision: number;
   nextId: number;
   money: number;
   roads: string[];
+  decorations: Decoration[];
   buildings: Building[];
   residents: Resident[];
   agents: Agent[];
@@ -140,18 +153,20 @@ const NAMES = [
 ];
 export class Simulation {
   state: World;
+  private traffic = new Traffic();
   private roadSet = new Set<string>();
   private processed = new Map<string, Result>();
   constructor(saved?: World) {
     this.state = saved
       ? structuredClone(saved)
       : {
-          version: 2,
+          version: 3,
           tick: 0,
           revision: 0,
           nextId: 1,
           money: 2400,
           roads: [],
+          decorations: [],
           buildings: [],
           residents: [],
           agents: [],
@@ -163,7 +178,27 @@ export class Simulation {
           food: 100,
           history: [],
         };
-    if (!saved) this.seed();
+    if (!saved) {
+      this.seed();
+      for (const b of this.state.buildings) {
+        b.plot = FOOTPRINTS[b.kind];
+        const facing = [0, 1, 2, 3].find((r) =>
+          frontage(b.kind, b.x, b.y, r, b.plot).some((p) =>
+            this.state.roads.includes(key(p)),
+          ),
+        );
+        if (facing !== undefined) b.rotation = facing as 0 | 1 | 2 | 3;
+      }
+    }
+    if (!saved || !saved.decorations)
+      this.state.decorations = initialDecorations(
+        new Set(this.state.roads),
+        (x, y) =>
+          terrain(x, y) === "water" ||
+          !!this.buildingAt(x, y) ||
+          !!DEPOSITS[key({ x, y })],
+        () => this.state.nextId++,
+      );
     this.reconnect();
   }
   private seed() {
@@ -236,16 +271,27 @@ export class Simulation {
       (b) =>
         x >= b.x &&
         y >= b.y &&
-        x < b.x + FOOTPRINTS[b.kind][0] &&
-        y < b.y + FOOTPRINTS[b.kind][1],
+        x < b.x + dimensions(b.kind, b.rotation, b.plot)[0] &&
+        y < b.y + dimensions(b.kind, b.rotation, b.plot)[1],
     );
+  }
+  decorationAt(x: number, y: number) {
+    return this.state.decorations.find((d) => d.x === x && d.y === y);
   }
   building(id: number) {
     return this.state.buildings.find((b) => b.id === id);
   }
   adjacent(p: Point) {
     const kind = (p as Partial<Building>).kind;
-    const cells = kind ? footprint(kind, p.x, p.y) : [p];
+    if (kind) {
+      const b = p as Building;
+      return frontage(kind, b.x, b.y, b.rotation, b.plot).filter((n) =>
+        this.roadSet.has(key(n)),
+      );
+    }
+    const cells = kind
+      ? footprint(kind, p.x, p.y, (p as Building).rotation)
+      : [p];
     const perimeter = new Map<string, Point>();
     for (const cell of cells)
       for (const d of dirs) {
@@ -291,6 +337,7 @@ export class Simulation {
   }
   reconnect() {
     this.roadSet = new Set(this.state.roads);
+    this.traffic.configure(this.roadSet);
     const warehouses = this.state.buildings.filter(
       (b) => b.kind === "warehouse",
     );
@@ -298,13 +345,11 @@ export class Simulation {
       b.connected = warehouses.some((w) => !!this.route(b, w));
       b.workers = 0;
     }
-    const homes = this.state.buildings.filter(
-      (b) => b.kind === "house" && b.connected,
-    );
+    const homes = this.state.buildings.filter((b) => b.kind === "house");
     this.state.residents = this.state.residents.filter((r) =>
       homes.some((h) => h.id === r.home),
     );
-    for (const h of homes) {
+    for (const h of homes.filter((h) => h.connected)) {
       while (this.state.residents.filter((r) => r.home === h.id).length < 3) {
         const id = this.state.nextId++;
         this.state.residents.push({
@@ -328,8 +373,15 @@ export class Simulation {
     }
     this.state.agents = this.state.agents.filter((a) => {
       if (a.kind !== "truck") return false;
+      const sourceBuilding = this.building(a.source),
+        targetBuilding = this.building(a.target);
       const valid =
-        this.building(a.target) &&
+        sourceBuilding?.connected &&
+        targetBuilding?.connected &&
+        this.adjacent(sourceBuilding).some((p) => key(p) === key(a.path[0])) &&
+        this.adjacent(targetBuilding).some(
+          (p) => key(p) === key(a.path[a.path.length - 1]),
+        ) &&
         a.path.slice(a.segment).every((p) => this.roadSet.has(key(p)));
       if (!valid && a.cargo) {
         const source = this.building(a.source) ?? warehouses[0];
@@ -365,17 +417,21 @@ export class Simulation {
           wait: (r.id % 12) * 0.45,
         });
     }
+    for (const a of this.state.agents) a.active = false;
+    this.traffic.plan(this.state.agents);
   }
   canPlace(
     kind: Exclude<Tool, "inspect" | "bulldoze">,
     x: number,
     y: number,
+    rotation = 0,
   ): string | null {
     if (!inside(x, y)) return "Choose a tile inside the valley.";
     if (kind === "bridge" && terrain(x, y) !== "water")
       return "Place bridges over water. Use roads on dry land.";
-    const cells =
-      kind === "road" || kind === "bridge" ? [{ x, y }] : footprint(kind, x, y);
+    const cells = isBuilding(kind)
+      ? footprint(kind, x, y, rotation)
+      : [{ x, y }];
     for (const p of cells) {
       if (!inside(p.x, p.y))
         return "The whole building must fit inside the valley.";
@@ -384,6 +440,11 @@ export class Simulation {
       if (terrain(p.x, p.y) === "water" && kind !== "road" && kind !== "bridge")
         return "The whole building needs dry land. Roads can form bridges.";
     }
+    if (
+      isDecoration(kind) &&
+      (this.decorationAt(x, y) || DEPOSITS[key({ x, y })])
+    )
+      return "Choose an empty land tile for this decoration.";
     if (
       (kind === "quarry" || kind === "mine") &&
       DEPOSITS[key({ x, y })] !== (kind === "quarry" ? "stone" : "metal")
@@ -394,9 +455,11 @@ export class Simulation {
         ? terrain(x, y) === "water"
           ? 35
           : 12
-        : BUILDINGS[kind].cost;
+        : isDecoration(kind)
+          ? DECORATIONS[kind].cost
+          : BUILDINGS[kind].cost;
     if (this.state.money < cost) return "Not enough gold yet.";
-    if (kind !== "road" && kind !== "bridge")
+    if (isBuilding(kind))
       for (const [r, n] of Object.entries(BUILDINGS[kind].materials ?? {})) {
         if (this.stored(r as Resource) < n)
           return `Need ${n} ${r} in warehouses.`;
@@ -433,7 +496,8 @@ export class Simulation {
         message: "Unknown action.",
         revision: this.state.revision,
       };
-    let message = "";
+    let message = "",
+      networkChanged = true;
     if (c.type === "place") {
       if (c.rotation !== undefined && ![0, 1, 2, 3].includes(c.rotation))
         return {
@@ -444,14 +508,15 @@ export class Simulation {
       if (
         c.kind !== "road" &&
         c.kind !== "bridge" &&
-        !Object.hasOwn(BUILDINGS, c.kind)
+        !isBuilding(c.kind) &&
+        !isDecoration(c.kind)
       )
         return {
           ok: false,
           message: "Unknown building.",
           revision: this.state.revision,
         };
-      const error = this.canPlace(c.kind, c.x, c.y);
+      const error = this.canPlace(c.kind, c.x, c.y, c.rotation);
       if (error)
         return { ok: false, message: error, revision: this.state.revision };
       const cost =
@@ -459,14 +524,31 @@ export class Simulation {
           ? terrain(c.x, c.y) === "water"
             ? 35
             : 12
-          : BUILDINGS[c.kind].cost;
+          : isDecoration(c.kind)
+            ? DECORATIONS[c.kind].cost
+            : BUILDINGS[c.kind].cost;
       this.state.money -= cost;
-      if (c.kind !== "road" && c.kind !== "bridge")
+      if (isBuilding(c.kind))
         for (const [r, n] of Object.entries(BUILDINGS[c.kind].materials ?? {}))
           this.consume(r as Resource, n);
+      const cells = isBuilding(c.kind)
+        ? footprint(c.kind, c.x, c.y, c.rotation)
+        : [c];
+      this.state.decorations = this.state.decorations.filter(
+        (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
+      );
       if (c.kind === "road" || c.kind === "bridge")
         this.state.roads.push(key(c));
-      else
+      else if (isDecoration(c.kind)) {
+        this.state.decorations.push({
+          id: this.state.nextId++,
+          kind: c.kind,
+          x: c.x,
+          y: c.y,
+          natural: false,
+        });
+        networkChanged = false;
+      } else
         this.state.buildings.push({
           id: this.state.nextId++,
           kind: c.kind,
@@ -478,16 +560,18 @@ export class Simulation {
           connected: false,
           enabled: true,
           produced: 0,
-          rotation: c.kind === "house" ? (c.rotation ?? 0) : 0,
+          rotation: c.rotation ?? 0,
+          plot: dimensions(c.kind, c.rotation),
         });
       message =
         c.kind === "road" || c.kind === "bridge"
           ? terrain(c.x, c.y) === "water"
             ? "Bridge built. Connect both ends to roads."
             : "Road laid."
-          : `${BUILDINGS[c.kind].name} built.`;
+          : `${isDecoration(c.kind) ? DECORATIONS[c.kind].name : BUILDINGS[c.kind].name} built.`;
     } else if (c.type === "demolish") {
-      const b = this.buildingAt(c.x, c.y);
+      const b = this.buildingAt(c.x, c.y),
+        decoration = this.decorationAt(c.x, c.y);
       if (
         b?.kind === "warehouse" &&
         this.state.buildings.filter((b) => b.kind === "warehouse").length === 1
@@ -513,23 +597,63 @@ export class Simulation {
       } else if (this.roadSet.has(key(c))) {
         this.state.roads = this.state.roads.filter((k) => k !== key(c));
         this.state.money += terrain(c.x, c.y) === "water" ? 17 : 6;
+      } else if (decoration) {
+        this.state.decorations = this.state.decorations.filter(
+          (d) => d.id !== decoration.id,
+        );
+        this.state.money += decoration.natural
+          ? 0
+          : Math.floor(DECORATIONS[decoration.kind].cost / 2);
+        networkChanged = false;
       } else
         return {
           ok: false,
           message: "There is nothing to remove here.",
           revision: this.state.revision,
         };
-      message = "Removed. Half the build cost returned.";
+      message = decoration?.natural
+        ? "Decoration removed."
+        : "Removed. Half the build cost returned.";
     } else if (c.type === "rotate") {
       const b = this.building(c.id);
-      if (!b || b.kind !== "house")
+      if (!b)
         return {
           ok: false,
-          message: "Select a cottage to rotate.",
+          message: "Select a building to rotate.",
           revision: this.state.revision,
         };
-      b.rotation = ((b.rotation + 1) % 4) as 0 | 1 | 2 | 3;
-      message = "Cottage rotated.";
+      const rotation = ((b.rotation + 1) % 4) as 0 | 1 | 2 | 3;
+      const cells = footprint(b.kind, b.x, b.y, rotation);
+      if (
+        cells.some(
+          (p) =>
+            !inside(p.x, p.y) ||
+            terrain(p.x, p.y) === "water" ||
+            this.roads.has(key(p)) ||
+            this.state.buildings.some(
+              (other) =>
+                other.id !== b.id &&
+                footprint(
+                  other.kind,
+                  other.x,
+                  other.y,
+                  other.rotation,
+                  other.plot,
+                ).some((q) => p.x === q.x && p.y === q.y),
+            ),
+        )
+      )
+        return {
+          ok: false,
+          message: "The rotated footprint needs more clear land.",
+          revision: this.state.revision,
+        };
+      b.rotation = rotation;
+      b.plot = dimensions(b.kind, rotation);
+      this.state.decorations = this.state.decorations.filter(
+        (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
+      );
+      message = `${BUILDINGS[b.kind].name} rotated.`;
     } else if (c.type === "toggle") {
       const b = this.building(c.id);
       if (!b)
@@ -542,7 +666,7 @@ export class Simulation {
       message = b.enabled ? "Production resumed." : "Production paused.";
     }
     this.state.revision++;
-    if (c.type !== "rotate") this.reconnect();
+    if (networkChanged) this.reconnect();
     this.state.history.unshift(message);
     this.state.history = this.state.history.slice(0, 20);
     const result = { ok: true, message, revision: this.state.revision };
@@ -589,12 +713,11 @@ export class Simulation {
         a.wait -= STEP;
         continue;
       }
-      a.progress += STEP * AGENT_SPEED[a.kind];
-      if (a.progress >= 1) {
-        a.segment++;
-        a.progress -= 1;
-      }
-      if (a.segment >= a.path.length - 1) {
+      const distance =
+        a.segment + a.progress + (a.move ?? STEP * AGENT_SPEED[a.kind]);
+      a.segment = Math.floor(distance);
+      a.progress = distance - a.segment;
+      if (distance >= a.path.length - 1 - 1e-8) {
         if (a.kind === "truck") {
           const b = this.building(a.target);
           if (b && a.cargo) {
@@ -613,10 +736,12 @@ export class Simulation {
           a.progress = 0;
           a.returning = !a.returning;
           a.wait = 4 + (a.id % 8);
+          a.active = false;
         }
       }
     }
     if (this.state.tick % 12 === 0) this.dispatch();
+    this.traffic.plan(this.state.agents);
     if (this.state.tick % 240 === 0) {
       this.state.money += this.state.residents.length * 6;
       let demand = Math.ceil(this.state.residents.length / 3);
@@ -721,7 +846,7 @@ export class Simulation {
   }
   status(b: Building) {
     const d = BUILDINGS[b.kind];
-    if (!b.connected) return "Needs a road to a warehouse";
+    if (!b.connected) return "Connect the front entrance to a warehouse road";
     if (!b.enabled) return "Production paused";
     if (
       (b.kind === "quarry" || b.kind === "mine") &&
@@ -752,7 +877,7 @@ export function parseSave(raw: string): World {
     typeof n === "number" && Number.isFinite(n) && n >= 0;
   if (
     !s ||
-    ![1, 2].includes(s.version) ||
+    ![1, 2, 3].includes(s.version) ||
     !finite(s.money) ||
     !Number.isInteger(s.tick) ||
     s.tick < 0 ||
@@ -793,6 +918,17 @@ export function parseSave(raw: string): World {
   }
   for (const b of s.buildings) {
     b.rotation ??= 0;
+    if (s.version < 3) {
+      b.plot = FOOTPRINTS[b.kind];
+      if (b.plot) {
+        const facing = [0, 1, 2, 3].find((r) =>
+          frontage(b.kind, b.x, b.y, r, b.plot).some((p) =>
+            s.roads.includes(key(p)),
+          ),
+        );
+        if (facing !== undefined) b.rotation = facing as 0 | 1 | 2 | 3;
+      }
+    }
     if (
       !inside(b.x, b.y) ||
       terrain(b.x, b.y) !== "land" ||
@@ -804,7 +940,14 @@ export function parseSave(raw: string): World {
       !finite(b.progress) ||
       !finite(b.produced) ||
       typeof b.enabled !== "boolean" ||
-      ![0, 1, 2, 3].includes(b.rotation)
+      ![0, 1, 2, 3].includes(b.rotation) ||
+      (b.plot !== undefined &&
+        (!Array.isArray(b.plot) ||
+          b.plot.length !== 2 ||
+          ![
+            FOOTPRINTS[b.kind].join(","),
+            [...FOOTPRINTS[b.kind]].reverse().join(","),
+          ].includes(b.plot.join(","))))
     )
       throw new Error("Invalid building.");
     for (const [k, v] of Object.entries(b.inventory)) {
@@ -812,7 +955,9 @@ export function parseSave(raw: string): World {
         throw new Error("Invalid inventory.");
     }
     ids.add(b.id);
-    for (const p of legacy ? [b] : footprint(b.kind, b.x, b.y)) {
+    for (const p of legacy
+      ? [b]
+      : footprint(b.kind, b.x, b.y, b.rotation, b.plot)) {
       if (
         !inside(p.x, p.y) ||
         terrain(p.x, p.y) !== "land" ||
@@ -844,7 +989,7 @@ export function parseSave(raw: string): World {
             (b.kind === "quarry" || b.kind === "mine") &&
             DEPOSITS[key(p)] !== (b.kind === "quarry" ? "stone" : "metal")
           ) &&
-          footprint(b.kind, p.x, p.y).every(
+          footprint(b.kind, p.x, p.y, b.rotation, b.plot).every(
             (c) =>
               inside(c.x, c.y) &&
               terrain(c.x, c.y) === "land" &&
@@ -859,13 +1004,43 @@ export function parseSave(raw: string): World {
         s.deposits[key(p)] = s.deposits[key(b)] ?? 600;
       b.x = p.x;
       b.y = p.y;
-      footprint(b.kind, b.x, b.y).forEach((c) => taken.add(key(c)));
+      const facing = [0, 1, 2, 3].find((r) =>
+        frontage(b.kind, b.x, b.y, r, b.plot).some((p) =>
+          s.roads.includes(key(p)),
+        ),
+      );
+      if (facing !== undefined) b.rotation = facing as 0 | 1 | 2 | 3;
+      footprint(b.kind, b.x, b.y, b.rotation, b.plot).forEach((c) =>
+        taken.add(key(c)),
+      );
     }
     for (const k of Object.keys(DEPOSITS)) s.deposits[k] ??= 600;
     s.history.unshift(
       "Building footprints upgraded. Existing buildings were moved clear of roads.",
     );
     s.revision++;
+    occupied.clear();
+    for (const k of taken) occupied.add(k);
+  }
+  if (s.decorations !== undefined) {
+    if (!Array.isArray(s.decorations) || s.decorations.length > SIZE * SIZE)
+      throw new Error("Invalid decorations.");
+    for (const d of s.decorations) {
+      if (
+        !Number.isInteger(d.id) ||
+        d.id < 1 ||
+        ids.has(d.id) ||
+        !inside(d.x, d.y) ||
+        terrain(d.x, d.y) === "water" ||
+        !isDecoration(d.kind) ||
+        typeof d.natural !== "boolean" ||
+        occupied.has(key(d)) ||
+        DEPOSITS[key(d)]
+      )
+        throw new Error("Invalid decoration.");
+      ids.add(d.id);
+      occupied.add(key(d));
+    }
   }
   if (!s.buildings.some((b) => b.kind === "warehouse"))
     throw new Error("Save needs a warehouse.");
@@ -895,6 +1070,14 @@ export function parseSave(raw: string): World {
   );
   s.history = s.history.filter((x) => typeof x === "string").slice(0, 20);
   s.nextId = Math.max(s.nextId, ...ids, ...s.residents.map((r) => r.id)) + 1;
-  s.version = 2;
+  s.decorations ??= initialDecorations(
+    new Set(s.roads),
+    (x, y) =>
+      terrain(x, y) === "water" ||
+      occupied.has(key({ x, y })) ||
+      !!DEPOSITS[key({ x, y })],
+    () => s.nextId++,
+  );
+  s.version = 3;
   return s as World;
 }

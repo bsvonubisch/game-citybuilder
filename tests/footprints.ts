@@ -1,134 +1,126 @@
-import { BUILDINGS, FOOTPRINTS, type BuildingKind } from "../src/catalog.js";
-import { buildingArt, atlasContentWidth } from "../src/building-art.js";
-import { fitGround, iso, opaqueBounds } from "../src/rendering.js";
+import {
+  BUILDINGS,
+  dimensions,
+  FRONT_NAMES,
+  FRONT_DIRECTIONS,
+  type BuildingKind,
+} from "../src/catalog.js";
+import { buildingArt } from "../src/building-art.js";
+import { plotTransform, iso } from "../src/rendering.js";
+import { drawPlot } from "../src/plot-art.js";
 
-const images = new Map<string, HTMLImageElement>();
-for (const texture of ["buildings", "houses", "mill"]) {
-  const image = new Image();
-  image.src =
-    texture === "houses"
-      ? "/house-rotations.png"
-      : texture === "mill"
-        ? "/windmill-parts.png"
-        : "/buildings.png";
-  await image.decode();
-  images.set(texture, image);
-}
-const cases = Object.keys(BUILDINGS).flatMap((kind) =>
-  Array.from({ length: kind === "house" ? 4 : 1 }, (_, rotation) => ({
-    kind: kind as BuildingKind,
-    rotation,
-  })),
-);
 const contacts = document.querySelector<HTMLInputElement>("#contacts")!;
-const before = document.querySelector<HTMLInputElement>("#before")!;
 const drawCases: (() => void)[] = [];
-for (const { kind, rotation } of cases) {
-  const article = document.createElement("article");
-  const title = document.createElement("h2");
-  const [w, h] = FOOTPRINTS[kind];
-  title.textContent = `${BUILDINGS[kind].name}${kind === "house" ? " · " + ["SE", "SW", "NW", "NE"][rotation] : ""} · ${w}×${h}`;
-  const canvas = document.createElement("canvas");
-  canvas.width = 380;
-  canvas.height = 380;
-  article.append(title, canvas);
-  document.querySelector("main")!.append(article);
-  const ctx = canvas.getContext("2d")!;
-  const art = buildingArt(kind, rotation);
-  const img = images.get(art.texture)!;
-  const columns = art.texture === "buildings" ? 3 : 2;
-  const cell = Math.floor(img.width / columns);
-  const sx = (art.frame % columns) * cell,
-    sy = Math.floor(art.frame / columns) * cell;
-  const scratch = document.createElement("canvas");
-  scratch.width = cell;
-  scratch.height = cell;
-  const sc = scratch.getContext("2d")!;
-  sc.drawImage(img, sx, sy, cell, cell, 0, 0, cell, cell);
-  const bounds = opaqueBounds(
-    sc.getImageData(0, 0, cell, cell).data,
-    cell,
-    cell,
-  );
-  const fit = fitGround(art.ground, w, h);
-  const draw = () => {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = "#8da778";
-    ctx.fillRect(0, 0, 380, 380);
-    ctx.imageSmoothingEnabled = false;
-    const center = iso((w - 1) / 2, (h - 1) / 2);
-    ctx.translate(190 - center.x * 1.75, 276 - center.y * 1.75);
-    ctx.scale(1.75, 1.75);
-    const polygon = (
-      points: { x: number; y: number }[],
-      fill: string,
-      stroke: string,
-    ) => {
-      ctx.beginPath();
-      points.forEach((p, i) =>
-        i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
-      );
-      ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.fill();
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
-    };
-    for (let x = -1; x <= w; x++)
-      for (let y = -1; y <= h; y++) {
-        const road = x < 0 || y < 0 || x === w || y === h;
-        polygon(
-          [
-            iso(x - 0.5, y - 0.5),
-            iso(x + 0.5, y - 0.5),
-            iso(x + 0.5, y + 0.5),
-            iso(x - 0.5, y + 0.5),
-          ],
-          road ? "#b5b2a1" : "#8da778",
-          road ? "#d7cfb8" : "#a5b789",
+const filter = new URLSearchParams(location.search).get("kind");
+for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
+  if (filter && kind !== filter) continue;
+  const image = new Image();
+  image.src = `/plot-${kind}.png`;
+  await image.decode();
+  for (let rotation = 0; rotation < 4; rotation++) {
+    const art = buildingArt(kind, rotation),
+      [w, h] = dimensions(kind, rotation),
+      fit = plotTransform(art.ground, w, h);
+    const article = document.createElement("article"),
+      title = document.createElement("h2"),
+      canvas = document.createElement("canvas");
+    title.textContent = `${BUILDINGS[kind].name} · ${FRONT_NAMES[rotation]} · ${w}×${h}`;
+    canvas.width = 400;
+    canvas.height = 390;
+    article.append(title, canvas);
+    document.querySelector("main")!.append(article);
+    const ctx = canvas.getContext("2d")!;
+    const sprite = document.createElement("canvas"),
+      [cw, ch] = art.size,
+      corners = [
+        [0, 0],
+        [cw, 0],
+        [cw, ch],
+        [0, ch],
+      ].map(([x, y]) => fit.point(x, y));
+    const left = Math.floor(Math.min(...corners.map((p) => p.x))),
+      top = Math.floor(Math.min(...corners.map((p) => p.y))),
+      right = Math.ceil(Math.max(...corners.map((p) => p.x))),
+      bottom = Math.ceil(Math.max(...corners.map((p) => p.y)));
+    sprite.width = (right - left) * 4;
+    sprite.height = (bottom - top) * 4;
+    const sc = sprite.getContext("2d")!;
+    sc.scale(4, 4);
+    sc.translate(-left, -top);
+    drawPlot(sc, image, art, w, h);
+    const draw = () => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#8da778";
+      ctx.fillRect(0, 0, 400, 390);
+      ctx.imageSmoothingEnabled = false;
+      const center = iso((w - 1) / 2, (h - 1) / 2);
+      ctx.translate(200 - center.x * 1.8, 290 - center.y * 1.8);
+      ctx.scale(1.8, 1.8);
+      const poly = (
+        points: { x: number; y: number }[],
+        fill: string,
+        stroke: string,
+      ) => {
+        ctx.beginPath();
+        points.forEach((p, i) =>
+          i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
         );
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+      };
+      for (let x = -1; x <= w; x++)
+        for (let y = -1; y <= h; y++)
+          poly(
+            [
+              iso(x - 0.5, y - 0.5),
+              iso(x + 0.5, y - 0.5),
+              iso(x + 0.5, y + 0.5),
+              iso(x - 0.5, y + 0.5),
+            ],
+            x < 0 || y < 0 || x === w || y === h ? "#b5b2a1" : "#8da778",
+            "#d7cfb8",
+          );
+      ctx.drawImage(sprite, left, top, right - left, bottom - top);
+      if (contacts.checked) {
+        poly(
+          [
+            iso(-0.5, -0.5),
+            iso(w - 0.5, -0.5),
+            iso(w - 0.5, h - 0.5),
+            iso(-0.5, h - 0.5),
+          ],
+          "#00000000",
+          "#ffe5a4",
+        );
+        const ground = art.ground.map(([x, y]) => fit.point(x, y));
+        ctx.beginPath();
+        ground.forEach((p, i) =>
+          i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+        );
+        ctx.strokeStyle = "#5af9e2";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        const d = FRONT_DIRECTIONS[rotation],
+          edge = {
+            x: (w - 1) / 2 + (d.x * w) / 2,
+            y: (h - 1) / 2 + (d.y * h) / 2,
+          },
+          from = iso(edge.x, edge.y),
+          to = iso(edge.x + d.x * 0.5, edge.y + d.y * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.strokeStyle = "#60ffab";
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
-    polygon(
-      [
-        iso(-0.5, -0.5),
-        iso(w - 0.5, -0.5),
-        iso(w - 0.5, h - 0.5),
-        iso(-0.5, h - 0.5),
-      ],
-      "#dbc47525",
-      "#ffe5a4",
-    );
-    let scale = (fit.scale * art.cellSize) / cell,
-      tx = fit.x,
-      ty = fit.y;
-    if (before.checked) {
-      scale = ((w + h) * 32 * 0.98) / bounds.width;
-      const front = iso(w - 0.5, h - 0.5);
-      tx = front.x - (bounds.x + bounds.groundX) * scale;
-      ty = front.y - 1 - (bounds.y + bounds.height) * scale;
-    }
-    const contentWidth = atlasContentWidth(art.texture, art.frame, cell);
-    ctx.drawImage(
-      img,
-      sx,
-      sy,
-      contentWidth,
-      cell,
-      tx,
-      ty,
-      contentWidth * scale,
-      cell * scale,
-    );
-    if (contacts.checked) {
-      const points = art.ground.map(([x, y]) => ({
-        x: tx + ((x * cell) / art.cellSize) * scale,
-        y: ty + ((y * cell) / art.cellSize) * scale,
-      }));
-      polygon(points, "#5af9e212", "#5af9e2");
-    }
-  };
-  drawCases.push(draw);
-  draw();
+    };
+    drawCases.push(draw);
+    draw();
+  }
 }
-contacts.onchange = before.onchange = () => drawCases.forEach((draw) => draw());
+contacts.onchange = () => drawCases.forEach((draw) => draw());

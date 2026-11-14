@@ -31,7 +31,7 @@ const CORNERS = [
 export class BridgeArt {
   private variants = new Map<
     string,
-    { deck: string; rails: (string | null)[] }
+    { deck: string; supports: string; rails: (string | null)[] }
   >();
   private images: Phaser.GameObjects.Image[] = [];
   private wood: HTMLImageElement;
@@ -175,6 +175,13 @@ export class BridgeArt {
                 point(u + 0.25, v + 0.25),
                 point(u, v + 0.25),
               ];
+          ctx.beginPath();
+          corners.forEach((p, i) =>
+            i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
+          );
+          ctx.closePath();
+          ctx.fillStyle = "#af783c";
+          ctx.fill();
           this.quad(
             ctx,
             corners,
@@ -205,6 +212,33 @@ export class BridgeArt {
         }
       }
     });
+    const supports = this.canvas(`bridge-supports-${id}`, (ctx) => {
+      for (let edge = 0; edge < 4; edge++)
+        if (open[edge]) {
+          const [a, b] = CORNERS[edge];
+          for (const t of [0, 0.5, 1]) {
+            const u = a.x + (b.x - a.x) * t,
+              v = a.y + (b.y - a.y) * t,
+              p = point(u, v),
+              ground = iso(u, v);
+            this.quad(
+              ctx,
+              [
+                { x: p.x - 1.8, y: p.y },
+                { x: p.x + 1, y: p.y + 0.7 },
+                { x: p.x + 1, y: ground.y + 8 },
+                { x: p.x - 1.8, y: ground.y + 7.3 },
+              ],
+              this.wood.width * 0.55,
+              0,
+              this.wood.width * 0.05,
+              this.wood.height,
+            );
+            ctx.fillStyle = "#70482c";
+            ctx.fillRect(p.x + 1, p.y + 0.7, 1.3, ground.y + 7.3 - p.y);
+          }
+        }
+    });
     const rails = open.map((closed, edge) =>
       !closed
         ? null
@@ -213,20 +247,16 @@ export class BridgeArt {
             const positions = [0, 0.5, 1].map((t) =>
               point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t),
             );
-            // Square pilings, shaded faces, and capped posts continue below the waterline.
+            // Rail posts stop at deck level; submerged pilings are behind the deck.
             for (let i = 0; i < positions.length; i++) {
-              const p = positions[i],
-                ground = iso(
-                  a.x + ((b.x - a.x) * i) / 2,
-                  a.y + ((b.y - a.y) * i) / 2,
-                );
+              const p = positions[i];
               this.quad(
                 ctx,
                 [
                   { x: p.x - 1.8, y: p.y - 12 },
                   { x: p.x + 1, y: p.y - 11.3 },
-                  { x: p.x + 1, y: ground.y + 8 },
-                  { x: p.x - 1.8, y: ground.y + 7.3 },
+                  { x: p.x + 1, y: p.y + 0.7 },
+                  { x: p.x - 1.8, y: p.y },
                 ],
                 this.wood.width * 0.55,
                 0,
@@ -234,7 +264,7 @@ export class BridgeArt {
                 this.wood.height,
               );
               ctx.fillStyle = "#70482c";
-              ctx.fillRect(p.x + 1, p.y - 11.3, 1.3, ground.y + 19.3 - p.y);
+              ctx.fillRect(p.x + 1, p.y - 11.3, 1.3, 12);
               ctx.fillStyle = "#e9c48a";
               ctx.beginPath();
               ctx.moveTo(p.x - 2.2, p.y - 12);
@@ -262,7 +292,7 @@ export class BridgeArt {
             }
           }),
     );
-    const result = { deck, rails };
+    const result = { deck, supports, rails };
     this.variants.set(id, result);
     return result;
   }
@@ -282,6 +312,7 @@ export class BridgeArt {
             .setScale(1 / RESOLUTION)
             .setDepth(depth),
         );
+      add(art.supports, -997);
       add(art.deck, -996);
       art.rails.forEach((texture, edge) => {
         if (texture) add(texture, (x + y) * 32 + (edge < 2 ? 32 : 0));

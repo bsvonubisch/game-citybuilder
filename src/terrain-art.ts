@@ -28,14 +28,12 @@ export class TerrainArt {
   }[] = [];
   private grass: HTMLImageElement;
   private slate: HTMLImageElement;
-  private water: HTMLImageElement;
   private shore: HTMLImageElement;
   constructor(private scene: Phaser.Scene) {
     const source = (name: string) =>
       scene.textures.get(name).getSourceImage() as HTMLImageElement;
     this.grass = source("meadow");
     this.slate = source("slate");
-    this.water = source("brook");
     this.shore = source("shore");
     const width = SIZE * 64,
       height = SIZE * 32 + 32;
@@ -81,9 +79,8 @@ export class TerrainArt {
         );
         return p;
       };
-      // Continuous fields retain the camera orientation of the grass and ripples.
-      const meadow = pattern(this.grass, 160),
-        brook = pattern(this.water, 320);
+      // The moving water field is rendered separately below the cached banks.
+      const meadow = pattern(this.grass, 160);
       const poly = (points: number[][], fill: string | CanvasPattern) => {
         ctx.beginPath();
         points.forEach(([x, y], i) =>
@@ -113,30 +110,27 @@ export class TerrainArt {
         ctx.lineTo(bx, by);
         ctx.stroke();
       };
-      // An opaque continuous base prevents antialiased tile edges from exposing
-      // thin grid seams when the water is magnified.
-      poly(
-        [
-          [0, -16],
-          [SIZE * 32, (SIZE - 1) * 16],
-          [0, (SIZE - 0.5) * 32],
-          [-SIZE * 32, (SIZE - 1) * 16],
-        ],
-        brook,
-      );
       for (let y = 0; y < SIZE; y++)
         for (let x = 0; x < SIZE; x++) {
           const p = iso(x, y);
           if (!visible(p.x, p.y)) continue;
           const water = terrain(x, y) === "water",
             road = sim.roads.has(key({ x, y }));
-          if (x === SIZE - 1 || y === SIZE - 1)
+          if (x === SIZE - 1)
+            poly(
+              [
+                [p.x + 32, p.y],
+                [p.x, p.y + 16],
+                [p.x, p.y + 25],
+                [p.x + 32, p.y + 9],
+              ],
+              water ? "#347d7b" : "#64754d",
+            );
+          if (y === SIZE - 1)
             poly(
               [
                 [p.x - 32, p.y],
                 [p.x, p.y + 16],
-                [p.x + 32, p.y],
-                [p.x + 32, p.y + 9],
                 [p.x, p.y + 25],
                 [p.x - 32, p.y + 9],
               ],
@@ -148,7 +142,7 @@ export class TerrainArt {
             [p.x, p.y + 16.1],
             [p.x - 32.2, p.y],
           ];
-          poly(diamond, water ? brook : meadow);
+          if (!water) poly(diamond, meadow);
           if (!water && road) {
             ctx.save();
             ctx.translate(p.x, p.y - 16);

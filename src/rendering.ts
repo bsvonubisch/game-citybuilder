@@ -1,4 +1,4 @@
-import type { GroundPoint } from "./building-art.js";
+import type { GroundPoint, PlotCorners } from "./building-art.js";
 import type { Agent } from "./simulation.js";
 import { AGENT_SPEED, STEP } from "./catalog.js";
 
@@ -10,6 +10,47 @@ export const groundCoordinates = (x: number, y: number) => ({
   x: x / 64 + y / 32,
   y: y / 32 - x / 64,
 });
+
+/** A projective fit aligns the whole base while keeping verticals upright and
+ * roof lines straight. The transform has no y term in x, so walls cannot lean. */
+export function plotTransform(
+  [left, front, right]: PlotCorners,
+  width: number,
+  height: number,
+) {
+  const l = iso(-0.5, height - 0.5),
+    f = iso(width - 0.5, height - 0.5),
+    r = iso(width - 0.5, -0.5);
+  const lx = left[0] - front[0],
+    ly = left[1] - front[1],
+    rx = right[0] - front[0],
+    ry = right[1] - front[1];
+  const dl = l.x - f.x,
+    dr = r.x - f.x,
+    g = (dr / rx - dl / lx) / (dl - dr),
+    a = dl * (g + 1 / lx);
+  const yl = (l.y - f.y) * (g * lx + 1),
+    yr = (r.y - f.y) * (g * rx + 1),
+    det = lx * ry - rx * ly;
+  const b = (yl * ry - yr * ly) / det,
+    d = (lx * yr - rx * yl) / det;
+  return {
+    scale: d,
+    scaleAt: (x: number) => d / (g * (x - front[0]) + 1),
+    sourceX: (worldX: number) => {
+      const z = worldX - f.x;
+      return front[0] + z / (a - g * z);
+    },
+    point: (x: number, y: number) => {
+      const dx = x - front[0],
+        denominator = g * dx + 1;
+      return {
+        x: f.x + (a * dx) / denominator,
+        y: f.y + (b * dx + d * (y - front[1])) / denominator,
+      };
+    },
+  };
+}
 
 /** Uniformly fit the ground outline into BOTH tile axes. A screen-space width
  * cannot describe an isometric plot, particularly a rectangular one.
@@ -39,13 +80,20 @@ export function fitGround(
 /** Sample deterministic travel between simulation ticks. Following the route by
  * distance (rather than lerping endpoints) keeps turns on the road. No state is
  * changed, and arrival/waiting never extrapolates beyond the destination. */
-export function agentPose(agent: Agent, elapsed = 0) {
-  const distance =
+export function agentDistance(agent: Agent, elapsed = 0) {
+  return (
     agent.segment +
     agent.progress +
     (agent.wait > 0
       ? 0
-      : Math.max(0, Math.min(elapsed, STEP)) * AGENT_SPEED[agent.kind]);
+      : Math.max(0, Math.min(elapsed, STEP)) *
+        (agent.move === undefined
+          ? AGENT_SPEED[agent.kind]
+          : agent.move / STEP))
+  );
+}
+export function agentPose(agent: Agent, elapsed = 0) {
+  const distance = agentDistance(agent, elapsed);
   const end = agent.path.length - 1;
   const segment = Math.min(Math.floor(distance), Math.max(0, end - 1));
   const progress = Math.min(1, distance - segment);
