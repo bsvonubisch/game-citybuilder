@@ -1214,9 +1214,17 @@ export class Simulation {
         continue;
       const destinations = this.state.buildings
         .filter((t) => t.connected && t.enabled && canSupply(b, t))
-        .sort(
-          (a, c) => (a.inventory[r.output] ?? 0) - (c.inventory[r.output] ?? 0),
-        );
+        .sort((a, c) => {
+          // Reserve one grand-house upgrade's planks before feeding continuous
+          // factory demand; faster traffic must not consume every new plank.
+          const priority = (target: Building) =>
+            r.output === "planks" &&
+            target.kind === "warehouse" &&
+            this.stored("planks") < 16
+              ? -1
+              : (target.inventory[r.output] ?? 0);
+          return priority(a) - priority(c);
+        });
       for (const dest of destinations) {
         const incoming = this.state.agents
           .filter(

@@ -258,7 +258,29 @@ export class Traffic {
         Math.min(a.path.length - 1, nodes[nodes.length - 1] + 0.8),
       ];
     };
+    const maneuvers = new Map<string, string>();
+    const maneuver = (vehicle: Agent, junction: string) => {
+      const cacheKey = `${vehicle.id}:${junction}`;
+      const cached = maneuvers.get(cacheKey);
+      if (cached !== undefined) return cached;
+      const indices = vehicle.path.flatMap((p, i) =>
+        this.junctionGroups.get(key(p)) === junction ? [i] : [],
+      );
+      const lane = !indices.length
+        ? ""
+        : vehicle.path
+            .slice(Math.max(0, indices[0] - 1), indices[indices.length - 1] + 2)
+            .map(key)
+            .join(";");
+      maneuvers.set(cacheKey, lane);
+      return lane;
+    };
     const conflicts = (a: Agent, b: Agent, junction: string) => {
+      // Vehicles taking the same lane through a crossing can follow one another.
+      // The swept body checks below still enforce the actual following gap.
+      // Reserving the whole corridor exclusively made every car stop in turn.
+      const lane = maneuver(a, junction);
+      if (lane && lane === maneuver(b, junction)) return false;
       const ar = range(a, junction),
         br = range(b, junction);
       return corridorsOverlap(a, ar[0], ar[1], b, br[0], br[1]);

@@ -469,6 +469,29 @@ main {
   inset: 0;
   pointer-events: none;
 }
+#traffic-alerts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.traffic-alert {
+  width: auto;
+  min-width: 46px;
+  padding: 0 7px;
+  display: flex;
+  gap: 5px;
+  background: #ffe4ac;
+  color: #88541f;
+  border-color: #b47b32;
+}
+.traffic-alert[data-severity="heavy"] {
+  background: #ffcfb6;
+  color: #8c3f2c;
+  border-color: #b05f3c;
+}
+#traffic-vehicles {
+  margin-top: 16px;
+}
 .building-alert[data-kind="construction"] {
   width: 70px;
   height: 46px;

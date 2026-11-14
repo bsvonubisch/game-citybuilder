@@ -10,6 +10,7 @@ import {
 import { Simulation } from "../.test-dist/simulation.js";
 import { agentDistance } from "../.test-dist/rendering.js";
 import { STEP } from "../.test-dist/catalog.js";
+import { trafficQueues } from "../.test-dist/traffic-queues.js";
 const vehicle = (id, path, kind = "car") => ({
   id,
   kind,
@@ -192,4 +193,64 @@ test("a busy working town remains collision free between simulation ticks and ke
     sim.state.agents.every((a) => (a.queuedTicks ?? 0) < 240),
     "no car should remain stuck for a minute",
   );
+});
+
+test("same-lane convoys cross a junction without an artificial stop for each car", () => {
+  const path = line(-5, 0, 1, 0, 11),
+    cross = line(0, -4, 0, 1, 9);
+  const lead = { ...vehicle(1, path), active: true, segment: 3, progress: 0.6 };
+  const follower = {
+    ...vehicle(2, path),
+    active: true,
+    segment: 2,
+    progress: 0.1,
+  };
+  const result = complete([lead, follower], [...path, ...cross]);
+  assert.equal(
+    result.queueObserved,
+    false,
+    "a safe same-lane following gap must not require a separate junction turn",
+  );
+});
+
+test("traffic warning thresholds exclude ordinary stops and hidden departures", () => {
+  const path = line(0, 0, 1, 0, 12);
+  const waiting = {
+    ...vehicle(1, path),
+    active: true,
+    trafficWait: true,
+    queuedTicks: 7 / STEP,
+  };
+  assert.equal(trafficQueues([waiting]).length, 0);
+  waiting.queuedTicks = 8 / STEP;
+  assert.equal(trafficQueues([waiting]).length, 1);
+  for (const changed of [
+    { active: false },
+    { wait: 1 },
+    { kind: "person" },
+    { trafficWait: false },
+  ])
+    assert.equal(trafficQueues([{ ...waiting, ...changed }]).length, 0);
+});
+
+test("nearby queued vehicles share an actionable warning which clears with traffic", () => {
+  const path = line(0, 0, 1, 0, 20);
+  const queued = (id, at, seconds) => ({
+    ...vehicle(id, path),
+    active: true,
+    trafficWait: true,
+    segment: at,
+    queuedTicks: seconds / STEP,
+  });
+  const agents = [queued(1, 2, 4), queued(2, 1, 2), queued(3, 10, 13)];
+  const groups = trafficQueues(agents);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups[0].agents, [1, 2]);
+  assert.equal(groups[0].severe, false);
+  assert.equal(groups[1].severe, true);
+  for (const a of agents) {
+    a.trafficWait = false;
+    a.queuedTicks = 0;
+  }
+  assert.deepEqual(trafficQueues(agents), []);
 });

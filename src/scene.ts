@@ -35,6 +35,8 @@ import { ConstructionArt } from "./construction-art.js";
 import { builderPosition, builderFrame } from "./construction.js";
 import { MapTouches, gestureCamera } from "./gestures.js";
 import { BuildingAlerts } from "./building-alerts.js";
+import { TrafficAlerts } from "./traffic-alerts.js";
+import type { TrafficQueue } from "./traffic-queues.js";
 import {
   LogisticsCache,
   LOGISTICS_COLORS,
@@ -112,6 +114,8 @@ export class TownScene extends Phaser.Scene {
   onSelect: (id: number) => void = () => {};
   onHover: (p: Point | null) => void = () => {};
   onCamera: () => void = () => {};
+  onSelectTraffic: (queue: TrafficQueue) => void = () => {};
+  private trafficAlerts!: TrafficAlerts;
   private terrainArt!: TerrainArt;
   private fishingArt!: FishingArt;
   private elevationArt!: ElevationArt;
@@ -244,6 +248,12 @@ export class TownScene extends Phaser.Scene {
       document.querySelector("#building-alerts")!,
       (id) => this.onSelect(id),
     );
+    this.trafficAlerts = new TrafficAlerts(
+      this,
+      document.querySelector("#traffic-alerts")!,
+      (queue) => this.onSelectTraffic(queue),
+    );
+    this.events.once("shutdown", () => this.trafficAlerts.clear());
     this.events.once("shutdown", () => this.buildingAlerts.clear());
     this.trimAtlas("vehicles", 4, 4);
     this.trimAtlas("walkers", 8, 4);
@@ -1242,6 +1252,12 @@ export class TownScene extends Phaser.Scene {
     }
     const time = this.simulation.state.tick * STEP + this.acc;
     this.fishingArt.update(this.simulation, this.acc, time, this.selected);
+    this.trafficAlerts.update(
+      this.simulation,
+      this.tool === "inspect",
+      time,
+      (id) => this.people.get(id),
+    );
     const camera = this.cameras.main;
     const cameraKey = `${camera.scrollX}:${camera.scrollY}:${camera.zoom}:${camera.width}:${camera.height}`;
     if (cameraKey !== this.cameraKey) {
@@ -1294,6 +1310,7 @@ export class TownScene extends Phaser.Scene {
     this.buildingAlerts.clear();
     this.animation.clear();
     this.fishingArt.clear();
+    this.trafficAlerts.clear();
     this.acc = 0;
     this.selected = null;
     this.selectedAgent = null;

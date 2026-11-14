@@ -40,6 +40,7 @@ import { icon } from "./icons.js";
 import { buildingPreview } from "./previews.js";
 import { alertIcon } from "./building-alerts.js";
 import { buildingGuidance, type GuidanceAction } from "./building-guidance.js";
+import { trafficQueues } from "./traffic-queues.js";
 import { cameraViewport } from "./rendering.js";
 import { productionActivity, type GoodsConnection } from "./logistics.js";
 import { CloudSaves, cloudError } from "./cloud.js";
@@ -84,6 +85,7 @@ let category: "homes" | "production" | "town" | "decorations" = "homes",
   tab: "build" | "town" = "build",
   selected: number | null = null,
   selectedAgent: number | null = null,
+  selectedTraffic: number[] | null = null,
   selectedDecoration: number | null = null,
   hovered: Point | null = null,
   tool: Tool = "inspect",
@@ -173,6 +175,10 @@ $("#app").innerHTML = `
    )}<button id="grid" class="tool-button" title="Show grid (G)">${icon("grid")}<span>Grid</span></button></div><div class="speed-controls"><button id="pause" aria-label="Pause simulation">${icon("pause")}</button><button data-speed="1" class="active">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button></div></nav></div>
  <button id="help" class="help-button" aria-label="How to play">${icon("help")}</button><div id="tile-label" class="tile-label"></div></section></main>
  <div id="toast" role="status" aria-live="polite"></div><dialog id="dialog"><button id="close-dialog" class="icon-button close" aria-label="Close dialog">${icon("close")}</button><div id="dialog-content"></div></dialog><input id="import-file" type="file" accept="application/json,.json" hidden>`;
+$("#building-alerts").insertAdjacentHTML(
+  "afterend",
+  '<div id="traffic-alerts" role="group" aria-label="Traffic warnings"></div>',
+);
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
@@ -546,6 +552,7 @@ scene.onHover = (p) => {
     : "";
 };
 scene.onSelectAgent = (id) => {
+  selectedTraffic = null;
   selected = null;
   selectedDecoration = null;
   scene.selected = null;
@@ -555,6 +562,7 @@ scene.onSelectAgent = (id) => {
   renderAgentInspector();
 };
 scene.onSelect = (id) => {
+  selectedTraffic = null;
   selectedAgent = null;
   selectedDecoration = null;
   scene.selectedAgent = null;
@@ -574,6 +582,7 @@ scene.onCamera = () => {
   drawMinimap();
 };
 function renderInspector() {
+  selectedTraffic = null;
   const b = selected ? simulation.building(selected) : null;
   const panel = $("#inspector");
   panel.hidden = !b;
@@ -651,6 +660,7 @@ function renderInspector() {
   updateInspector();
 }
 function closeInspection() {
+  selectedTraffic = null;
   selected = null;
   selectedAgent = null;
   selectedDecoration = null;
@@ -740,6 +750,7 @@ function runGuidance(b: Building, action: GuidanceAction) {
   }
 }
 function renderDecorationInspector() {
+  selectedTraffic = null;
   const d = simulation.state.decorations.find(
     (d) => d.id === selectedDecoration,
   );
@@ -812,6 +823,10 @@ function updateAgentInspector() {
     `<div class="detail-row"><span>From</span><b>${escapeHtml(label(from))}</b></div><div class="detail-row"><span>Headed to</span><b>${escapeHtml(label(to))}</b></div>${a.cargo ? `<div class="detail-row"><span>Carrying</span><b>${a.amount} ${RESOURCE_NAMES[a.cargo]}</b></div>` : ""}<p class="muted">The gold line shows this journey on the map.</p>`;
 }
 function updateInspector() {
+  if (selectedTraffic) {
+    updateTrafficInspector();
+    return;
+  }
   if (selectedAgent !== null) {
     updateAgentInspector();
     return;
@@ -898,6 +913,54 @@ function updateInspector() {
       : "Resume construction";
   }
   updateBuildingActions(b);
+}
+scene.onSelectTraffic = (queue) => {
+  closeInspection();
+  selectedTraffic = queue.agents;
+  $("#inspector").hidden = false;
+  $("#inspector").innerHTML =
+    `<button id="close-inspector" class="icon-button close" aria-label="Close traffic details">${icon("close")}</button><span class="eyebrow">STREETS & JOURNEYS</span><h3>Traffic queue</h3><div id="traffic-status" class="building-status warning"></div><p>Amber rings mark delayed vehicles; copper means a longer or larger queue. Short junction stops do not trigger a warning.</p><p>Give this area another connected road route, shorten busy delivery routes, or spread workplaces and homes across more streets. Cars sharing a clear lane can continue together; crossing paths still yield.</p><button id="traffic-road" class="primary">Add an alternate road</button><div id="traffic-vehicles"></div>`;
+  $("#close-inspector").onclick = closeInspection;
+  $("#traffic-road").onclick = () => {
+    const id = selectedTraffic?.[0];
+    if (id !== undefined) scene.focusAgent(id);
+    setTool("road");
+    toast("Join both ends of an alternate route to the existing roads.");
+  };
+  $("#traffic-vehicles").onclick = (event) => {
+    const target = (event.target as Element).closest<HTMLButtonElement>(
+      "[data-traffic-agent]",
+    );
+    if (!target) return;
+    const id = Number(target.dataset.trafficAgent);
+    scene.onSelectAgent(id);
+    scene.focusAgent(id);
+  };
+  updateTrafficInspector();
+};
+function updateTrafficInspector() {
+  const queue = trafficQueues(simulation.state.agents).find((q) =>
+    q.agents.some((id) => selectedTraffic?.includes(id)),
+  );
+  $("#traffic-status").textContent = queue
+    ? `${queue.agents.length} vehicles delayed · longest wait about ${Math.floor(queue.seconds)}s`
+    : "Traffic has cleared";
+  $("#traffic-status").classList.toggle("warning", !!queue);
+  $("#traffic-road").hidden = !queue;
+  if (queue) selectedTraffic = queue.agents;
+  const html =
+    queue?.agents
+      .map((id) => {
+        const a = simulation.state.agents.find((a) => a.id === id)!;
+        const destination = simulation.building(
+          a.returning ? a.source : a.target,
+        );
+        return `<button class="goods-link" data-traffic-agent="${id}"><span>${a.kind === "truck" ? "Delivery truck" : "Car"}</span><small>${destination ? escapeHtml(buildingName(destination)) : "Road journey"} · ${Math.floor((a.queuedTicks ?? 0) / 4)}s delayed</small>${icon("arrow")}</button>`;
+      })
+      .join("") ??
+    '<p class="muted">The warning disappears automatically as vehicles move on.</p>';
+  if ($("#traffic-vehicles").innerHTML !== html)
+    $("#traffic-vehicles").innerHTML = html;
 }
 function updateLogistics(b: Building) {
   const view = scene.productionView(b.id);
