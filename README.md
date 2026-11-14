@@ -95,3 +95,7 @@ Terrain (T) provides 1–5 tile square brushes for adding water, filling ground,
 The brush and vertical drag interaction are inspired by the [RollerCoaster Tycoon 2 manual](https://cdn.akamai.steamstatic.com/steam/apps/285330/manuals/manual.pdf). This implementation uses terraced tile heights, rather than RCT's individual corner-slope controls.
 
 On phones, the build catalog becomes a drawer. One finger drags the map in any tool; two fingers pan and pinch around their midpoint. Releasing a gesture never places or removes a building. Tap to select or build. Warehouse planks and employed/total residents appear in the resource bar; swipe the bar to see additional stocks on narrow screens. Sawmills deliver planks to warehouses as well as workshops, so grand-house upgrades can use produced materials.
+
+### Day and night
+
+The existing 60-second simulation day now cycles from an 08:00 start through gradual dawn/dusk lighting. At night, buildings and terrain take a cooler tint; existing amber windows and lantern pixels emit warm, depth-sorted light without replacement sprites. Lights follow rotation, camera motion and building moves. Ordinary industries and construction run at 25% pace, most residents wait at home, deliveries are dispatched less often, and fisheries finish existing trips but wait until daylight to launch. Pause and speed controls also govern the light cycle.

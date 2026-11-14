@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { NightArt } from "./night-art.js";
 import {
   setupArtworkScaling,
   updateArtworkScaling,
@@ -188,6 +189,8 @@ export class TownScene extends Phaser.Scene {
   private waterEffects!: Phaser.GameObjects.Graphics;
   private waterPoints: Point[] = [];
   private animation!: TownAnimation;
+  private nightArt!: NightArt;
+  private lightSources: Phaser.GameObjects.Image[] = [];
   private ghost?: Phaser.GameObjects.Image;
   private ghostRotor?: Phaser.GameObjects.Image;
   private hover: Point | null = null;
@@ -231,6 +234,7 @@ export class TownScene extends Phaser.Scene {
   }
   create() {
     setupArtworkScaling(this.game);
+    this.nightArt = new NightArt(this);
     this.plotArt = new PlotArt(this);
     this.constructionArt = new ConstructionArt(this);
     const builderTexture = this.textures.get("construction-workers"),
@@ -639,6 +643,7 @@ export class TownScene extends Phaser.Scene {
           fenceMask(d, this.simulation.state.decorations),
         );
       sprite.y -= groundHeight(d.x, d.y, this.simulation.state.terrain);
+      sprite.setData("streetlight", d.kind === "streetlight");
       this.trees.push(sprite);
     }
     for (const [id, sprite] of this.buildings) {
@@ -665,6 +670,10 @@ export class TownScene extends Phaser.Scene {
         b.enabled ? 1 : 0.55,
       );
     }
+    this.lightSources = [
+      ...this.buildings.values(),
+      ...this.trees.filter((t) => t.getData("streetlight")),
+    ];
     this.occludingPlots = this.simulation.state.buildings.map((b) => {
       const s = this.buildings.get(b.id)!,
         [width, height] = dimensions(b.kind, b.rotation, b.plot);
@@ -1309,6 +1318,7 @@ export class TownScene extends Phaser.Scene {
       },
     );
     this.waterArt.update(time);
+    this.nightArt.update(this.simulation, time, this.lightSources);
     this.drawAgentRoute();
     this.animation.update(
       this.simulation,
@@ -1338,6 +1348,7 @@ export class TownScene extends Phaser.Scene {
     this.deliveryRoutes.clear();
     this.buildingAlerts.clear();
     this.animation.clear();
+    this.nightArt.clear();
     this.fishingArt.clear();
     this.trafficAlerts.clear();
     this.acc = 0;

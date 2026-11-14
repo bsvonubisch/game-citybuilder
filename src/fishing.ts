@@ -1,6 +1,7 @@
 import { BUILDINGS, FRONT_DIRECTIONS, SIZE, STEP } from "./catalog.js";
 import { fisheryCells } from "./shoreline.js";
 import { terrainCell } from "./terrain.js";
+import { daylight } from "./daylight.js";
 import type { Building, Point, Simulation } from "./simulation.js";
 
 export interface FishingTrip {
@@ -97,6 +98,7 @@ export function stepFishing(sim: Simulation, b: Building) {
   }
   if (!fishingActive(b)) return;
   if (!trip) {
+    if (daylight(sim.state.tick).night) return;
     if ((b.inventory.fish ?? 0) >= 20) return;
     const path = fishingRoute(sim, b);
     if (!path) return;

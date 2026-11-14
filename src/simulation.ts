@@ -22,6 +22,7 @@ import {
   type Tool,
 } from "./catalog.js";
 import { initialDecorations, type Decoration } from "./decorations.js";
+import { daylight } from "./daylight.js";
 import {
   DEPOSITS,
   INITIAL_RESERVE,
@@ -1099,6 +1100,7 @@ export class Simulation {
   }
   step() {
     this.state.tick++;
+    const day = daylight(this.state.tick);
     let completed = false;
     for (const b of this.state.buildings) {
       if (!b.construction || !b.connected || !b.enabled) continue;
@@ -1111,7 +1113,7 @@ export class Simulation {
       ).length;
       b.construction.completed = Math.min(
         b.construction.required,
-        b.construction.completed + crew * STEP,
+        b.construction.completed + crew * STEP * day.workRate,
       );
       if (b.construction.completed >= b.construction.required) {
         if (b.construction.upgradeTo) b.houseTier = b.construction.upgradeTo;
@@ -1156,7 +1158,7 @@ export class Simulation {
         (b.inventory[recipe.input] ?? 0) < (recipe.amount ?? 0)
       )
         continue;
-      b.progress += STEP;
+      b.progress += STEP * day.workRate;
       if (b.progress >= recipe.seconds) {
         b.progress -= recipe.seconds;
         if (recipe.input) b.inventory[recipe.input]! -= recipe.amount!;
@@ -1168,6 +1170,17 @@ export class Simulation {
       }
     }
     for (const a of [...this.state.agents]) {
+      // Finish journeys already on the road; most residents stay home at night.
+      if (
+        day.night &&
+        a.kind !== "truck" &&
+        a.resident !== null &&
+        a.resident % 4 !== 0 &&
+        !a.returning &&
+        a.active === false &&
+        !a.onsite
+      )
+        a.wait = Math.max(a.wait, STEP * 2);
       if (a.onsite && this.building(a.onsite)?.construction) {
         a.wait = 1;
         a.active = false;
@@ -1223,7 +1236,7 @@ export class Simulation {
         }
       }
     }
-    if (this.state.tick % 12 === 0) this.dispatch();
+    if (this.state.tick % (day.night ? 48 : 12) === 0) this.dispatch();
     this.traffic.plan(this.state.agents);
     if (this.state.tick % 240 === 0) {
       this.state.money += this.state.residents.length * 6;

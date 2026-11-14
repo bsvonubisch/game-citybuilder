@@ -39,6 +39,7 @@ import {
   deeperLayer,
 } from "../.test-dist/deposits.js";
 import { baseTerrain } from "../.test-dist/terrain.js";
+import { daylight, warmEmission } from "../.test-dist/daylight.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
 import {
   constructionWork,
@@ -1782,4 +1783,48 @@ test("unaffordable and duplicate excavation commands are atomic; malformed depth
   const bad = sim.snapshot();
   bad.buildings.find((c) => c.id === b.id).construction.deeperTo = 8;
   assert.throws(() => parseSave(JSON.stringify(bad)), /building/);
+});
+
+test("daylight is continuous, repeats daily and night production slows without changing inventory", () => {
+  assert.equal(daylight(0).hour, 8);
+  assert.deepEqual(daylight(240), daylight(0));
+  assert.equal(daylight(150).night, true);
+  assert.equal(daylight(150).workRate, 0.25);
+  for (let tick = 0; tick < 240; tick += 0.25)
+    assert.ok(
+      Math.abs(daylight(tick).light - daylight(tick + 0.25).light) < 0.03,
+    );
+  const sim = new Simulation(),
+    b = sim.state.buildings.find((b) => b.kind === "forester");
+  b.progress = 0;
+  b.inventory.wood = 0;
+  sim.state.tick = 0;
+  sim.step();
+  assert.equal(b.progress, STEP);
+  sim.state.tick = 150;
+  sim.step();
+  assert.equal(b.progress, STEP * 1.25);
+  assert.equal(b.inventory.wood, 0);
+  assert.equal(warmEmission(40, 85, 60, 255), 0, "green roof stays dark");
+  assert.equal(warmEmission(180, 180, 170, 255), 0, "stone stays dark");
+  assert.ok(warmEmission(255, 200, 50, 255) > 0.5, "warm window emits");
+});
+
+test("night keeps most residents at home while journeys already in progress continue", () => {
+  const sim = new Simulation();
+  const person = sim.state.agents.find(
+    (a) => a.kind === "person" && a.resident % 4 !== 0,
+  );
+  person.active = false;
+  person.wait = 0;
+  sim.state.tick = 150;
+  sim.step();
+  assert.ok(person.wait > 0);
+  assert.equal(person.segment, 0);
+  sim.state.tick = 0;
+  for (let i = 0; i < 20; i++) sim.step();
+  assert.ok(
+    person.segment + person.progress > 0,
+    "resident leaves again in daylight",
+  );
 });

@@ -28,6 +28,7 @@ import {
   type Building,
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
+import { daylight } from "./daylight.js";
 import { deeperLayer, isExtractor } from "./deposits.js";
 import { builderCapacity, constructionWork } from "./construction.js";
 import { fishingStatus } from "./fishing.js";
@@ -1176,7 +1177,13 @@ function updateUI() {
     $(".resource.population").title,
   );
   $("#happiness").textContent = simulation.happiness() + "%";
-  $("#day").textContent = `Day ${Math.floor(s.tick / 240) + 1}`;
+  const light = daylight(s.tick),
+    clock = `${String(Math.floor(light.hour)).padStart(2, "0")}:${String(Math.floor((light.hour % 1) * 60)).padStart(2, "0")}`;
+  $("#day").textContent =
+    `Day ${Math.floor(s.tick / 240) + 1} · ${clock} · ${light.phase}`;
+  $("#day").title = light.night
+    ? "Night shift: 25% work pace, fewer deliveries; most residents stay home."
+    : "Day shift: full work pace.";
   $("#goal-progress").style.width =
     Math.min(100, (s.delivered / 30) * 100) + "%";
   $("#goal-count").textContent =

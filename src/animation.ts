@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
+import { daylight } from "./daylight.js";
 import { buildingArt } from "./building-art.js";
 import { rotorView } from "./windmill.js";
 import {
@@ -179,7 +180,9 @@ export class TownAnimation {
       }
       const art = buildingArt(b.kind, b.rotation, b.houseTier);
       const active = working(sim, b);
-      const phase = (this.machineryTime.get(b.id) ?? b.id) + (active ? dt : 0);
+      const phase =
+        (this.machineryTime.get(b.id) ?? b.id) +
+        (active ? dt * daylight(sim.state.tick).workRate : 0);
       this.machineryTime.set(b.id, phase);
       if (b.kind === "mill") {
         let rotor = this.rotors.get(b.id);
