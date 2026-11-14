@@ -89,6 +89,26 @@ test("opposite directions use their own right-hand lane on both road axes", () =
     );
   }
 });
+
+test("opposing straight lanes share an intersection without waiting for each other", () => {
+  const east = line(-4, 0, 1, 0, 9),
+    south = line(0, -4, 0, 1, 9);
+  const cars = [vehicle(1, east), vehicle(2, [...east].reverse())];
+  const result = complete(cars, [...east, ...south]);
+  assert.equal(
+    result.queueObserved,
+    false,
+    "separate right-hand lanes must proceed together",
+  );
+});
+
+test("opposite right turns leave clearance for the full vehicle body", () => {
+  const east = line(-4, 0, 1, 0, 9),
+    south = line(0, -4, 0, 1, 9);
+  const a = [...line(-4, 0, 1, 0, 5), ...line(0, 1, 0, 1, 4)];
+  const b = a.map((p) => ({ x: -p.x, y: -p.y }));
+  complete([vehicle(1, a), vehicle(2, b)], [...east, ...south]);
+});
 test("faster cars queue behind a delivery truck and parked vehicles wait for a safe gap", () => {
   const path = line(0, 0, 1, 0, 12);
   const result = complete(

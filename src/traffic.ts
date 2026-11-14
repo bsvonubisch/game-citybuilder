@@ -107,8 +107,59 @@ function sweptOverlap(a: Agent, ma: number, b: Agent, mb: number) {
   return false;
 }
 
+/** Independent swept corridors allow compatible lanes to share a junction.
+ * Separating axes include vehicle dimensions and every turning waypoint. */
+function corridorsOverlap(
+  a: Agent,
+  a0: number,
+  a1: number,
+  b: Agent,
+  b0: number,
+  b1: number,
+) {
+  const segments = (agent: Agent, from: number, to: number) => {
+    const parts = [];
+    for (let d = from; d < to - 1e-8; ) {
+      const end = Math.min(to, Math.floor(d + 1e-8) + 1);
+      parts.push({
+        p: lanePose(agent, d),
+        q: lanePose(agent, end),
+        e: extents(agent, (d + end) / 2),
+      });
+      d = end;
+    }
+    return parts;
+  };
+  for (const sa of segments(a, a0, a1))
+    for (const sb of segments(b, b0, b1)) {
+      const axes = [
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+        { x: sa.q.y - sa.p.y, y: sa.p.x - sa.q.x },
+        { x: sb.q.y - sb.p.y, y: sb.p.x - sb.q.x },
+      ];
+      const separated = axes.some((axis) => {
+        if (Math.abs(axis.x) + Math.abs(axis.y) < 1e-9) return false;
+        const project = (p: Point) => p.x * axis.x + p.y * axis.y;
+        const ap = project(sa.p),
+          aq = project(sa.q),
+          bp = project(sb.p),
+          bq = project(sb.q);
+        const margin =
+          Math.abs(axis.x) * (sa.e.x + sb.e.x + 0.08) +
+          Math.abs(axis.y) * (sa.e.y + sb.e.y + 0.08);
+        return (
+          Math.max(ap, aq) + margin <= Math.min(bp, bq) ||
+          Math.max(bp, bq) + margin <= Math.min(ap, aq)
+        );
+      });
+      if (!separated) return true;
+    }
+  return false;
+}
+
 export class Traffic {
-  private junctions = new Map<string, number>();
+  private junctions = new Map<string, Set<number>>();
   private junctionTiles = new Set<string>();
   private junctionGroups = new Map<string, string>();
   private groupTiles = new Map<string, Point[]>();
@@ -176,21 +227,52 @@ export class Traffic {
         a.queuedTicks = 0;
       }
     }
-    for (const [junction, id] of this.junctions) {
-      const a = cars.find((a) => a.id === id);
-      // Release once the rear has cleared, before stopping at the next crossing.
-      // The old 1.1-tile radius overlapped the next crossing's stop line.
-      if (
-        !a?.active ||
-        !a.path.some(
-          (p, i) =>
-            this.junctionGroups.get(key(p)) === junction &&
-            i >= a.segment + a.progress - 0.7 &&
-            i <= a.segment + a.progress + 1.8,
+    for (const [junction, ids] of this.junctions) {
+      for (const id of ids) {
+        const a = cars.find((a) => a.id === id);
+        // Release once the rear has cleared, before stopping at the next crossing.
+        // The old 1.1-tile radius overlapped the next crossing's stop line.
+        if (
+          !a?.active ||
+          !a.path.some(
+            (p, i) =>
+              this.junctionGroups.get(key(p)) === junction &&
+              i >= a.segment + a.progress - 0.7 &&
+              i <= a.segment + a.progress + 1.8,
+          )
         )
-      )
-        this.junctions.delete(junction);
+          ids.delete(id);
+      }
+      if (!ids.size) this.junctions.delete(junction);
     }
+    const range = (a: Agent, junction: string) => {
+      const at = a.segment + a.progress;
+      const nodes = a.path.flatMap((p, i) =>
+        this.junctionGroups.get(key(p)) === junction && i >= at - 0.7
+          ? [i]
+          : [],
+      );
+      if (!nodes.length) return [at, Math.min(a.path.length - 1, at + 0.8)];
+      return [
+        Math.max(at, nodes[0] - 1.1),
+        Math.min(a.path.length - 1, nodes[nodes.length - 1] + 0.8),
+      ];
+    };
+    const conflicts = (a: Agent, b: Agent, junction: string) => {
+      const ar = range(a, junction),
+        br = range(b, junction);
+      return corridorsOverlap(a, ar[0], ar[1], b, br[0], br[1]);
+    };
+    const blockedByOwner = (a: Agent, junction: string) =>
+      [...(this.junctions.get(junction) ?? [])].some((id) => {
+        const b = cars.find((b) => b.id === id);
+        return b && b !== a && conflicts(a, b, junction);
+      });
+    const reserve = (junction: string, id: number) => {
+      let owners = this.junctions.get(junction);
+      if (!owners) this.junctions.set(junction, (owners = new Set()));
+      owners.add(id);
+    };
     // Vehicles wait inside their source building until there is room to join.
     for (const a of cars
       .filter((a) => !a.active && a.wait <= 0)
@@ -220,12 +302,12 @@ export class Traffic {
           ),
         ];
       const blocked = near.some((k) => {
-        const owner = this.junctions.get(k);
-        if (owner !== undefined && owner !== a.id) return true;
+        if (blockedByOwner(a, k)) return true;
         return cars.some(
           (b) =>
             b !== a &&
             b.active &&
+            conflicts(a, b, k) &&
             this.groupTiles
               .get(k)!
               .some(
@@ -240,7 +322,7 @@ export class Traffic {
         continue;
       }
       a.active = true;
-      for (const junction of near) this.junctions.set(junction, a.id);
+      for (const junction of near) reserve(junction, a.id);
     }
     // Pick the first car in each approach queue, then use waiting time for fairness.
     const candidates = new Map<
@@ -260,7 +342,7 @@ export class Traffic {
           !junction ||
           distance < -0.7 ||
           distance > 1.8 ||
-          this.junctions.has(junction)
+          this.junctions.get(junction)?.has(a.id)
         )
           continue;
         const approach = key(a.path[Math.max(0, i - 1)]);
@@ -272,15 +354,18 @@ export class Traffic {
       }
     }
     for (const [junction, approaches] of candidates) {
-      const winner = [...approaches.values()].sort(
+      const ranked = [...approaches.values()].sort(
         (a, b) =>
           (b.a.queuedTicks ?? 0) - (a.a.queuedTicks ?? 0) ||
           a.distance - b.distance ||
           a.a.id - b.a.id,
-      )[0];
-      this.junctions.set(junction, winner.a.id);
+      );
+      for (const { a } of ranked)
+        if (!blockedByOwner(a, junction)) reserve(junction, a.id);
     }
-    const owners = new Set(this.junctions.values());
+    const owners = new Set(
+      [...this.junctions.values()].flatMap((ids) => [...ids]),
+    );
     const ordered = cars
       .filter((a) => a.active)
       .sort(
@@ -301,9 +386,7 @@ export class Traffic {
         i++
       ) {
         const group = this.junctionGroups.get(key(a.path[i]));
-        const owner =
-          group === undefined ? undefined : this.junctions.get(group);
-        if (owner !== undefined && owner !== a.id && i >= at)
+        if (group !== undefined && blockedByOwner(a, group) && i >= at)
           desired = Math.min(desired, Math.max(0, i - at - 1.1));
       }
       const clear = (move: number) =>
@@ -322,7 +405,8 @@ export class Traffic {
       }
       a.move = desired;
       a.trafficWait =
-        desired < STEP * AGENT_SPEED[a.kind] - 0.001 && at < a.path.length - 1;
+        desired <
+        Math.min(STEP * AGENT_SPEED[a.kind], a.path.length - 1 - at) - 0.001;
       a.queuedTicks = a.trafficWait ? (a.queuedTicks ?? 0) + 1 : 0;
     }
   }
