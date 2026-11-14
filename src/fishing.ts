@@ -2,6 +2,7 @@ import { BUILDINGS, FRONT_DIRECTIONS, SIZE, STEP } from "./catalog.js";
 import { fisheryCells } from "./shoreline.js";
 import { terrainCell } from "./terrain.js";
 import { daylight } from "./daylight.js";
+import { productionRate, outputCapacity } from "./upgrades.js";
 import type { Building, Point, Simulation } from "./simulation.js";
 
 export interface FishingTrip {
@@ -99,14 +100,14 @@ export function stepFishing(sim: Simulation, b: Building) {
   if (!fishingActive(b)) return;
   if (!trip) {
     if (daylight(sim.state.tick).night) return;
-    if ((b.inventory.fish ?? 0) >= 20) return;
+    if ((b.inventory.fish ?? 0) >= outputCapacity(b)) return;
     const path = fishingRoute(sim, b);
     if (!path) return;
     b.fishing = { path, distance: 0, phase: "outbound", cargo: 0 };
     return;
   }
   if (trip.phase === "fishing") {
-    b.progress += STEP;
+    b.progress += STEP * productionRate(b);
     if (b.progress >= BUILDINGS.fishery.recipe!.seconds) {
       b.progress = 0;
       trip.cargo = BUILDINGS.fishery.recipe!.count;

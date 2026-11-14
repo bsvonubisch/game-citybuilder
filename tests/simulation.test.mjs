@@ -40,6 +40,17 @@ import {
 } from "../.test-dist/deposits.js";
 import { baseTerrain } from "../.test-dist/terrain.js";
 import { daylight, warmEmission } from "../.test-dist/daylight.js";
+import {
+  serviceCoverage,
+  servicePreview,
+  serviceOpen,
+  MAX_COMMUTE,
+} from "../.test-dist/proximity.js";
+import {
+  nextUpgrade,
+  productionRate,
+  outputCapacity,
+} from "../.test-dist/upgrades.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
 import {
   constructionWork,
@@ -1827,4 +1838,144 @@ test("night keeps most residents at home while journeys already in progress cont
     person.segment + person.progress > 0,
     "resident leaves again in daylight",
   );
+});
+
+test("leisure coverage follows roads, capacity and reach rather than straight-line proximity", () => {
+  const sim = new Simulation(),
+    park = sim.state.buildings.find((b) => b.kind === "park");
+  const first = serviceCoverage(sim, park);
+  assert.ok(first.residents > 0 && first.residents <= 12);
+  assert.ok(
+    first.homes.every(
+      (h) => h.tiles <= 10 && h.seconds === h.tiles / AGENT_SPEED.person,
+    ),
+  );
+  park.level = 3;
+  const upgraded = serviceCoverage(sim, park);
+  assert.ok(upgraded.residents >= first.residents);
+  assert.equal(upgraded.range, first.range);
+  const old = sim.route.bind(sim);
+  sim.route = (a, b) =>
+    b.kind === "house"
+      ? Array.from({ length: 30 }, (_, x) => ({ x, y: 0 }))
+      : old(a, b);
+  assert.equal(
+    serviceCoverage(sim, park).residents,
+    0,
+    "nearby walls do not overcome a long road detour",
+  );
+  sim.route = () => null;
+  assert.equal(serviceCoverage(sim, park).connected, false);
+  assert.equal(serviceOpen("tavern", 19), true);
+  assert.equal(serviceOpen("tavern", 1), true);
+  assert.equal(serviceOpen("tavern", 10), false);
+});
+
+test("tavern visits improve leisure only on arrival during opening hours", () => {
+  const sim = new Simulation();
+  const tavern = sim.state.buildings.find((b) => b.kind === "park");
+  tavern.kind = "tavern";
+  tavern.rotation = [0, 1, 2, 3].find((r) =>
+    frontage(tavern.kind, tavern.x, tavern.y, r, tavern.plot).some((p) =>
+      sim.roads.has(key(p)),
+    ),
+  );
+  sim.state.tick = 100;
+  for (const r of sim.state.residents) r.leisure = 0;
+  sim.reconnect();
+  assert.equal(tavern.workers, 2);
+  const guest = sim.state.agents.find(
+    (a) =>
+      a.target === tavern.id &&
+      sim.state.residents.find((r) => r.id === a.resident).job !== tavern.id,
+  );
+  assert.ok(guest, "a covered home sends an evening guest");
+  const r = sim.state.residents.find((r) => r.id === guest.resident);
+  sim.step();
+  assert.equal(r.leisure, 0, "coverage alone does not grant leisure");
+  guest.segment = guest.path.length - 2;
+  guest.progress = 1;
+  guest.wait = 0;
+  guest.active = true;
+  sim.step();
+  assert.equal(r.leisure, 45, "visit completed at the tavern");
+  assert.equal(guest.returning, true);
+  const saved = parseSave(JSON.stringify(sim.snapshot()));
+  assert.equal(saved.residents.find((p) => p.id === r.id).leisure, 45);
+});
+
+test("industry and leisure upgrades take builders, persist and improve capacity without changing plots", () => {
+  for (const kind of ["farm", "tavern", "warehouse"]) {
+    const sim = new Simulation();
+    const b = sim.state.buildings.find(
+      (b) => b.kind === (kind === "tavern" ? "park" : kind),
+    );
+    b.kind = kind;
+    b.rotation = [0, 1, 2, 3].find((r) =>
+      frontage(b.kind, b.x, b.y, r, b.plot).some((p) => sim.roads.has(key(p))),
+    );
+    sim.reconnect();
+    sim.state.money = 100000;
+    for (const w of sim.state.buildings.filter((b) => b.kind === "warehouse"))
+      Object.assign(w.inventory, { planks: 1000, stone: 1000, metal: 1000 });
+    const before = {
+      id: b.id,
+      x: b.x,
+      y: b.y,
+      rotation: b.rotation,
+      plot: b.plot,
+    };
+    const inventory = structuredClone(b.inventory),
+      next = nextUpgrade(b);
+    assert.equal(execute(sim, { type: "upgrade", id: b.id }).ok, true);
+    assert.equal(b.construction.upgradeLevel, 2);
+    assert.equal(b.construction.required, next.labour);
+    if (kind !== "warehouse") assert.deepEqual(b.inventory, inventory);
+    const saved = parseSave(JSON.stringify(sim.snapshot()));
+    assert.equal(
+      saved.buildings.find((c) => c.id === b.id).construction.upgradeLevel,
+      2,
+    );
+    if (kind === "warehouse")
+      assert.ok(
+        sim.state.buildings
+          .filter((b) => b.kind === "house")
+          .every((b) => b.connected),
+        "warehouse road network stays open during upgrades",
+      );
+    finishConstruction(sim, b);
+    assert.equal(b.level, 2);
+    for (const [k, v] of Object.entries(before)) assert.deepEqual(b[k], v);
+    assert.equal(outputCapacity(b), 40);
+    assert.equal(productionRate(b), 1.35);
+    assert.equal(
+      parseSave(JSON.stringify(sim.snapshot())).buildings.find(
+        (c) => c.id === b.id,
+      ).level,
+      2,
+    );
+  }
+});
+
+test("workers choose nearby jobs and do not commute across the entire expanded map", () => {
+  const sim = new Simulation();
+  const far = {
+    ...sim.state.buildings.find((b) => b.kind === "farm"),
+    id: sim.state.nextId++,
+    x: 58,
+    y: 53,
+    rotation: 0,
+  };
+  sim.state.buildings.push(far);
+  for (let y = 3; y <= 55; y++) sim.state.roads.push(`6,${y}`);
+  for (let x = 6; x <= 60; x++) sim.state.roads.push(`${x},55`);
+  sim.state.roads = [...new Set(sim.state.roads)];
+  sim.reconnect();
+  assert.equal(far.connected, true);
+  assert.equal(far.workers, 0, "remote workplace needs nearby homes");
+  for (const r of sim.state.residents.filter((r) => r.job))
+    assert.ok(
+      sim.route(sim.building(r.home), sim.building(r.job)).length - 1 <=
+        MAX_COMMUTE,
+    );
 });

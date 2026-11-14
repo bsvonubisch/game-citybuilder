@@ -71,7 +71,11 @@ export class NightArt {
       );
       for (const obj of this.scene.children.list) {
         const image = obj as Phaser.GameObjects.Image;
-        if (typeof image.setTint === "function" && !image.getData("emission"))
+        if (
+          typeof image.setTint === "function" &&
+          !image.getData("emission") &&
+          image.depth < 4990
+        )
           image.setTint(color);
       }
       this.scene.cameras.main.setBackgroundColor(
@@ -108,7 +112,10 @@ export class NightArt {
           .setBlendMode(Phaser.BlendModes.ADD);
         this.lights.set(sprite, light);
       }
-      const quiet = b && b.kind !== "house" && b.kind !== "park" ? 0.45 : 1;
+      const quiet =
+        b && b.kind !== "house" && b.kind !== "park" && b.kind !== "tavern"
+          ? 0.45
+          : 1;
       light
         .setTexture(texture)
         .setOrigin(sprite.originX, sprite.originY)

@@ -29,6 +29,13 @@ import {
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
 import { daylight } from "./daylight.js";
+import { nextUpgrade, productionRate, outputCapacity } from "./upgrades.js";
+import {
+  isLeisure,
+  serviceCoverage,
+  servicePreview,
+  serviceOpen,
+} from "./proximity.js";
 import { deeperLayer, isExtractor } from "./deposits.js";
 import { builderCapacity, constructionWork } from "./construction.js";
 import { fishingStatus } from "./fishing.js";
@@ -148,6 +155,7 @@ $("#app").innerHTML = `
    ["metal", "metal", "Metal in warehouses"],
    ["people", "population", "Employed / residents"],
    ["hammer", "builders", "Builders / needed"],
+   ["leaf", "leisure", "Leisure"],
    ["heart", "happiness", "Happiness"],
  ]
    .map(
@@ -378,6 +386,15 @@ function updateEntranceHint() {
       ? "Connect a road on any of the four sides"
       : "Front entrance needs a road";
   el.className = connected ? "front-connected" : "front-missing";
+  if (hovered && isLeisure(kind)) {
+    const view = serviceCoverage(
+      simulation,
+      servicePreview(kind, hovered.x, hovered.y, scene.rotation, moving?.level),
+    );
+    el.textContent += view.connected
+      ? ` · ${view.homes.filter((h) => h.served > 0).length} homes / ${view.residents} residents served · ${view.range}-tile walk limit`
+      : " · 0 homes served until connected";
+  }
 }
 function renderPanel() {
   setPanelOpen(panelOpen);
@@ -594,10 +611,10 @@ function renderInspector() {
   const panel = $("#inspector");
   panel.hidden = !b;
   if (!b) return;
-  panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${!!b.construction}`;
+  panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}`;
   panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) ? '<button id="toggle-production" class="primary"></button>' : ""}`;
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
       const link = (event.target as Element).closest<HTMLButtonElement>(
@@ -612,7 +629,7 @@ function renderInspector() {
     "afterend",
     '<div class="building-actions"><p id="building-next-step" class="next-step" hidden></p><div id="building-primary"></div><button id="resolve-issue" hidden></button><details id="building-more"><summary>More actions</summary><div id="building-menu-items"></div></details></div>',
   );
-  if (b.construction && !d.recipe)
+  if (b.construction && !d.recipe && !isLeisure(b.kind))
     panel.insertAdjacentHTML(
       "beforeend",
       '<button id="toggle-production"></button>',
@@ -656,6 +673,32 @@ function renderInspector() {
       } else updateInspector();
     };
   }
+  if (b.kind !== "house" && nextUpgrade(b) && !b.construction) {
+    const next = nextUpgrade(b)!;
+    $(".building-actions").insertAdjacentHTML(
+      "afterend",
+      `<section id="industry-upgrade"><h4>Upgrade to level ${next.level}</h4><p>${escapeHtml(next.benefit)}</p><div id="industry-upgrade-costs" class="upgrade-costs"></div><p id="industry-upgrade-reason" class="upgrade-reason"></p></section>`,
+    );
+    panel.insertAdjacentHTML(
+      "beforeend",
+      `<button id="upgrade-building">Upgrade to level ${next.level}</button>`,
+    );
+    $("#upgrade-building").onclick = async () => {
+      const result = await gateway.command({ type: "upgrade", id: b.id });
+      toast(result.message);
+      if (result.ok) {
+        scene.redraw();
+        save(false);
+        renderInspector();
+        updateUI();
+      } else updateInspector();
+    };
+  }
+  if (isLeisure(b.kind) || b.kind === "house")
+    $(".building-actions").insertAdjacentHTML(
+      "afterend",
+      '<section id="service-detail"></section>',
+    );
   {
     panel.insertAdjacentHTML(
       "beforeend",
@@ -673,7 +716,7 @@ function renderInspector() {
     panel.hidden = true;
     scene.drawOverlay();
   };
-  if (d.recipe || b.construction)
+  if (d.recipe || isLeisure(b.kind) || b.construction)
     $("#toggle-production").onclick = async () => {
       const result = await gateway.command({ type: "toggle", id: b.id });
       toast(result.message);
@@ -717,6 +760,7 @@ function updateBuildingActions(b: Building) {
   const buttons = [
     "resolve-issue",
     "upgrade-house",
+    "upgrade-building",
     "deepen-deposit",
     "toggle-production",
     "move-building",
@@ -734,9 +778,11 @@ function updateBuildingActions(b: Building) {
             ? "deepen-deposit"
             : b.kind === "house" && (b.houseTier ?? 1) < 3
               ? "upgrade-house"
-              : BUILDINGS[b.kind].recipe
-                ? "toggle-production"
-                : "move-building"),
+              : nextUpgrade(b)
+                ? "upgrade-building"
+                : BUILDINGS[b.kind].recipe
+                  ? "toggle-production"
+                  : "move-building"),
   )!;
   for (const button of buttons) {
     const isPrimary = button === primary;
@@ -872,7 +918,7 @@ function updateInspector() {
   const alert = simulation.alert(b);
   if (
     $("#inspector").dataset.buildingView !==
-    `${b.id}:${b.houseTier ?? 1}:${!!b.construction}`
+    `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}`
   ) {
     renderInspector();
     return;
@@ -911,10 +957,19 @@ function updateInspector() {
                 .join("")
             : ""
     }`;
-  if (d.recipe)
-    $("#toggle-production").textContent = b.enabled
-      ? "Pause production"
-      : "Resume production";
+  if (d.recipe || isLeisure(b.kind))
+    $("#toggle-production").textContent = isLeisure(b.kind)
+      ? b.enabled
+        ? "Close for visitors"
+        : "Reopen for visitors"
+      : b.enabled
+        ? "Pause production"
+        : "Resume production";
+  if (d.recipe && !b.construction)
+    $("#building-detail").insertAdjacentHTML(
+      "afterbegin",
+      `<div class="detail-row"><span>Level ${b.level ?? 1} · capacity</span><b>${Math.round(productionRate(b) * 100)}% pace · ${outputCapacity(b)} output</b></div>`,
+    );
   if (d.recipe) updateLogistics(b);
   if (b.kind === "fishery" && !b.construction) {
     const trip = b.fishing,
@@ -926,6 +981,62 @@ function updateInspector() {
       `<h4>${icon("fish")} Fishing boat</h4><p>${escapeHtml(fishingStatus(b))}</p><div class="detail-row"><span>Catch aboard</span><b>${trip?.cargo ?? 0} fish</b></div><div class="detail-row"><span>Headed to</span><b>${trip ? `${trip.phase === "returning" ? "Pier" : "Fishing grounds"} · ${destination!.x}, ${destination!.y}` : "Moored"}</b></div><p class="muted">The blue line follows the boat. Fish become available when it returns to the pier.</p>`;
   }
   if (b.kind === "house" && (b.houseTier ?? 1) < 3) updateUpgrade(b);
+  if (b.kind !== "house" && nextUpgrade(b) && !b.construction) {
+    const next = nextUpgrade(b)!;
+    const costs = [
+      { name: "Gold", need: next.cost, have: simulation.state.money },
+      ...Object.entries(next.materials).map(([r, need]) => ({
+        name: RESOURCE_NAMES[r as Resource],
+        need,
+        have: simulation.stored(r as Resource),
+      })),
+    ];
+    $("#industry-upgrade-costs").innerHTML = costs
+      .map(
+        (c) =>
+          `<span class="${c.have < c.need ? "missing" : "ready"}">${c.need} ${c.name}<small>${c.have.toLocaleString()} available</small></span>`,
+      )
+      .join("");
+    const reason = simulation.canUpgrade(b.id);
+    $<HTMLButtonElement>("#upgrade-building").disabled = !!reason;
+    $("#industry-upgrade-reason").textContent =
+      reason ?? `${next.labour} worker-seconds · inventory stays here.`;
+  }
+  if (isLeisure(b.kind)) {
+    const coverage = serviceCoverage(simulation, b);
+    const open =
+      !b.construction &&
+      b.enabled &&
+      b.workers >= d.jobs &&
+      serviceOpen(b.kind, daylight(simulation.state.tick).hour);
+    $("#service-detail").innerHTML =
+      `<h4>Nearby leisure · level ${b.level ?? 1}</h4><p>${open ? "Open for visits" : b.kind === "tavern" ? "Evening hours: 17:00–02:00 · requires two staff" : "Daytime visits: 06:00–20:00"}</p><p>${coverage.residents} / ${coverage.capacity} nearby residents · maximum ${coverage.range} road tiles. Green homes are in reach; amber homes need more capacity.</p>${coverage.homes.map((h) => `<button class="goods-link" data-service-home="${h.home.id}"><span>${escapeHtml(buildingName(h.home))} · ${h.home.x}, ${h.home.y}</span><small>${h.served} served · ${h.tiles} road tiles · ~${Math.ceil(h.seconds)}s walk</small></button>`).join("") || '<p class="muted">No homes within walking distance. Place homes closer and connect their road entrances.</p>'}`;
+    $("#service-detail").onclick = (event) => {
+      const el = (event.target as Element).closest<HTMLElement>(
+        "[data-service-home]",
+      );
+      if (el) {
+        scene.onSelect(Number(el.dataset.serviceHome));
+        scene.focusBuilding(Number(el.dataset.serviceHome));
+      }
+    };
+  } else if (b.kind === "house") {
+    const people = simulation.state.residents.filter((r) => r.home === b.id);
+    const need = people.length
+      ? Math.round(
+          people.reduce((sum, r) => sum + (r.leisure ?? 60), 0) / people.length,
+        )
+      : 0;
+    const nearby = simulation.state.buildings.filter(
+      (s) =>
+        isLeisure(s.kind) &&
+        serviceCoverage(simulation, s).homes.some(
+          (h) => h.home.id === b.id && h.served > 0,
+        ),
+    );
+    $("#service-detail").innerHTML =
+      `<h4>Leisure · ${need}%</h4><p>${nearby.length ? nearby.map((s) => escapeHtml(buildingName(s))).join(" · ") : "No nearby leisure. Build a fountain square or tavern within walking distance and connect the roads."}</p><p class="muted">Leisure improves after a visit. Workplaces must be within 28 road tiles; nearby jobs are assigned first.</p>`;
+  }
   if (isExtractor(b.kind) && !b.construction) {
     const depth = simulation.state.depositDepths?.[key(b)] ?? 0;
     const next = deeperLayer(depth);
@@ -962,7 +1073,7 @@ function updateInspector() {
       .filter((r) => r.job === b.id)
       .map((r) => escapeHtml(r.name));
     $("#building-detail").innerHTML =
-      `<h4>${b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Builders assigned</span><b>${b.workers} / ${builderCapacity(b)}</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div><p class="muted">${names.join(", ") || "Waiting for available residents."}</p>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
+      `<h4>${b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : b.construction.upgradeLevel ? "Building upgrade" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Builders assigned</span><b>${b.workers} / ${builderCapacity(b)}</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div><p class="muted">${names.join(", ") || "Waiting for available residents."}</p>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
     if (d.recipe) $("#production-logistics").hidden = true;
     $("#toggle-production").textContent = b.enabled
       ? "Pause construction"
@@ -1177,6 +1288,9 @@ function updateUI() {
     $(".resource.population").title,
   );
   $("#happiness").textContent = simulation.happiness() + "%";
+  $("#leisure").textContent = simulation.leisure() + "%";
+  $(".resource.happiness").title =
+    `Food ${s.food}% · leisure ${simulation.leisure()}% · actual nearby visits improve leisure`;
   const light = daylight(s.tick),
     clock = `${String(Math.floor(light.hour)).padStart(2, "0")}:${String(Math.floor((light.hour % 1) * 60)).padStart(2, "0")}`;
   $("#day").textContent =

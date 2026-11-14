@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { NightArt } from "./night-art.js";
+import { isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
 import {
   setupArtworkScaling,
   updateArtworkScaling,
@@ -762,6 +763,7 @@ export class TownScene extends Phaser.Scene {
         for (const p of footprint(b.kind, b.x, b.y, b.rotation, b.plot))
           this.diamond(p, 0xf3ce7b, 0.23);
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
+        if (isLeisure(b.kind)) this.drawCoverage(b);
       }
     }
     if (this.hover && this.tool !== "inspect") {
@@ -847,6 +849,16 @@ export class TownScene extends Phaser.Scene {
         );
       }
       if (isBuilding(kind)) {
+        if (isLeisure(kind))
+          this.drawCoverage(
+            servicePreview(
+              kind,
+              this.hover.x,
+              this.hover.y,
+              this.rotation,
+              moving?.level,
+            ),
+          );
         this.drawFront(kind, this.hover.x, this.hover.y, this.rotation, plot);
         this.ghost ??= this.add.image(0, 0, "building-house").setDepth(5001);
         this.placeSprite(
@@ -1006,6 +1018,25 @@ export class TownScene extends Phaser.Scene {
   }
   productionView(id: number | null = this.selected) {
     return this.logisticsCache.get(this.simulation, id);
+  }
+  private drawCoverage(b: Building) {
+    const coverage = serviceCoverage(this.simulation, b);
+    for (const h of coverage.homes) {
+      const color = h.served ? 0x7ee0ad : 0xe8b66a;
+      for (const p of footprint(
+        h.home.kind,
+        h.home.x,
+        h.home.y,
+        h.home.rotation,
+        h.home.plot,
+      ))
+        this.diamond(p, color, 0.2);
+      if (h.path && h.served)
+        this.overlay.lineStyle(1, color, 0.45).strokePoints(
+          h.path.map((p) => this.roadPoint(p)),
+          false,
+        );
+    }
   }
   private roadPoint(p: Point) {
     const v = iso(p.x, p.y);

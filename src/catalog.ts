@@ -19,6 +19,7 @@ export type BuildingKind =
   | "workshop"
   | "warehouse"
   | "park"
+  | "tavern"
   | "quarry"
   | "mine";
 export type HouseTier = 1 | 2 | 3;
@@ -70,12 +71,14 @@ export const houseCapacity = (b: {
 export const buildingInvestment = (b: {
   kind: BuildingKind;
   houseTier?: HouseTier;
+  level?: HouseTier;
 }) =>
   b.kind === "house"
     ? ([1, 2, 3] as HouseTier[])
         .filter((t) => t <= (b.houseTier ?? 1))
         .reduce((sum, t) => sum + HOUSE_TIERS[t].cost, 0)
-    : BUILDINGS[b.kind].cost;
+    : BUILDINGS[b.kind].cost *
+      ((b.level ?? 1) === 3 ? 6 : (b.level ?? 1) === 2 ? 3 : 1);
 export type DecorationKind =
   | "oak"
   | "pine"
@@ -291,6 +294,16 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     category: "town",
     description: "A little place to slow down. Improves the town’s happiness.",
   },
+  tavern: {
+    name: "Copper Mug tavern",
+    cost: 280,
+    jobs: 2,
+    frame: 0,
+    materials: { wood: 12, planks: 8, stone: 10 },
+    category: "town",
+    description:
+      "A warm evening meeting place. Serves nearby homes within 14 road tiles, from 17:00 to 02:00. Needs two staff.",
+  },
   quarry: {
     name: "Stone quarry",
     cost: 180,
@@ -346,6 +359,7 @@ export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
   workshop: [2, 2],
   warehouse: [2, 2],
   park: [2, 2],
+  tavern: [2, 2],
   quarry: [2, 2],
   mine: [2, 2],
 };

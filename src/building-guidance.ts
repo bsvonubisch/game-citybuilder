@@ -1,6 +1,7 @@
 import { BUILDINGS, type BuildingKind } from "./catalog.js";
 import type { Building, Simulation } from "./simulation.js";
 import type { ProductionConnections } from "./logistics.js";
+import { isLeisure, serviceCoverage } from "./proximity.js";
 
 export type GuidanceAction =
   | { type: "build"; kind: BuildingKind | "road" }
@@ -47,7 +48,9 @@ export function buildingGuidance(
     };
   if (!b.connected) {
     const warehouse = sim.state.buildings.find(
-      (other) => other.kind === "warehouse" && !other.construction,
+      (other) =>
+        other.kind === "warehouse" &&
+        (!other.construction || !!other.construction.upgradeLevel),
     );
     if (!warehouse && b.kind !== "warehouse") {
       const site = sim.state.buildings.find(
@@ -139,6 +142,22 @@ export function buildingGuidance(
       label: "Dig deeper",
       action: { type: "deepen" },
     };
+  if (alert.kind === "leisure") {
+    const nearby = sim.state.buildings.find(
+      (s) =>
+        isLeisure(s.kind) &&
+        serviceCoverage(sim, s).homes.some((h) => h.home.id === b.id),
+    );
+    return nearby
+      ? inspect(
+          nearby,
+          "A leisure building is close enough. Check its opening hours, staff and capacity; upgrading serves more neighbours.",
+        )
+      : build(
+          "tavern",
+          "Place an evening tavern within 14 road tiles of this home. Its preview highlights the homes it can serve; visits improve leisure after residents arrive.",
+        );
+  }
   if (b.kind === "fishery" && alert.kind === "input")
     return {
       message:

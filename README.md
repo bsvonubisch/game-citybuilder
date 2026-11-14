@@ -99,3 +99,11 @@ On phones, the build catalog becomes a drawer. One finger drags the map in any t
 ### Day and night
 
 The existing 60-second simulation day now cycles from an 08:00 start through gradual dawn/dusk lighting. At night, buildings and terrain take a cooler tint; existing amber windows and lantern pixels emit warm, depth-sorted light without replacement sprites. Lights follow rotation, camera motion and building moves. Ordinary industries and construction run at 25% pace, most residents wait at home, deliveries are dispatched less often, and fisheries finish existing trips but wait until daylight to launch. Pause and speed controls also govern the light cycle.
+
+### Nearby leisure and building improvements
+
+The Copper Mug tavern is a 2×2 evening leisure building (280 gold, 12 wood, 8 planks, 10 stone; 260 worker-seconds; two staff). It opens 17:00–02:00 and serves up to 18 residents within 14 road tiles. Fountain squares serve 12 within 10 road tiles during 06:00–20:00. Building/moving previews and inspection highlight reachable homes and actual road routes, with capacity limits and walking times. No connection means no coverage; walls being close together is not sufficient.
+
+Residents have a saved leisure need that slowly falls. Completed visits restore it: fountains +22, taverns +45. Food and leisure contribute to happiness. Low-leisure homes display an actionable warning. Evening journeys choose an available local service; satisfied residents stay home. Jobs are assigned to nearby connected homes first and have a maximum commute of 28 road tiles.
+
+All buildings have three functional levels. Existing house tiers remain; industries gain +35% production pace per level and storage of 20/40/60. Leisure buildings gain visitor capacity while retaining their walking range. Warehouse upgrades improve tool export prices. Upgrades cost materials and construction labor, keep inventory, identity and footprint, and persist in saves. Warehouse road access remains available during improvements. Extraction depth is separate and repeatable beyond level 3. Other actions stay under More actions; there is one main button.

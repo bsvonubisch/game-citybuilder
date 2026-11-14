@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
 import { daylight } from "./daylight.js";
+import { productionRate, outputCapacity } from "./upgrades.js";
 import { buildingArt } from "./building-art.js";
 import { rotorView } from "./windmill.js";
 import {
@@ -41,7 +42,7 @@ export function working(sim: Simulation, b: Building) {
     return false;
   return (
     (!r.input || (b.inventory[r.input] ?? 0) >= (r.amount ?? 0)) &&
-    (b.inventory[r.output] ?? 0) < 20
+    (b.inventory[r.output] ?? 0) < outputCapacity(b)
   );
 }
 
@@ -182,7 +183,9 @@ export class TownAnimation {
       const active = working(sim, b);
       const phase =
         (this.machineryTime.get(b.id) ?? b.id) +
-        (active ? dt * daylight(sim.state.tick).workRate : 0);
+        (active
+          ? dt * daylight(sim.state.tick).workRate * productionRate(b)
+          : 0);
       this.machineryTime.set(b.id, phase);
       if (b.kind === "mill") {
         let rotor = this.rotors.get(b.id);

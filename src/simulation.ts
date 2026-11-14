@@ -24,6 +24,18 @@ import {
 import { initialDecorations, type Decoration } from "./decorations.js";
 import { daylight } from "./daylight.js";
 import {
+  buildingLevel,
+  nextUpgrade,
+  productionRate,
+  outputCapacity,
+} from "./upgrades.js";
+import {
+  MAX_COMMUTE,
+  isLeisure,
+  serviceCoverage,
+  serviceOpen,
+} from "./proximity.js";
+import {
   DEPOSITS,
   INITIAL_RESERVE,
   deeperLayer,
@@ -71,6 +83,7 @@ export interface Building extends Point {
   rotation: 0 | 1 | 2 | 3;
   plot?: readonly [number, number];
   houseTier?: HouseTier;
+  level?: HouseTier;
   construction?: Construction;
   fishing?: FishingTrip;
 }
@@ -79,6 +92,7 @@ export interface Resident {
   name: string;
   home: number;
   job: number | null;
+  leisure?: number;
 }
 export interface Agent {
   id: number;
@@ -155,6 +169,7 @@ export interface BuildingAlert {
     | "workers"
     | "output"
     | "input"
+    | "leisure"
     | "construction";
   title: string;
   message: string;
@@ -209,6 +224,7 @@ const NAMES = [
 export class Simulation {
   state: World;
   private traffic = new Traffic();
+  private leisureByResident = new Map<number, Building[]>();
   private roadSet = new Set<string>();
   private processed = new Map<string, Result>();
   private terrainUndo?: {
@@ -418,7 +434,9 @@ export class Simulation {
     this.roadSet = new Set(this.state.roads);
     this.traffic.configure(this.roadSet);
     const warehouses = this.state.buildings.filter(
-      (b) => b.kind === "warehouse" && !b.construction,
+      (b) =>
+        b.kind === "warehouse" &&
+        (!b.construction || b.construction.upgradeLevel),
     );
     for (const b of this.state.buildings) {
       b.connected = warehouses.some((w) => !!this.route(b, w));
@@ -454,7 +472,13 @@ export class Simulation {
     );
     for (const r of this.state.residents) {
       const h = this.building(r.home)!;
-      const previous = jobs.find(
+      r.leisure ??= 60;
+      const nearby = jobs
+        .map((b) => ({ b, path: this.route(h, b) }))
+        .filter((j) => j.path && j.path.length - 1 <= MAX_COMMUTE)
+        .sort((a, b) => a.path!.length - b.path!.length || a.b.id - b.b.id)
+        .map((j) => j.b);
+      const previous = nearby.find(
         (b) =>
           b.id === r.job &&
           b.workers < BUILDINGS[b.kind].jobs &&
@@ -462,7 +486,7 @@ export class Simulation {
       );
       const job =
         (preserveTravel ? previous : undefined) ??
-        jobs.find(
+        nearby.find(
           (b) => b.workers < BUILDINGS[b.kind].jobs && this.route(h, b),
         );
       r.job = job?.id ?? null;
@@ -481,6 +505,23 @@ export class Simulation {
         site.workers++;
       }
     }
+    this.leisureByResident.clear();
+    for (const service of this.state.buildings.filter(
+      (b) =>
+        isLeisure(b.kind) &&
+        !b.construction &&
+        b.enabled &&
+        b.connected &&
+        b.workers >= BUILDINGS[b.kind].jobs,
+    ))
+      for (const h of serviceCoverage(this, service).homes)
+        for (const r of this.state.residents
+          .filter((r) => r.home === h.home.id)
+          .slice(0, h.served)) {
+          const choices = this.leisureByResident.get(r.id) ?? [];
+          choices.push(service);
+          this.leisureByResident.set(r.id, choices);
+        }
     this.state.agents = this.state.agents.filter((a) => {
       if (a.kind !== "truck") return false;
       const sourceBuilding = this.building(a.source),
@@ -509,15 +550,16 @@ export class Simulation {
     });
     for (const r of this.state.residents) {
       const home = this.building(r.home)!,
+        retained = travellers.find(
+          (a) =>
+            a.resident === r.id &&
+            a.source === home.id &&
+            this.building(a.target)?.connected,
+        ),
         destination =
-          this.building(r.job ?? -1) ??
-          this.state.buildings.find(
-            (b) =>
-              b.kind === "park" &&
-              !b.construction &&
-              b.connected &&
-              this.route(home, b),
-          ) ??
+          (retained && this.building(retained.target)) ??
+          this.residentDestination(r) ??
+          this.leisureByResident.get(r.id)?.[0] ??
           warehouses.find((w) => this.route(home, w));
       if (!destination) continue;
       const p = this.route(home, destination);
@@ -564,6 +606,29 @@ export class Simulation {
     }
     if (!preserveTravel) for (const a of this.state.agents) a.active = false;
     this.traffic.plan(this.state.agents);
+  }
+  private residentDestination(r: Resident) {
+    const hour = daylight(this.state.tick).hour;
+    const leisure = (this.leisureByResident.get(r.id) ?? []).filter((b) =>
+      serviceOpen(b.kind, hour),
+    );
+    leisure.sort(
+      (a, b) =>
+        (this.route(this.building(r.home)!, a)?.length ?? Infinity) -
+        (this.route(this.building(r.home)!, b)?.length ?? Infinity),
+    );
+    const job = this.building(r.job ?? -1);
+    if ((r.leisure ?? 60) < 90 && (!job || hour >= 17 || hour < 6))
+      return leisure[0] ?? job;
+    return job ?? ((r.leisure ?? 60) < 90 ? leisure[0] : undefined);
+  }
+  leisure() {
+    return this.state.residents.length
+      ? Math.round(
+          this.state.residents.reduce((sum, r) => sum + (r.leisure ?? 60), 0) /
+            this.state.residents.length,
+        )
+      : 100;
   }
   private retarget(a: Agent, destination: Building) {
     const entrances = this.adjacent(destination);
@@ -753,13 +818,13 @@ export class Simulation {
   }
   canUpgrade(id: number): string | null {
     const b = this.building(id);
-    if (!b || b.kind !== "house") return "Select a house to upgrade.";
+    if (!b) return "Select a building to upgrade.";
     if (b.construction) return "Finish the current construction first.";
-    if ((b.houseTier ?? 1) >= 3)
-      return "This house is already at the highest tier.";
+    if (buildingLevel(b) >= 3)
+      return "This building is already at the highest tier.";
     if (!b.connected)
       return "Connect the front entrance to a warehouse road before upgrading.";
-    const next = HOUSE_TIERS[((b.houseTier ?? 1) + 1) as HouseTier];
+    const next = nextUpgrade(b)!;
     if (this.state.money < next.cost)
       return `Need ${next.cost} gold to upgrade.`;
     for (const [r, n] of Object.entries(next.materials)) {
@@ -1062,17 +1127,17 @@ export class Simulation {
       if (error)
         return { ok: false, message: error, revision: this.state.revision };
       const b = this.building(c.id)!;
-      const tier = ((b.houseTier ?? 1) + 1) as HouseTier,
-        next = HOUSE_TIERS[tier];
+      const next = nextUpgrade(b)!,
+        tier = next.level;
       this.state.money -= next.cost;
       for (const [r, n] of Object.entries(next.materials))
         this.consume(r as Resource, n);
       b.construction = {
-        required: constructionWork("house", tier),
+        required: next.labour,
         completed: 0,
-        upgradeTo: tier,
+        ...(b.kind === "house" ? { upgradeTo: tier } : { upgradeLevel: tier }),
       };
-      message = `Upgrading to ${next.name.toLowerCase()}. Residents keep their home while builders work.`;
+      message = `Upgrading to ${next.name.toLowerCase()}. ${b.kind === "house" ? "Residents keep their home" : "Stored inventory stays here"} while builders work.`;
     } else if (c.type === "toggle") {
       const b = this.building(c.id);
       if (!b)
@@ -1117,6 +1182,7 @@ export class Simulation {
       );
       if (b.construction.completed >= b.construction.required) {
         if (b.construction.upgradeTo) b.houseTier = b.construction.upgradeTo;
+        if (b.construction.upgradeLevel) b.level = b.construction.upgradeLevel;
         if (b.construction.deeperTo !== undefined) {
           const depth = b.construction.deeperTo;
           this.state.depositDepths ??= {};
@@ -1152,13 +1218,13 @@ export class Simulation {
         (this.state.deposits[key(b)] ?? 0) < recipe.count
       )
         continue;
-      if ((b.inventory[recipe.output] ?? 0) >= 20) continue;
+      if ((b.inventory[recipe.output] ?? 0) >= outputCapacity(b)) continue;
       if (
         recipe.input &&
         (b.inventory[recipe.input] ?? 0) < (recipe.amount ?? 0)
       )
         continue;
-      b.progress += STEP * day.workRate;
+      b.progress += STEP * day.workRate * productionRate(b);
       if (b.progress >= recipe.seconds) {
         b.progress -= recipe.seconds;
         if (recipe.input) b.inventory[recipe.input]! -= recipe.amount!;
@@ -1169,13 +1235,39 @@ export class Simulation {
         b.produced += recipe.count;
       }
     }
+    for (const r of this.state.residents)
+      r.leisure = Math.max(0, (r.leisure ?? 60) - 0.04);
     for (const a of [...this.state.agents]) {
+      if (
+        a.resident !== null &&
+        a.active === false &&
+        !a.returning &&
+        !a.onsite
+      ) {
+        const r = this.state.residents.find((r) => r.id === a.resident),
+          destination = r && this.residentDestination(r),
+          home = this.building(a.source);
+        if (destination && home && destination.id !== a.target) {
+          const path = this.route(home, destination);
+          if (path) {
+            a.target = destination.id;
+            a.path = path;
+            a.segment = 0;
+            a.progress = 0;
+          }
+        }
+        if (!destination) a.wait = Math.max(a.wait, STEP * 2);
+      }
       // Finish journeys already on the road; most residents stay home at night.
       if (
         day.night &&
         a.kind !== "truck" &&
         a.resident !== null &&
         a.resident % 4 !== 0 &&
+        !(
+          isLeisure(this.building(a.target)?.kind ?? "") &&
+          serviceOpen(this.building(a.target)!.kind, day.hour)
+        ) &&
         !a.returning &&
         a.active === false &&
         !a.onsite
@@ -1202,12 +1294,29 @@ export class Simulation {
             this.state.delivered += a.amount;
             if (b.kind === "warehouse" && a.cargo === "tools") {
               b.inventory.tools! -= a.amount;
-              this.state.money += a.amount * 35;
+              this.state.money +=
+                a.amount * Math.round(35 * (1 + ((b.level ?? 1) - 1) * 0.1));
               this.state.exported += a.amount;
             }
           }
           this.state.agents = this.state.agents.filter((x) => x.id !== a.id);
         } else {
+          const arrival = this.building(a.target),
+            resident = this.state.residents.find((r) => r.id === a.resident);
+          if (
+            !a.returning &&
+            resident &&
+            arrival &&
+            isLeisure(arrival.kind) &&
+            serviceOpen(arrival.kind, day.hour) &&
+            this.leisureByResident
+              .get(resident.id)
+              ?.some((b) => b.id === arrival.id)
+          )
+            resident.leisure = Math.min(
+              100,
+              (resident.leisure ?? 60) + (arrival.kind === "tavern" ? 45 : 22),
+            );
           const home = this.building(a.source),
             destination = this.building(a.target);
           const reverse =
@@ -1304,7 +1413,8 @@ export class Simulation {
           )
           .reduce((n, a) => n + a.amount, 0);
         if (
-          (dest.inventory[r.output] ?? 0) + incoming >= 24 &&
+          (dest.inventory[r.output] ?? 0) + incoming >=
+            outputCapacity(dest) + 4 &&
           dest.kind !== "warehouse"
         )
           continue;
@@ -1350,11 +1460,8 @@ export class Simulation {
   happiness() {
     return Math.min(
       100,
-      60 +
-        this.state.buildings.filter(
-          (b) => b.kind === "park" && !b.construction && b.connected,
-        ).length *
-          6 +
+      55 +
+        Math.round(this.leisure() * 0.25) +
         Math.round(this.state.food * 0.2),
     );
   }
@@ -1362,7 +1469,7 @@ export class Simulation {
     if (b.construction)
       return {
         kind: "construction",
-        title: `${b.construction.deeperTo !== undefined ? "Digging deeper" : b.construction.upgradeTo ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
+        title: `${b.construction.deeperTo !== undefined ? "Digging deeper" : b.construction.upgradeTo || b.construction.upgradeLevel ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
         message: !b.enabled
           ? "Construction is paused. Resume it to assign builders."
           : !b.connected
@@ -1388,7 +1495,7 @@ export class Simulation {
             message:
               "Connect this entrance road to the front entrance of a warehouse.",
           };
-    if (!b.enabled && d.recipe)
+    if (!b.enabled && (d.recipe || isLeisure(b.kind)))
       return {
         kind: "paused",
         title: "Production paused",
@@ -1404,7 +1511,7 @@ export class Simulation {
         message:
           "This layer is exhausted. Dig deeper here to unlock another large reserve without moving the building.",
       };
-    if (d.recipe && (b.inventory[d.recipe.output] ?? 0) >= 20)
+    if (d.recipe && (b.inventory[d.recipe.output] ?? 0) >= outputCapacity(b))
       return {
         kind: "output",
         title: "Output storage full",
@@ -1432,12 +1539,28 @@ export class Simulation {
         message:
           "Leave at least three connected open water tiles beyond the pier. Boats avoid land, bridges, other piers and occupied fishing routes.",
       };
+    if (b.kind === "house") {
+      const residents = this.state.residents.filter((r) => r.home === b.id);
+      if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
+        return {
+          kind: "leisure",
+          title: "Needs nearby leisure",
+          message:
+            "Residents need a visit to a nearby fountain square or evening tavern. Connect homes and leisure with a short road route.",
+        };
+    }
     return null;
   }
   status(b: Building) {
     const alert = this.alert(b);
     if (alert) return alert.title;
     if (b.kind === "fishery") return fishingStatus(b);
+    if (isLeisure(b.kind))
+      return serviceOpen(b.kind, daylight(this.state.tick).hour)
+        ? "Open for nearby visitors"
+        : b.kind === "tavern"
+          ? "Opens at 17:00"
+          : "Opens at 06:00";
     const d = BUILDINGS[b.kind];
     return d.recipe
       ? "Producing"
@@ -1577,6 +1700,12 @@ export function parseSave(raw: string): World {
           b.construction.required <= 0 ||
           b.construction.required > 10000 ||
           b.construction.completed > b.construction.required ||
+          (b.construction.upgradeLevel !== undefined &&
+            (b.kind === "house" ||
+              ![2, 3].includes(b.construction.upgradeLevel) ||
+              b.construction.upgradeLevel !== (b.level ?? 1) + 1 ||
+              b.construction.deeperTo !== undefined ||
+              b.construction.upgradeTo !== undefined)) ||
           (b.construction.deeperTo !== undefined &&
             (!isExtractor(b.kind) ||
               !DEPOSITS[key(b)] ||
@@ -1594,6 +1723,8 @@ export function parseSave(raw: string): World {
       ![0, 1, 2, 3].includes(b.rotation) ||
       (b.houseTier !== undefined &&
         (b.kind !== "house" || ![1, 2, 3].includes(b.houseTier))) ||
+      (b.level !== undefined &&
+        (b.kind === "house" || ![1, 2, 3].includes(b.level))) ||
       (b.plot !== undefined &&
         (!Array.isArray(b.plot) ||
           b.plot.length !== 2 ||
@@ -1749,6 +1880,8 @@ export function parseSave(raw: string): World {
       s.buildings.some((b) => b.id === r.home && b.kind === "house"),
   );
   s.history = s.history.filter((x) => typeof x === "string").slice(0, 20);
+  for (const r of s.residents)
+    r.leisure = finite(r.leisure) ? Math.min(100, r.leisure!) : 60;
   s.nextId = Math.max(s.nextId, ...ids, ...s.residents.map((r) => r.id)) + 1;
   s.decorations ??= initialDecorations(
     new Set(s.roads),

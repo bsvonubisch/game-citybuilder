@@ -13,6 +13,7 @@ export const alertIcon: Record<BuildingAlert["kind"], string> = {
   workers: "people",
   output: "box",
   input: "download",
+  leisure: "heart",
 };
 
 /** Status is derived from the simulation. Only changed badges touch the DOM. */

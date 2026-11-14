@@ -6,6 +6,7 @@ export interface Construction {
   required: number;
   completed: number;
   upgradeTo?: HouseTier;
+  upgradeLevel?: HouseTier;
   /** Permanent excavation at the current deposit; completed depth is stored on the world. */
   deeperTo?: number;
 }
@@ -20,6 +21,7 @@ const LABOUR: Record<BuildingKind, number> = {
   workshop: 280,
   warehouse: 240,
   park: 100,
+  tavern: 260,
   quarry: 200,
   mine: 280,
 };
