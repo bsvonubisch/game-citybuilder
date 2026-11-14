@@ -29,11 +29,15 @@ export interface ProductionConnections {
 export function canSupply(source: Building, target: Building) {
   const output = BUILDINGS[source.kind].recipe?.output;
   return (
+    !source.construction &&
+    !target.construction &&
     !!output &&
     source.id !== target.id &&
     (BUILDINGS[target.kind].recipe?.input === output ||
       (target.kind === "warehouse" &&
-        ["bread", "tools", "wood", "planks", "stone", "metal"].includes(output)))
+        ["bread", "tools", "wood", "planks", "stone", "metal"].includes(
+          output,
+        )))
   );
 }
 

@@ -24,6 +24,8 @@ import {
 } from "./rendering.js";
 import { buildingArt } from "./building-art.js";
 import { PlotArt } from "./plot-art.js";
+import { ConstructionArt } from "./construction-art.js";
+import { builderPosition, builderFrame } from "./construction.js";
 import { MapTouches, gestureCamera } from "./gestures.js";
 import { BuildingAlerts } from "./building-alerts.js";
 import {
@@ -140,6 +142,7 @@ export class TownScene extends Phaser.Scene {
     this.drawOverlay();
   }
   private plotArt!: PlotArt;
+  private constructionArt!: ConstructionArt;
   private buildingAlerts!: BuildingAlerts;
   private cameraKey = "";
   private bridgeArt!: BridgeArt;
@@ -197,9 +200,23 @@ export class TownScene extends Phaser.Scene {
     this.load.image("deposits", "/alpine-deposits.png");
     this.load.image("brook", "/brook-hd.png");
     this.load.image("mill", "/windmill-parts.png");
+    this.load.image("construction-props", "/construction-props.png");
+    this.load.image("construction-workers", "/construction-workers.png");
   }
   create() {
     this.plotArt = new PlotArt(this);
+    this.constructionArt = new ConstructionArt(this);
+    const builderTexture = this.textures.get("construction-workers"),
+      builderSource = builderTexture.getSourceImage() as HTMLImageElement;
+    for (let frame = 0; frame < 16; frame++)
+      builderTexture.add(
+        frame,
+        0,
+        Math.floor(((frame % 4) * builderSource.width) / 4),
+        Math.floor((Math.floor(frame / 4) * builderSource.height) / 4),
+        Math.floor(builderSource.width / 4),
+        Math.floor(builderSource.height / 4),
+      );
     this.buildingAlerts = new BuildingAlerts(
       document.querySelector("#building-alerts")!,
       (id) => this.onSelect(id),
@@ -473,6 +490,7 @@ export class TownScene extends Phaser.Scene {
     };
   }
   redraw() {
+    this.constructionArt.sync(this.simulation);
     this.renderRevision = this.simulation.state.revision;
     this.terrainArt.redraw(this.simulation);
     this.elevationArt.redraw(this.simulation);
@@ -576,7 +594,9 @@ export class TownScene extends Phaser.Scene {
           .setInteractive({ pixelPerfect: true });
         this.buildings.set(b.id, s);
       }
-      this.placeSprite(s, b.kind, b.x, b.y, b.rotation, b.plot, b.houseTier);
+      if (b.construction) this.constructionArt.place(s, b, this.simulation);
+      else
+        this.placeSprite(s, b.kind, b.x, b.y, b.rotation, b.plot, b.houseTier);
       s.setDepth((b.x + b.y + w + h - 2) * 32 + 12).setAlpha(
         b.enabled ? 1 : 0.55,
       );
@@ -1049,6 +1069,7 @@ export class TownScene extends Phaser.Scene {
       }
     for (const a of this.simulation.state.agents) {
       let s = this.people.get(a.id);
+      const site = a.onsite ? this.simulation.building(a.onsite) : undefined;
       const p = lanePose(a, agentDistance(a, this.acc)),
         direction = facing(p.dx, p.dy);
       const texture = a.kind === "person" ? "walkers" : "vehicles";
@@ -1093,18 +1114,19 @@ export class TownScene extends Phaser.Scene {
                 (this.simulation.state.tick + this.acc / STEP) * 1.1 + a.id,
               ) * 0.55
             : 0;
-      s.setPosition(
-        v.x,
-        v.y -
-          roadHeight(
-            this.simulation.roads,
-            p.x,
-            p.y,
-            this.simulation.state.buildings,
-            this.simulation.state.terrain,
-          ) +
-          bob,
-      )
+      s.setOrigin(0.5, a.kind === "person" ? 1 : 0.8)
+        .setPosition(
+          v.x,
+          v.y -
+            roadHeight(
+              this.simulation.roads,
+              p.x,
+              p.y,
+              this.simulation.state.buildings,
+              this.simulation.state.terrain,
+            ) +
+            bob,
+        )
         .setVisible(a.active !== false)
         .setDepth(
           travellerDepth(
@@ -1119,6 +1141,31 @@ export class TownScene extends Phaser.Scene {
           ),
         )
         .setFlipX(a.kind === "person" && walk.flip);
+      if (site?.construction) {
+        const crew = this.simulation.state.agents.filter(
+            (a) => a.onsite === site.id,
+          ),
+          slot = crew.findIndex((c) => c.id === a.id);
+        const p = builderPosition(site, slot),
+          v = iso(p.x, p.y),
+          [w, h] = dimensions(site.kind, site.rotation, site.plot);
+        const working = site.enabled && site.connected;
+        const phase = this.simulation.state.tick * STEP + this.acc + a.id;
+        const pose = builderFrame(a.resident ?? a.id, slot % 2, phase, working);
+        s.setTexture("construction-workers", pose.frame)
+          .setOrigin(pose.originX, pose.originY)
+          .setScale(
+            pose.size /
+              this.textures.getFrame("construction-workers", pose.frame).height,
+          )
+          .setPosition(
+            v.x,
+            v.y - groundHeight(site.x, site.y, this.simulation.state.terrain),
+          )
+          .setVisible(true)
+          .setFlipX(false)
+          .setDepth((site.x + site.y + w + h - 2) * 32 + 12.25 + slot * 0.01);
+      }
       if (a.kind !== "person")
         this.animation.vehicle(
           a,
@@ -1144,7 +1191,7 @@ export class TownScene extends Phaser.Scene {
         const [w, h] = dimensions(b.kind, b.rotation, b.plot);
         return {
           x: iso(b.x + (w - 1) / 2, b.y + (h - 1) / 2).x,
-          y: sprite.y - 4,
+          y: sprite.y + (b.construction ? 16 : -4),
         };
       },
     );

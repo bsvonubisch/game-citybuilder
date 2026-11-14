@@ -98,9 +98,12 @@ test("sawmills deliver usable construction planks to warehouses while workshops 
   );
   const house = building(sim, "house");
   execute(sim, { type: "upgrade", id: house.id });
+  for (let i = 0; i < 5000 && house.construction; i++) sim.step();
+  assert.equal(house.houseTier, 2);
   const before = sim.stored("planks");
   execute(sim, { type: "upgrade", id: house.id });
   assert.equal(sim.stored("planks"), before - 16);
+  for (let i = 0; i < 5000 && house.construction; i++) sim.step();
   assert.equal(house.houseTier, 3);
 });
 

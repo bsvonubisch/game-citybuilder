@@ -24,6 +24,11 @@ import { initialDecorations, type Decoration } from "./decorations.js";
 import { Traffic } from "./traffic.js";
 import { canSupply } from "./logistics.js";
 import {
+  builderCapacity,
+  constructionWork,
+  type Construction,
+} from "./construction.js";
+import {
   terrainCell,
   groundHeight,
   planTerrain,
@@ -47,6 +52,7 @@ export interface Building extends Point {
   rotation: 0 | 1 | 2 | 3;
   plot?: readonly [number, number];
   houseTier?: HouseTier;
+  construction?: Construction;
 }
 export interface Resident {
   id: number;
@@ -71,6 +77,7 @@ export interface Agent {
   active?: boolean;
   trafficWait?: boolean;
   queuedTicks?: number;
+  onsite?: number;
 }
 export interface World {
   version: 3;
@@ -124,7 +131,8 @@ export interface BuildingAlert {
     | "depleted"
     | "workers"
     | "output"
-    | "input";
+    | "input"
+    | "construction";
   title: string;
   message: string;
 }
@@ -394,13 +402,16 @@ export class Simulation {
     this.roadSet = new Set(this.state.roads);
     this.traffic.configure(this.roadSet);
     const warehouses = this.state.buildings.filter(
-      (b) => b.kind === "warehouse",
+      (b) => b.kind === "warehouse" && !b.construction,
     );
     for (const b of this.state.buildings) {
       b.connected = warehouses.some((w) => !!this.route(b, w));
       b.workers = 0;
     }
-    const homes = this.state.buildings.filter((b) => b.kind === "house");
+    const homes = this.state.buildings.filter(
+      (b) =>
+        b.kind === "house" && (!b.construction || b.construction.upgradeTo),
+    );
     this.state.residents = this.state.residents.filter((r) =>
       homes.some((h) => h.id === r.home),
     );
@@ -419,7 +430,11 @@ export class Simulation {
       }
     }
     const jobs = this.state.buildings.filter(
-      (b) => b.connected && b.enabled && BUILDINGS[b.kind].jobs > 0,
+      (b) =>
+        !b.construction &&
+        b.connected &&
+        b.enabled &&
+        BUILDINGS[b.kind].jobs > 0,
     );
     for (const r of this.state.residents) {
       const h = this.building(r.home)!;
@@ -436,6 +451,19 @@ export class Simulation {
         );
       r.job = job?.id ?? null;
       if (job) job.workers++;
+    }
+    const sites = this.state.buildings.filter(
+      (b) => b.construction && b.connected && b.enabled,
+    );
+    for (const r of this.state.residents.filter((r) => r.job === null)) {
+      const home = this.building(r.home)!;
+      const site = sites.find(
+        (b) => b.workers < builderCapacity(b) && this.route(home, b),
+      );
+      if (site) {
+        r.job = site.id;
+        site.workers++;
+      }
     }
     this.state.agents = this.state.agents.filter((a) => {
       if (a.kind !== "truck") return false;
@@ -468,7 +496,11 @@ export class Simulation {
         destination =
           this.building(r.job ?? -1) ??
           this.state.buildings.find(
-            (b) => b.kind === "park" && b.connected && this.route(home, b),
+            (b) =>
+              b.kind === "park" &&
+              !b.construction &&
+              b.connected &&
+              this.route(home, b),
           ) ??
           warehouses.find((w) => this.route(home, w));
       if (!destination) continue;
@@ -483,13 +515,25 @@ export class Simulation {
         existing &&
         this.retarget(existing, existing.returning ? home : destination)
       ) {
+        if (existing.onsite && !destination.construction) {
+          delete existing.onsite;
+          existing.wait = 0;
+          existing.path = this.route(destination, home) ?? existing.path;
+          existing.segment = 0;
+          existing.progress = 0;
+          existing.returning = true;
+        }
         this.state.agents.push(existing);
         continue;
       }
       if (p)
         this.state.agents.push({
           id: this.state.nextId++,
-          kind: r.id % 4 === 0 ? "car" : "person",
+          kind: destination.construction
+            ? "person"
+            : r.id % 4 === 0
+              ? "car"
+              : "person",
           path: p,
           segment: 0,
           progress: 0,
@@ -663,6 +707,7 @@ export class Simulation {
   canUpgrade(id: number): string | null {
     const b = this.building(id);
     if (!b || b.kind !== "house") return "Select a house to upgrade.";
+    if (b.construction) return "Finish the current construction first.";
     if ((b.houseTier ?? 1) >= 3)
       return "This house is already at the highest tier.";
     if (!b.connected)
@@ -814,13 +859,16 @@ export class Simulation {
           rotation: c.rotation ?? 0,
           plot: dimensions(c.kind, c.rotation),
           ...(c.kind === "house" ? { houseTier: 1 as const } : {}),
+          construction: { required: constructionWork(c.kind), completed: 0 },
         });
       message =
         c.kind === "road" || c.kind === "bridge"
           ? terrain(c.x, c.y, this.state.terrain) === "water"
             ? "Bridge built. Connect both ends to roads."
             : "Road laid."
-          : `${isDecoration(c.kind) ? DECORATIONS[c.kind].name : BUILDINGS[c.kind].name} built.`;
+          : isDecoration(c.kind)
+            ? `${DECORATIONS[c.kind].name} placed.`
+            : `${BUILDINGS[c.kind].name} construction started. Available residents will build it.`;
     } else if (c.type === "demolish") {
       const b = this.buildingAt(c.x, c.y),
         decoration = this.decorationAt(c.x, c.y);
@@ -933,8 +981,12 @@ export class Simulation {
       this.state.money -= next.cost;
       for (const [r, n] of Object.entries(next.materials))
         this.consume(r as Resource, n);
-      b.houseTier = tier;
-      message = `Upgraded to ${next.name.toLowerCase()}. Room for ${next.capacity} residents.`;
+      b.construction = {
+        required: constructionWork("house", tier),
+        completed: 0,
+        upgradeTo: tier,
+      };
+      message = `Upgrading to ${next.name.toLowerCase()}. Residents keep their home while builders work.`;
     } else if (c.type === "toggle") {
       const b = this.building(c.id);
       if (!b)
@@ -947,7 +999,8 @@ export class Simulation {
       message = b.enabled ? "Production resumed." : "Production paused.";
     }
     this.state.revision++;
-    if (networkChanged) this.reconnect(c.type === "move");
+    if (networkChanged)
+      this.reconnect(["move", "place", "upgrade"].includes(c.type));
     if (c.type === "move" && !this.building(c.id)?.connected)
       message +=
         " Connect the front entrance to the warehouse road network to resume work.";
@@ -961,9 +1014,36 @@ export class Simulation {
   }
   step() {
     this.state.tick++;
+    let completed = false;
+    for (const b of this.state.buildings) {
+      if (!b.construction || !b.connected || !b.enabled) continue;
+      const crew = this.state.agents.filter(
+        (a) =>
+          a.onsite === b.id &&
+          this.state.residents.some(
+            (r) => r.id === a.resident && r.job === b.id,
+          ),
+      ).length;
+      b.construction.completed = Math.min(
+        b.construction.required,
+        b.construction.completed + crew * STEP,
+      );
+      if (b.construction.completed >= b.construction.required) {
+        if (b.construction.upgradeTo) b.houseTier = b.construction.upgradeTo;
+        delete b.construction;
+        this.state.history.unshift(`${buildingName(b)} construction finished.`);
+        completed = true;
+      }
+    }
+    if (completed) {
+      this.state.history = this.state.history.slice(0, 20);
+      this.state.revision++;
+      this.reconnect(true);
+    }
     for (const b of this.state.buildings) {
       const recipe = BUILDINGS[b.kind].recipe;
       if (
+        b.construction ||
         !recipe ||
         !b.enabled ||
         !b.connected ||
@@ -993,6 +1073,11 @@ export class Simulation {
       }
     }
     for (const a of [...this.state.agents]) {
+      if (a.onsite && this.building(a.onsite)?.construction) {
+        a.wait = 1;
+        a.active = false;
+        continue;
+      }
       if (a.wait > 0) {
         a.wait -= STEP;
         continue;
@@ -1030,6 +1115,16 @@ export class Simulation {
           a.returning = !a.returning;
           a.wait = 4 + (a.id % 8);
           a.active = false;
+          if (
+            a.returning &&
+            this.building(a.target)?.construction &&
+            this.state.residents.some(
+              (r) => r.id === a.resident && r.job === a.target,
+            )
+          ) {
+            a.onsite = a.target;
+            a.wait = 1;
+          }
         }
       }
     }
@@ -1055,6 +1150,7 @@ export class Simulation {
     for (const b of this.state.buildings) {
       const r = BUILDINGS[b.kind].recipe;
       if (
+        b.construction ||
         !r ||
         !b.connected ||
         !b.enabled ||
@@ -1121,13 +1217,26 @@ export class Simulation {
     return Math.min(
       100,
       60 +
-        this.state.buildings.filter((b) => b.kind === "park" && b.connected)
-          .length *
+        this.state.buildings.filter(
+          (b) => b.kind === "park" && !b.construction && b.connected,
+        ).length *
           6 +
         Math.round(this.state.food * 0.2),
     );
   }
   alert(b: Building): BuildingAlert | null {
+    if (b.construction)
+      return {
+        kind: "construction",
+        title: `${b.construction.upgradeTo ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
+        message: !b.enabled
+          ? "Construction is paused. Resume it to assign builders."
+          : !b.connected
+            ? "Connect the front entrance to a warehouse road so builders can reach the site."
+            : !b.workers
+              ? "Waiting for residents without an assigned job. Free up workers or connect more homes."
+              : `${b.workers} builders assigned · ${this.state.agents.filter((a) => a.onsite === b.id).length} on site · ${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds remaining.`,
+      };
     const d = BUILDINGS[b.kind];
     if (!b.connected)
       return this.adjacent(b).length === 0
@@ -1264,6 +1373,17 @@ export function parseSave(raw: string): World {
       b.id < 1 ||
       ids.has(b.id) ||
       !b.inventory ||
+      (b.construction !== undefined &&
+        (!b.construction ||
+          !finite(b.construction.completed) ||
+          !finite(b.construction.required) ||
+          b.construction.required <= 0 ||
+          b.construction.required > 10000 ||
+          b.construction.completed > b.construction.required ||
+          (b.construction.upgradeTo !== undefined &&
+            (b.kind !== "house" ||
+              ![2, 3].includes(b.construction.upgradeTo) ||
+              b.construction.upgradeTo !== (b.houseTier ?? 1) + 1)))) ||
       !finite(b.progress) ||
       !finite(b.produced) ||
       typeof b.enabled !== "boolean" ||

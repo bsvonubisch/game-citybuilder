@@ -30,7 +30,8 @@ export function walkFrame(
 export function working(sim: Simulation, b: Building) {
   const d = BUILDINGS[b.kind],
     r = d.recipe;
-  if (!r || !b.enabled || !b.connected || b.workers < d.jobs) return false;
+  if (b.construction || !r || !b.enabled || !b.connected || b.workers < d.jobs)
+    return false;
   if (
     (b.kind === "quarry" || b.kind === "mine") &&
     (sim.state.deposits[key(b)] ?? 0) < r.count
@@ -170,6 +171,11 @@ export class TownAnimation {
         this.rotors.delete(id);
       }
     for (const b of sim.state.buildings) {
+      if (b.construction) {
+        this.effects.get(b.id)?.clear();
+        this.rotors.get(b.id)?.setVisible(false);
+        continue;
+      }
       const art = buildingArt(b.kind, b.rotation, b.houseTier);
       const active = working(sim, b);
       const phase = (this.machineryTime.get(b.id) ?? b.id) + (active ? dt : 0);
@@ -182,6 +188,7 @@ export class TownAnimation {
         }
         const p = this.point(b, ...art.mechanism!);
         rotor
+          .setVisible(true)
           .setPosition(p.x, p.y)
           .setScale((p.scale * 0.7) / ROTOR_SCALE)
           .setFlipX(b.rotation % 2 === 1)

@@ -26,6 +26,12 @@ import {
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
 import {
+  constructionWork,
+  builderFrame,
+  builderPosition,
+  builderCapacity,
+} from "../.test-dist/construction.js";
+import {
   bridgeRails,
   roadHeight,
   BRIDGE_HEIGHT,
@@ -48,6 +54,110 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+const finishConstruction = (sim, b) => {
+  for (let i = 0; i < 5000 && b.construction; i++) sim.step();
+  assert.equal(b.construction, undefined, "builders complete their work");
+};
+test("construction work scales by tier and worker animation keeps fixed feet and stays inside every plot", () => {
+  assert.ok(constructionWork("house", 3) > constructionWork("house", 2));
+  assert.ok(constructionWork("house", 2) > constructionWork("house"));
+  for (const kind of Object.keys(BUILDINGS))
+    for (let rotation = 0; rotation < 4; rotation++) {
+      const b = { kind, rotation, x: 4, y: 4 },
+        [w, h] = dimensions(kind, rotation);
+      for (let slot = 0; slot < builderCapacity(b); slot++) {
+        const p = builderPosition(b, slot);
+        assert.ok(
+          p.x > b.x - 0.5 &&
+            p.x < b.x + w - 0.5 &&
+            p.y > b.y - 0.5 &&
+            p.y < b.y + h - 0.5,
+        );
+        const idle = builderFrame(slot % 2, slot % 2, 0, false),
+          frames = new Set();
+        for (let t = 0; t < 2; t += 0.1) {
+          const pose = builderFrame(slot % 2, slot % 2, t, true);
+          frames.add(pose.frame);
+          assert.equal(pose.originX, idle.originX);
+          assert.equal(pose.originY, idle.originY);
+          assert.equal(pose.size, idle.size);
+          assert.deepEqual(builderFrame(slot % 2, slot % 2, t, false), idle);
+        }
+        assert.equal(frames.size, 4);
+      }
+    }
+});
+
+test("construction requires available builders to arrive, reserves costs once and opens only when complete", () => {
+  const sim = new Simulation(),
+    money = sim.state.money,
+    wood = sim.stored("wood");
+  const jobs = sim.state.residents
+    .filter((r) => r.job !== null)
+    .map((r) => [r.id, r.job]);
+  assert.equal(
+    execute(sim, { type: "place", kind: "house", x: 4, y: 11, rotation: 1 }).ok,
+    true,
+  );
+  const b = sim.buildingAt(4, 11);
+  assert.ok(b.construction);
+  assert.equal(sim.state.money, money - BUILDINGS.house.cost);
+  assert.equal(sim.stored("wood"), wood - BUILDINGS.house.materials.wood);
+  assert.equal(sim.state.residents.filter((r) => r.home === b.id).length, 0);
+  assert.ok(b.workers > 0);
+  for (const [id, job] of jobs)
+    assert.equal(
+      sim.state.residents.find((r) => r.id === id).job,
+      job,
+      "existing industry worker keeps their job",
+    );
+  sim.step();
+  assert.equal(b.construction.completed, 0, "travel does not count as labour");
+  for (
+    let i = 0;
+    i < 500 && !sim.state.agents.some((a) => a.onsite === b.id);
+    i++
+  )
+    sim.step();
+  const crew = sim.state.agents.filter((a) => a.onsite === b.id);
+  assert.ok(crew.length > 0, "builders reach the site");
+  const progress = b.construction.completed;
+  sim.step();
+  assert.equal(b.construction.completed, progress + crew.length * STEP);
+  const saved = new Simulation(parseSave(JSON.stringify(sim.state)));
+  assert.equal(
+    saved.building(b.id).construction.completed,
+    b.construction.completed,
+  );
+  assert.equal(
+    execute(sim, { type: "move", id: b.id, x: b.x, y: b.y }).ok,
+    true,
+  );
+  assert.equal(
+    b.construction.completed,
+    progress + crew.length * STEP,
+    "moving preserves labour",
+  );
+  finishConstruction(sim, b);
+  assert.equal(sim.state.residents.filter((r) => r.home === b.id).length, 3);
+  assert.equal(
+    sim.state.agents.some((a) => a.onsite === b.id),
+    false,
+    "builders leave after completion",
+  );
+});
+
+test("disconnected or unstaffed construction never progresses and malformed progress is rejected", () => {
+  const sim = new Simulation();
+  execute(sim, { type: "place", kind: "house", x: 4, y: 11, rotation: 0 });
+  const b = sim.buildingAt(4, 11);
+  advance(sim, 120);
+  assert.equal(b.construction.completed, 0);
+  assert.equal(b.workers, 0);
+  assert.match(sim.alert(b).message, /front entrance/);
+  b.construction.completed = -1;
+  assert.throws(() => parseSave(JSON.stringify(sim.state)), /Invalid building/);
+});
 
 test("moving preserves a working building, stocks, labour, progress and live deliveries", () => {
   const sim = new Simulation();
@@ -587,20 +697,36 @@ test("house upgrades charge once, retain families and plots, persist and increas
   };
   assert.equal(sim.execute(env).ok, true);
   assert.equal(sim.execute(env).ok, true);
-  assert.equal(house.houseTier, 2);
+  assert.equal(house.houseTier, 1);
+  assert.equal(house.construction.upgradeTo, 2);
   assert.equal(sim.state.money, money - 180);
   assert.equal(sim.stored("wood"), wood - 12);
   assert.equal(sim.stored("stone"), stone - 10);
   assert.equal(
     sim.state.residents.filter((r) => r.home === house.id).length,
+    3,
+    "existing family stays during renovation",
+  );
+  finishConstruction(sim, house);
+  assert.equal(house.houseTier, 2);
+  assert.equal(
+    sim.state.residents.filter((r) => r.home === house.id).length,
     6,
   );
+  const upgradeMoney = sim.state.money,
+    upgradePlanks = sim.stored("planks"),
+    upgradeStone = sim.stored("stone"),
+    upgradeMetal = sim.stored("metal");
   assert.equal(execute(sim, { type: "upgrade", id: house.id }).ok, true);
+  assert.equal(houseCapacity(house), 6);
+  assert.equal(sim.state.money, upgradeMoney - 420);
+  assert.equal(sim.stored("planks"), upgradePlanks - 16);
+  assert.equal(sim.stored("stone"), upgradeStone - 20);
+  assert.equal(sim.stored("metal"), upgradeMetal - 8);
+  const saved = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+  assert.equal(saved.building(house.id).construction.upgradeTo, 3);
+  finishConstruction(sim, house);
   assert.equal(houseCapacity(house), 9);
-  assert.equal(sim.state.money, money - 600);
-  assert.equal(sim.stored("planks"), 24);
-  assert.equal(sim.stored("stone"), stone - 30);
-  assert.equal(sim.stored("metal"), metal - 8);
   assert.deepEqual(
     { x: house.x, y: house.y, rotation: house.rotation, plot: house.plot },
     original,
@@ -1011,6 +1137,7 @@ test("front access distinguishes the entrance from side and back roads", () => {
     true,
     "turning the entrance to the existing road connects the house",
   );
+  finishConstruction(sim, b);
   const residents = sim.state.residents
     .filter((r) => r.home === b.id)
     .map((r) => r.id);

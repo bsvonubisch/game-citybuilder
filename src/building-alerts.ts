@@ -5,6 +5,7 @@ import type { Building, BuildingAlert, Simulation } from "./simulation.js";
 import type Phaser from "phaser";
 
 export const alertIcon: Record<BuildingAlert["kind"], string> = {
+  construction: "hammer",
   road: "road-off",
   warehouse: "warehouse-off",
   paused: "pause",
@@ -59,7 +60,12 @@ export class BuildingAlerts {
         if (badge.signature !== signature) {
           badge.signature = signature;
           badge.button.dataset.kind = alert.kind;
-          badge.button.innerHTML = `${icon(alertIcon[alert.kind])}<span class="building-alert-tip" role="tooltip" id="building-alert-tip-${b.id}"><strong></strong><span></span></span>`;
+          const progress = b.construction
+            ? Math.floor(
+                (b.construction.completed / b.construction.required) * 100,
+              )
+            : 0;
+          badge.button.innerHTML = `${icon(alertIcon[alert.kind])}${b.construction ? `<span class="construction-meter" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></span><span class="construction-percent">${progress}%</span>` : ""}<span class="building-alert-tip" role="tooltip" id="building-alert-tip-${b.id}"><strong></strong><span></span></span>`;
           badge.button.querySelector("strong")!.textContent = label;
           badge.button.querySelector(
             ".building-alert-tip > span",

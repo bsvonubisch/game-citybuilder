@@ -28,7 +28,8 @@ npm run build
 - Isometric 28×28 valley; pan, zoom, grid, building inspection, and speed controls.
 - Detailed Alpine Slate paving, continuous meadow grass, and Clear Brook water with shallow riverbed stones, banks, and reeds. Terrain retains four source pixels per world pixel through the maximum zoom.
 - Build wooden bridges with B: 35 gold per water tile. Raised decks, ramps, capped railings, and support posts follow the road connections. Cars, pedestrians, and delivery trucks cross at deck height; existing roads over water become bridges automatically.
-- All eleven buildings rotate four ways before placement and after construction (R or Rotate). Rectangular plots rotate with the building; occupied roads, buildings and water block an invalid turn.
+- All eleven buildings rotate four ways in the build or Move preview (R or Rotate). Select a built building and choose Move to relocate it with its identity, inventory, production progress and tier intact. The inspector has no separate rotation action. Occupied roads, buildings and water block an invalid move.
+- New buildings begin as dirt construction sites with modular timber scaffolding and material stacks sized to their footprint. Unassigned residents walk to the site, remain visible there and use dedicated hammering/digging sprite cycles. Only builders who have arrived contribute labor. Site badges and inspectors show progress, assigned builders, on-site builders and remaining work. Houses open after completion; upgrades retain their existing residents and take longer at higher tiers (300 / 600 worker-seconds). Construction saves and moves retain completed labor.
 - The front entrance determines road access. A front edge and arrow show green when a road reaches that side and amber when it does not. The entrance road must connect to a warehouse for employment and production.
 - Pedestrian walk cycles, turning vehicle wheels, windmill sails, working saw/conveyor details, hearth smoke, fountain droplets, and gentle water glints. Pause and speed controls apply to animation as well as the simulation.
 - Full paved lots cover explicit 2×2, 3×2 and rotated 2×3 footprints. Building art uses uniform scale and translation only, retaining its original proportions; the separate flat paving follows the grid. Existing towns retain occupied plots, buildings, residents and inventories.
@@ -49,7 +50,7 @@ npm run build
 
 ## Controls
 
-Choose a building, rotate it with R or Rotate, then click an empty plot. The preview shows the full footprint and a front entrance arrow: green for road access, amber for a missing entrance road. Click buildings, people, cars or decorations while exploring to inspect them. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R rotates the building being placed or inspected (otherwise selects roads), B selects bridges, X removes, G toggles the grid, and Escape cancels a tool. Connect bridges to roads at both banks; open-water ends make piers.
+Choose a building, rotate it with R or Rotate, then click an empty plot. The preview shows the full footprint and a front entrance arrow: green for road access, amber for a missing entrance road. Click buildings, people, cars or decorations while exploring to inspect them. Hold Space and drag, right-drag, or use WASD/arrow keys to pan; scroll to zoom. V explores, R rotates the building being placed or moved (otherwise selects roads), B selects bridges, X removes, G toggles the grid, and Escape cancels a tool. Connect bridges to roads at both banks; open-water ends make piers.
 
 ## Firebase & GitHub
 

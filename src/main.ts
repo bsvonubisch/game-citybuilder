@@ -27,6 +27,7 @@ import {
   type Building,
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
+import { builderCapacity, constructionWork } from "./construction.js";
 import { TownScene } from "./scene.js";
 import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
@@ -238,7 +239,7 @@ function setTool(next: Tool) {
         .map(([r, n]) => `· ${n} ${r}`)
         .join(
           " ",
-        )} · ${dimensions(next as BuildingKind, scene.rotation).join("×")} tiles ${isBuilding(next) ? `<button id="rotate-placement" class="rotate-placement" title="Rotate building (R)">${icon("reset")} Rotate <kbd>R</kbd></button><span id="front-access"></span>` : ""} <kbd>Esc</kbd>`
+        )} · ${dimensions(next as BuildingKind, scene.rotation).join("×")} tiles · ${constructionWork(next as BuildingKind)} worker-seconds ${isBuilding(next) ? `<button id="rotate-placement" class="rotate-placement" title="Rotate building (R)">${icon("reset")} Rotate <kbd>R</kbd></button><span id="front-access"></span>` : ""} <kbd>Esc</kbd>`
     : decoration
       ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
       : next === "road"
@@ -518,6 +519,7 @@ function renderInspector() {
   const panel = $("#inspector");
   panel.hidden = !b;
   if (!b) return;
+  panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${!!b.construction}`;
   panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
   panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
@@ -532,6 +534,7 @@ function renderInspector() {
       scene.focusBuilding(id);
     };
   if (b.kind === "house") {
+    $("#house-upgrade").hidden = !!b.construction;
     const tier = b.houseTier ?? 1;
     if (tier < 3) {
       const nextTier = (tier + 1) as HouseTier,
@@ -613,7 +616,7 @@ function renderAgentInspector() {
   $("#close-inspector").onclick = closeInspection;
   $("#show-destination").onclick = () => {
     const a = simulation.state.agents.find((a) => a.id === selectedAgent);
-    if (a) scene.focusBuilding(a.returning ? a.source : a.target);
+    if (a) scene.focusBuilding(a.onsite ?? (a.returning ? a.source : a.target));
   };
   updateAgentInspector();
 }
@@ -625,6 +628,18 @@ function updateAgentInspector() {
     return;
   }
   const person = simulation.state.residents.find((r) => r.id === a.resident);
+  if (a.onsite) {
+    const site = simulation.building(a.onsite);
+    $("#traveller-name").textContent = person?.name ?? "Builder";
+    $("#traveller-kind").textContent = "Construction worker";
+    $("#traveller-status").textContent =
+      site?.enabled && site.connected
+        ? "Working on site"
+        : "Construction paused";
+    $("#traveller-detail").innerHTML =
+      `<div class="detail-row"><span>Building</span><b>${site ? escapeHtml(buildingName(site)) : "Construction site"}</b></div><p class="muted">This resident is contributing labor to the construction progress.</p>`;
+    return;
+  }
   $("#traveller-name").textContent = person?.name ?? "Delivery truck";
   $("#traveller-kind").textContent =
     a.kind === "person"
@@ -660,6 +675,13 @@ function updateInspector() {
   }
   const d = BUILDINGS[b.kind];
   const alert = simulation.alert(b);
+  if (
+    $("#inspector").dataset.buildingView !==
+    `${b.id}:${b.houseTier ?? 1}:${!!b.construction}`
+  ) {
+    renderInspector();
+    return;
+  }
   $("#building-status").innerHTML = alert
     ? `<div class="status-heading">${icon(alertIcon[alert.kind])}<b>${escapeHtml(alert.title)}</b></div><p>${escapeHtml(alert.message)}</p>`
     : escapeHtml(simulation.status(b));
@@ -700,6 +722,25 @@ function updateInspector() {
       : "Resume production";
   if (d.recipe) updateLogistics(b);
   if (b.kind === "house" && (b.houseTier ?? 1) < 3) updateUpgrade(b);
+  if (b.construction) {
+    const progress = Math.floor(
+      (b.construction.completed / b.construction.required) * 100,
+    );
+    const onsite = simulation.state.agents.filter(
+      (a) => a.onsite === b.id,
+    ).length;
+    const names = simulation.state.residents
+      .filter((r) => r.job === b.id)
+      .map((r) => escapeHtml(r.name));
+    $("#building-detail").innerHTML =
+      `<h4>${b.construction.upgradeTo ? "Home improvements" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Builders assigned</span><b>${b.workers} / ${builderCapacity(b)}</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div><p class="muted">${names.join(", ") || "Waiting for available residents."}</p>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
+    if (d.recipe) {
+      $("#production-logistics").hidden = true;
+      $("#toggle-production").textContent = b.enabled
+        ? "Pause construction"
+        : "Resume construction";
+    }
+  }
 }
 function updateLogistics(b: Building) {
   const view = scene.productionView(b.id);
