@@ -2333,6 +2333,28 @@ dialog p.muted {
 }
 
 /* The town fills the screen; catalogs open above the bottom toolbar. */
+.boat-detail {
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid #b8d3c9;
+  background: #eaf1e7;
+  border-radius: 8px;
+}
+.boat-detail h4 {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.boat-detail > p {
+  font-size: 11px;
+  line-height: 1.6;
+}
+.boat-detail .detail-row {
+  font-size: 10px;
+  gap: 10px;
+}
+.boat-detail .detail-row b {
+  text-align: right;
+}
 #app {
   height: 100dvh;
   display: flex;

@@ -5,6 +5,12 @@ import { BUILDINGS, frontage } from "../.test-dist/catalog.js";
 import { fisheryCells, fisheryLayout } from "../.test-dist/shoreline.js";
 import { builderPosition } from "../.test-dist/construction.js";
 import { canSupply, productionConnections } from "../.test-dist/logistics.js";
+import {
+  fishingRoute,
+  boatPose,
+  stepFishing,
+  boatBerths,
+} from "../.test-dist/fishing.js";
 
 const execute = (sim, command) =>
   sim.execute({
@@ -41,6 +47,26 @@ function fixture() {
   seed.money = 10000;
   seed.tick = 0;
   return new Simulation(seed);
+}
+function sea(sim) {
+  sim.state.terrain ??= {};
+  for (let x = 7; x <= 16; x++)
+    for (let y = 13; y <= 18; y++)
+      sim.state.terrain[`${x},${y}`] = { kind: "water", height: 0 };
+}
+function workingFishery() {
+  const sim = fixture();
+  shore(sim, 8, 11, 2);
+  sea(sim);
+  assert.equal(
+    execute(sim, { type: "place", kind: "fishery", x: 8, y: 11, rotation: 2 })
+      .ok,
+    true,
+  );
+  const b = sim.buildingAt(8, 11);
+  delete b.construction;
+  sim.reconnect();
+  return { sim, b };
 }
 test("shoreline placement requires the correct land/water half in every rotation and charges once", () => {
   for (let rotation = 0; rotation < 4; rotation++) {
@@ -132,6 +158,7 @@ test("fishery move keeps stock and construction; wrong shore and invalid saves a
 test("builders finish a shoreline fishery, workers catch fish and trucks feed citizens through a warehouse", () => {
   const sim = fixture();
   shore(sim, 8, 11, 2);
+  sea(sim);
   assert.equal(
     execute(sim, { type: "place", kind: "fishery", x: 8, y: 11, rotation: 2 })
       .ok,
@@ -182,4 +209,149 @@ test("food demand consumes bread and fish without double charging and reports sh
     assert.equal(sim.state.food, expected);
     assert.equal((w.inventory.bread ?? 0) + (w.inventory.fish ?? 0), remaining);
   }
+});
+
+test("fishing voyages carry their catch home, pause safely, and survive save/reload mid-voyage", () => {
+  const { sim, b } = workingFishery();
+  const phases = new Set();
+  for (let i = 0; i < 500; i++) {
+    sim.step();
+    if (b.fishing) phases.add(b.fishing.phase);
+    if (b.fishing?.phase === "returning") break;
+  }
+  assert.deepEqual([...phases].sort(), ["fishing", "outbound", "returning"]);
+  assert.equal(
+    b.inventory.fish ?? 0,
+    0,
+    "catch stays aboard until the boat returns",
+  );
+  assert.equal(b.fishing.cargo, 3);
+  assert.equal(sim.totals().fish, 3);
+  const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+  assert.deepEqual(restored.building(b.id).fishing, b.fishing);
+  const trip = structuredClone(b.fishing);
+  assert.equal(execute(sim, { type: "toggle", id: b.id }).ok, true);
+  for (let i = 0; i < 40; i++) sim.step();
+  assert.deepEqual(
+    b.fishing,
+    trip,
+    "paused boats do not move or generate catches",
+  );
+  execute(sim, { type: "toggle", id: b.id });
+  for (let i = 0; i < 500 && b.fishing; i++) sim.step();
+  assert.equal(b.fishing, undefined);
+  assert.equal(b.produced, 3);
+  assert.equal(sim.totals().fish, 3);
+  assert.equal(b.inventory.fish ?? 0, 3);
+});
+test("boats reserve separate corridors and cannot sail through bridges, land or other piers", () => {
+  const { sim, b } = workingFishery();
+  const house = sim.state.buildings.find((b) => b.kind === "house");
+  house.houseTier = 2;
+  shore(sim, 12, 11, 2);
+  assert.equal(
+    execute(sim, { type: "place", kind: "fishery", x: 12, y: 11, rotation: 2 })
+      .ok,
+    true,
+  );
+  const second = sim.buildingAt(12, 11);
+  delete second.construction;
+  sim.reconnect();
+  for (let tick = 0; tick < 600; tick++) {
+    sim.step();
+    const routes = new Set();
+    for (const f of [b, second])
+      for (const p of f.fishing?.path ?? []) {
+        assert.equal(routes.has(key(p)), false);
+        routes.add(key(p));
+        assert.equal(sim.roads.has(key(p)), false);
+        assert.equal(sim.buildingAt(p.x, p.y), undefined);
+        assert.equal(sim.state.terrain[key(p)].kind, "water");
+      }
+  }
+  assert.ok(b.produced > 0 && second.produced > 0);
+  const p = b.fishing?.path[0] ?? fishingRoute(sim, b)?.[0];
+  assert.ok(p);
+  if (!b.fishing) stepFishing(sim, b);
+  assert.equal(
+    execute(sim, { type: "place", kind: "road", x: p.x, y: p.y }).ok,
+    false,
+  );
+  assert.equal(
+    execute(sim, { type: "terrain", mode: "land", size: 1, x: p.x, y: p.y }).ok,
+    false,
+  );
+});
+test("enclosed fisheries report blocked water and never create fish out of thin air", () => {
+  const sim = fixture();
+  shore(sim, 8, 11, 2);
+  execute(sim, { type: "place", kind: "fishery", x: 8, y: 11, rotation: 2 });
+  const b = sim.buildingAt(8, 11);
+  delete b.construction;
+  sim.reconnect();
+  for (let i = 0; i < 400; i++) sim.step();
+  assert.equal(b.fishing, undefined);
+  assert.equal(b.produced, 0);
+  assert.equal(sim.alert(b).title, "Waiting for clear water");
+  sea(sim);
+  const berths = boatBerths(b);
+  for (const p of berths) sim.state.roads.push(key(p));
+  sim.reconnect();
+  assert.equal(fishingRoute(sim, b), null, "low bridges block launching");
+});
+test("moving or removing a fishery preserves catches aboard, and malformed boats are rejected", () => {
+  const { sim, b } = workingFishery();
+  for (let i = 0; i < 500 && b.fishing?.phase !== "returning"; i++) sim.step();
+  assert.equal(b.fishing.cargo, 3);
+  const snapshot = sim.snapshot();
+  for (const edit of [
+    (t) => (t.cargo = 300),
+    (t) => (t.distance = NaN),
+    (t) => (t.path[1] = { x: 27, y: 27 }),
+    (t) => (t.phase = "flying"),
+  ]) {
+    const malformed = structuredClone(snapshot);
+    edit(malformed.buildings.find((q) => q.id === b.id).fishing);
+    assert.throws(() => parseSave(JSON.stringify(malformed)), /fishing/);
+  }
+  shore(sim, 12, 20, 2);
+  const total = sim.totals().fish,
+    produced = b.produced;
+  assert.equal(
+    execute(sim, { type: "move", id: b.id, x: 12, y: 20, rotation: 2 }).ok,
+    true,
+  );
+  assert.equal(sim.totals().fish, total);
+  assert.equal(b.produced, produced);
+  assert.equal(b.fishing, undefined);
+  assert.equal(execute(sim, { type: "demolish", x: b.x, y: b.y }).ok, true);
+  assert.equal(sim.stored("fish"), total);
+});
+test("boat interpolation follows each water segment smoothly and turns to all four views", () => {
+  const frames = new Set();
+  for (const end of [
+    { x: 2, y: 1 },
+    { x: 1, y: 2 },
+    { x: 0, y: 1 },
+    { x: 1, y: 0 },
+  ]) {
+    const dx = end.x - 1,
+      dy = end.y - 1;
+    const trip = {
+      path: [{ x: 1, y: 1 }, end, { x: end.x + dx, y: end.y + dy }],
+      distance: 0.5,
+      phase: "outbound",
+      cargo: 0,
+    };
+    const a = boatPose(trip, 0),
+      c = boatPose(trip, 0.1);
+    frames.add(a.frame);
+    assert.ok(Math.hypot(a.x - c.x, a.y - c.y) < 0.06);
+    assert.equal(a.dx, dx);
+    assert.equal(a.dy, dy);
+    trip.phase = "returning";
+    trip.cargo = 3;
+    assert.equal(boatPose(trip).frame, (a.frame + 2) % 4);
+  }
+  assert.equal(frames.size, 4);
 });

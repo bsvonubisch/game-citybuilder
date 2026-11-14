@@ -158,6 +158,13 @@ export function planTerrain(
       error =
         "Move or remove buildings and roads before reshaping their ground.";
     if (
+      world.buildings.some((b) =>
+        b.fishing?.path.some((p) => p.x === c.x && p.y === c.y),
+      )
+    )
+      error =
+        "A fishing boat is using this water. Let it return before reshaping the waterway.";
+    if (
       c.kind === "water" &&
       world.decorations.some((d) => d.x === c.x && d.y === c.y && !d.natural)
     )

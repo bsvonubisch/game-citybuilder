@@ -25,6 +25,7 @@ import {
 } from "./rendering.js";
 import { buildingArt } from "./building-art.js";
 import { fisheryCells } from "./shoreline.js";
+import { FishingArt } from "./fishing-art.js";
 import { PlotArt } from "./plot-art.js";
 import { ConstructionArt } from "./construction-art.js";
 import { builderPosition, builderFrame } from "./construction.js";
@@ -99,6 +100,7 @@ export class TownScene extends Phaser.Scene {
   selected: number | null = null;
   selectedAgent: number | null = null;
   onSelectAgent: (id: number) => void = () => {};
+  onSelectBoat: (id: number) => void = () => {};
   showGrid = false;
   rotation: 0 | 1 | 2 | 3 = 0;
   onTile: (p: Point) => void = () => {};
@@ -106,6 +108,7 @@ export class TownScene extends Phaser.Scene {
   onHover: (p: Point | null) => void = () => {};
   onCamera: () => void = () => {};
   private terrainArt!: TerrainArt;
+  private fishingArt!: FishingArt;
   private elevationArt!: ElevationArt;
   terrainMode: TerrainMode = "raise";
   terrainSize = 1;
@@ -215,6 +218,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("construction-props", "/construction-props.png");
     this.load.image("construction-earth", "/construction-earth.png");
     this.load.image("construction-workers", "/construction-workers.png");
+    this.load.image("fishing-boats", "/fishing-boats.png");
   }
   create() {
     this.plotArt = new PlotArt(this);
@@ -242,6 +246,8 @@ export class TownScene extends Phaser.Scene {
     this.trimAtlas("garden", 4, 4);
     this.trimAtlas("props", 2, 2);
     this.trimAtlas("mill", 2, 1);
+    this.trimAtlas("fishing-boats", 2, 2);
+    this.fishingArt = new FishingArt(this);
     createRotorFrames(this);
     this.animation = new TownAnimation(this, (b, x, y) =>
       this.artPoint(b, x, y),
@@ -396,6 +402,10 @@ export class TownScene extends Phaser.Scene {
           ? this.touches.end(p.id)
           : this.moved < 6 && p.button === 0 && !this.keys.SPACE.isDown;
         if (tap) {
+          const boatHit =
+            this.tool === "inspect"
+              ? over.find((o) => o.getData("boatId"))
+              : null;
           const agentHit =
             this.tool === "inspect"
               ? over.find((o) => o.getData("agentId"))
@@ -408,7 +418,8 @@ export class TownScene extends Phaser.Scene {
             this.tool === "inspect"
               ? over.find((o) => o.getData("buildingId"))
               : null;
-          if (agentHit) this.onSelectAgent(agentHit.getData("agentId"));
+          if (boatHit) this.onSelectBoat(boatHit.getData("boatId"));
+          else if (agentHit) this.onSelectAgent(agentHit.getData("agentId"));
           else if (decorationHit)
             this.onTile(decorationHit.getData("decoration"));
           else if (hit) this.onSelect(hit.getData("buildingId"));
@@ -1213,6 +1224,7 @@ export class TownScene extends Phaser.Scene {
         );
     }
     const time = this.simulation.state.tick * STEP + this.acc;
+    this.fishingArt.update(this.simulation, this.acc, time, this.selected);
     const camera = this.cameras.main;
     const cameraKey = `${camera.scrollX}:${camera.scrollY}:${camera.zoom}:${camera.width}:${camera.height}`;
     if (cameraKey !== this.cameraKey) {
@@ -1263,6 +1275,7 @@ export class TownScene extends Phaser.Scene {
     this.deliveryRoutes.clear();
     this.buildingAlerts.clear();
     this.animation.clear();
+    this.fishingArt.clear();
     this.acc = 0;
     this.selected = null;
     this.selectedAgent = null;

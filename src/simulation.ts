@@ -25,6 +25,15 @@ import { Traffic } from "./traffic.js";
 import { canSupply } from "./logistics.js";
 import { fisherySiteError } from "./shoreline.js";
 import {
+  stepFishing,
+  landCatch,
+  fishingRoute,
+  fishingStatus,
+  validFishingTrip,
+  boatBerths,
+  type FishingTrip,
+} from "./fishing.js";
+import {
   builderCapacity,
   constructionWork,
   type Construction,
@@ -54,6 +63,7 @@ export interface Building extends Point {
   plot?: readonly [number, number];
   houseTier?: HouseTier;
   construction?: Construction;
+  fishing?: FishingTrip;
 }
 export interface Resident {
   id: number;
@@ -613,6 +623,14 @@ export class Simulation {
         (this.buildingAt(p.x, p.y)?.id ?? id) !== id
       )
         return "The footprint overlaps a road or another building.";
+      if (
+        this.state.buildings.some(
+          (other) =>
+            other.id !== id &&
+            other.fishing?.path.some((q) => q.x === p.x && q.y === p.y),
+        )
+      )
+        return "A fishing boat is using this water. Let it return before moving here.";
     }
     if (
       (b.kind === "quarry" || b.kind === "mine") &&
@@ -637,6 +655,14 @@ export class Simulation {
     const cells = isBuilding(kind)
       ? footprint(kind, x, y, rotation)
       : [{ x, y }];
+    if (
+      this.state.buildings.some((b) =>
+        b.fishing?.path.some((p) =>
+          cells.some((c) => c.x === p.x && c.y === p.y),
+        ),
+      )
+    )
+      return "A fishing boat is using this water. Let it return before building here.";
     if (
       isBuilding(kind) &&
       cells.some(
@@ -896,6 +922,7 @@ export class Simulation {
           revision: this.state.revision,
         };
       if (b) {
+        landCatch(b);
         const depot = this.state.buildings.find(
           (w) => w.kind === "warehouse" && w.id !== b.id,
         );
@@ -934,6 +961,7 @@ export class Simulation {
       if (error)
         return { ok: false, message: error, revision: this.state.revision };
       const b = this.building(c.id)!;
+      landCatch(b);
       b.plot = this.relocationPlot(b, c.rotation ?? b.rotation);
       b.x = c.x;
       b.y = c.y;
@@ -1059,6 +1087,10 @@ export class Simulation {
     }
     for (const b of this.state.buildings) {
       const recipe = BUILDINGS[b.kind].recipe;
+      if (b.kind === "fishery") {
+        stepFishing(this, b);
+        continue;
+      }
       if (
         b.construction ||
         !recipe ||
@@ -1225,7 +1257,13 @@ export class Simulation {
     return Object.fromEntries(
       RESOURCES.map((r) => [
         r,
-        this.state.buildings.reduce((n, b) => n + (b.inventory[r] ?? 0), 0) +
+        this.state.buildings.reduce(
+          (n, b) =>
+            n +
+            (b.inventory[r] ?? 0) +
+            (r === "fish" ? (b.fishing?.cargo ?? 0) : 0),
+          0,
+        ) +
           this.state.agents
             .filter((a) => a.cargo === r)
             .reduce((n, a) => n + a.amount, 0),
@@ -1308,11 +1346,19 @@ export class Simulation {
         title: `Waiting for ${d.recipe.input}`,
         message: `Needs ${d.recipe.amount} ${d.recipe.input} per cycle. Check the supplying industry and its delivery route.`,
       };
+    if (b.kind === "fishery" && !b.fishing && !fishingRoute(this, b))
+      return {
+        kind: "input",
+        title: "Waiting for clear water",
+        message:
+          "Leave at least three connected open water tiles beyond the pier. Boats avoid land, bridges, other piers and occupied fishing routes.",
+      };
     return null;
   }
   status(b: Building) {
     const alert = this.alert(b);
     if (alert) return alert.title;
+    if (b.kind === "fishery") return fishingStatus(b);
     const d = BUILDINGS[b.kind];
     return d.recipe
       ? "Producing"
@@ -1459,6 +1505,11 @@ export function parseSave(raw: string): World {
     )
       throw new Error("Invalid building.");
     if (
+      b.fishing !== undefined &&
+      (b.kind !== "fishery" || b.construction || !validFishingTrip(b.fishing))
+    )
+      throw new Error("Invalid fishing boat.");
+    if (
       b.kind === "fishery" &&
       fisherySiteError(b.x, b.y, b.rotation, s.terrain)
     )
@@ -1482,6 +1533,21 @@ export function parseSave(raw: string): World {
       occupied.add(key(p));
     }
   }
+  const boatWater = new Set<string>();
+  for (const b of s.buildings)
+    if (b.fishing) {
+      if (!boatBerths(b).some((p) => key(p) === key(b.fishing!.path[0])))
+        throw new Error("Invalid fishing berth.");
+      for (const p of b.fishing.path) {
+        if (
+          occupied.has(key(p)) ||
+          boatWater.has(key(p)) ||
+          terrain(p.x, p.y, s.terrain) !== "water"
+        )
+          throw new Error("Invalid fishing waterway.");
+        boatWater.add(key(p));
+      }
+    }
   if (legacy) {
     const taken = new Set(s.roads);
     for (const b of [...s.buildings].sort(

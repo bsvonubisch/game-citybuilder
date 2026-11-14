@@ -28,6 +28,7 @@ import {
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
 import { builderCapacity, constructionWork } from "./construction.js";
+import { fishingStatus } from "./fishing.js";
 import { TownScene } from "./scene.js";
 import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
@@ -554,6 +555,10 @@ scene.onSelect = (id) => {
   scene.drawOverlay();
   renderInspector();
 };
+scene.onSelectBoat = (id) => {
+  scene.onSelect(id);
+  document.querySelector("#boat-detail")?.scrollIntoView({ block: "nearest" });
+};
 scene.onCamera = () => {
   if ($("#zoom-level"))
     $("#zoom-level").textContent =
@@ -568,7 +573,7 @@ function renderInspector() {
   panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${!!b.construction}`;
   panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe ? '<button id="toggle-production" class="primary"></button>' : ""}`;
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
       const link = (event.target as Element).closest<HTMLButtonElement>(
@@ -767,6 +772,15 @@ function updateInspector() {
       ? "Pause production"
       : "Resume production";
   if (d.recipe) updateLogistics(b);
+  if (b.kind === "fishery" && !b.construction) {
+    const trip = b.fishing,
+      destination =
+        trip?.phase === "returning"
+          ? trip.path[0]
+          : trip?.path[trip.path.length - 1];
+    $("#boat-detail").innerHTML =
+      `<h4>${icon("fish")} Fishing boat</h4><p>${escapeHtml(fishingStatus(b))}</p><div class="detail-row"><span>Catch aboard</span><b>${trip?.cargo ?? 0} fish</b></div><div class="detail-row"><span>Headed to</span><b>${trip ? `${trip.phase === "returning" ? "Pier" : "Fishing grounds"} · ${destination!.x}, ${destination!.y}` : "Moored"}</b></div><p class="muted">The blue line follows the boat. Fish become available when it returns to the pier.</p>`;
+  }
   if (b.kind === "house" && (b.houseTier ?? 1) < 3) updateUpgrade(b);
   if (b.construction) {
     const progress = Math.floor(
