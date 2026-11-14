@@ -9,6 +9,7 @@ const paths: Record<string, string> = {
   factory: "M3 21V10l6 3V8l7 4V3h4v18H3Zm4-4h1m3 0h1m3 0h1",
   coin: "M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0ZM12 7v10m3-8h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9",
   wood: "m4 7 12-4 5 10-12 5L4 7Zm0 0c-4 2 0 13 5 11m-4-6 3-1",
+  planks: "m3 7 13-4 5 4-13 4-5-4Zm0 5 5 4 13-4M3 17l5 4 13-4M8 11v3m0 2v3",
   stone: "m3 16 3-9 8-3 7 7-2 9H7l-4-4Zm3-9 7 5 8-1m-8 1-6 8",
   metal: "m3 16 4-9h10l4 9-9 5-9-5Zm4-9 5 5 5-5m-5 5v9M3 16l9-4 9 4",
   people:

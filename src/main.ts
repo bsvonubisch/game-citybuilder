@@ -119,6 +119,7 @@ $("#app").innerHTML = `
  ${[
    ["coin", "gold", "Gold"],
    ["wood", "wood", "Wood in warehouses"],
+   ["planks", "planks", "Planks in warehouses"],
    ["stone", "stone", "Stone in warehouses"],
    ["metal", "metal", "Metal in warehouses"],
    ["people", "population", "Employed / residents"],
@@ -686,7 +687,7 @@ function updateUI() {
   const s = simulation.state;
   const employed = s.residents.filter((r) => r.job !== null).length;
   $("#gold").textContent = Math.floor(s.money).toLocaleString();
-  for (const r of ["wood", "stone", "metal"] as const)
+  for (const r of ["wood", "planks", "stone", "metal"] as const)
     $("#" + r).textContent = simulation.stored(r).toString();
   $("#population").textContent = `${employed} / ${s.residents.length}`;
   $(".resource.population").title =
