@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { groundHeight } from "./terrain.js";
 import { SIZE } from "./catalog.js";
 import { iso } from "./rendering.js";
 import { key, terrain, type Simulation } from "./simulation.js";
@@ -112,9 +113,10 @@ export class TerrainArt {
       };
       for (let y = 0; y < SIZE; y++)
         for (let x = 0; x < SIZE; x++) {
+          if (groundHeight(x, y, sim.state.terrain) !== 0) continue;
           const p = iso(x, y);
           if (!visible(p.x, p.y)) continue;
-          const water = terrain(x, y) === "water",
+          const water = terrain(x, y, sim.state.terrain) === "water",
             road = sim.roads.has(key({ x, y }));
           if (x === SIZE - 1)
             poly(
@@ -154,15 +156,17 @@ export class TerrainArt {
       // Individual raised curb stones and banks are baked only after town edits.
       for (let y = 0; y < SIZE; y++)
         for (let x = 0; x < SIZE; x++) {
+          if (groundHeight(x, y, sim.state.terrain) !== 0) continue;
           const p = iso(x, y);
           if (!visible(p.x, p.y)) continue;
-          const water = terrain(x, y) === "water",
+          const water = terrain(x, y, sim.state.terrain) === "water",
             road = sim.roads.has(key({ x, y }));
           for (const e of EDGES) {
             const nx = x + e.dx,
               ny = y + e.dy;
             if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE) continue;
-            const shore = water && !road && terrain(nx, ny) === "land";
+            const shore =
+              water && !road && terrain(nx, ny, sim.state.terrain) === "land";
             const curb =
               road && !water && !sim.roads.has(key({ x: nx, y: ny }));
             if (!shore && !curb) continue;

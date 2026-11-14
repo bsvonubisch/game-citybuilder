@@ -23,6 +23,14 @@ import {
 import { initialDecorations, type Decoration } from "./decorations.js";
 import { Traffic } from "./traffic.js";
 import { canSupply } from "./logistics.js";
+import {
+  terrainCell,
+  groundHeight,
+  planTerrain,
+  validateTerrain,
+  type TerrainMap,
+  type TerrainCommand,
+} from "./terrain.js";
 export interface Point {
   x: number;
   y: number;
@@ -80,11 +88,14 @@ export interface World {
   exported: number;
   food: number;
   history: string[];
+  terrain?: TerrainMap;
 }
 export type Command =
+  | TerrainCommand
+  | { type: "undoTerrain" }
   | {
       type: "place";
-      kind: Exclude<Tool, "inspect" | "bulldoze">;
+      kind: Exclude<Tool, "inspect" | "bulldoze" | "terrain">;
       x: number;
       y: number;
       rotation?: 0 | 1 | 2 | 3;
@@ -123,10 +134,12 @@ const dirs = [
   { x: 0, y: -1 },
 ];
 export const key = (p: Point) => `${p.x},${p.y}`;
-export function terrain(x: number, y: number): "land" | "water" {
-  return x >= 23 + Math.floor(Math.sin(y * 0.37) * 1.6) || (y < 2 && x > 18)
-    ? "water"
-    : "land";
+export function terrain(
+  x: number,
+  y: number,
+  map?: TerrainMap,
+): "land" | "water" {
+  return terrainCell(x, y, map).kind;
 }
 export const inside = (x: number, y: number) =>
   Number.isInteger(x) &&
@@ -176,6 +189,15 @@ export class Simulation {
   private traffic = new Traffic();
   private roadSet = new Set<string>();
   private processed = new Map<string, Result>();
+  private terrainUndo?: {
+    revision: number;
+    map: TerrainMap;
+    decorations: Decoration[];
+    cost: number;
+  };
+  canUndoTerrain() {
+    return this.terrainUndo?.revision === this.state.revision;
+  }
   constructor(saved?: World) {
     this.state = saved
       ? structuredClone(saved)
@@ -214,7 +236,7 @@ export class Simulation {
       this.state.decorations = initialDecorations(
         new Set(this.state.roads),
         (x, y) =>
-          terrain(x, y) === "water" ||
+          terrain(x, y, this.state.terrain) === "water" ||
           !!this.buildingAt(x, y) ||
           !!DEPOSITS[key({ x, y })],
         () => this.state.nextId++,
@@ -306,8 +328,11 @@ export class Simulation {
     const kind = (p as Partial<Building>).kind;
     if (kind) {
       const b = p as Building;
-      return frontage(kind, b.x, b.y, b.rotation, b.plot).filter((n) =>
-        this.roadSet.has(key(n)),
+      return frontage(kind, b.x, b.y, b.rotation, b.plot).filter(
+        (n) =>
+          this.roadSet.has(key(n)) &&
+          groundHeight(n.x, n.y, this.state.terrain) ===
+            groundHeight(b.x, b.y, this.state.terrain),
       );
     }
     const cells = kind
@@ -340,7 +365,14 @@ export class Simulation {
       for (const d of dirs) {
         const n = { x: p.x + d.x, y: p.y + d.y },
           k = key(n);
-        if (this.roadSet.has(k) && !parents.has(k)) {
+        if (
+          this.roadSet.has(k) &&
+          !parents.has(k) &&
+          Math.abs(
+            groundHeight(n.x, n.y, this.state.terrain) -
+              groundHeight(p.x, p.y, this.state.terrain),
+          ) <= 8
+        ) {
           parents.set(k, p);
           queue.push(n);
         }
@@ -445,23 +477,55 @@ export class Simulation {
     this.traffic.plan(this.state.agents);
   }
   canPlace(
-    kind: Exclude<Tool, "inspect" | "bulldoze">,
+    kind: Exclude<Tool, "inspect" | "bulldoze" | "terrain">,
     x: number,
     y: number,
     rotation = 0,
   ): string | null {
     if (!inside(x, y)) return "Choose a tile inside the valley.";
-    if (kind === "bridge" && terrain(x, y) !== "water")
+    if (kind === "bridge" && terrain(x, y, this.state.terrain) !== "water")
       return "Place bridges over water. Use roads on dry land.";
     const cells = isBuilding(kind)
       ? footprint(kind, x, y, rotation)
       : [{ x, y }];
+    if (
+      isBuilding(kind) &&
+      cells.some(
+        (p) =>
+          groundHeight(p.x, p.y, this.state.terrain) !==
+          groundHeight(x, y, this.state.terrain),
+      )
+    )
+      return "Level the whole footprint before building here.";
+    if (
+      (kind === "road" || kind === "bridge") &&
+      dirs.some((d) => {
+        const nx = x + d.x,
+          ny = y + d.y;
+        return (
+          this.roads.has(key({ x: nx, y: ny })) &&
+          (Math.abs(
+            groundHeight(x, y, this.state.terrain) -
+              groundHeight(nx, ny, this.state.terrain),
+          ) > 8 ||
+            ((terrain(x, y, this.state.terrain) === "water" ||
+              terrain(nx, ny, this.state.terrain) === "water") &&
+              groundHeight(x, y, this.state.terrain) !==
+                groundHeight(nx, ny, this.state.terrain)))
+        );
+      })
+    )
+      return "Roads can climb one height step at a time. Bridge banks must be at water level.";
     for (const p of cells) {
       if (!inside(p.x, p.y))
         return "The whole building must fit inside the valley.";
       if (this.buildingAt(p.x, p.y) || this.roadSet.has(key(p)))
         return "The building footprint overlaps a road or another building.";
-      if (terrain(p.x, p.y) === "water" && kind !== "road" && kind !== "bridge")
+      if (
+        terrain(p.x, p.y, this.state.terrain) === "water" &&
+        kind !== "road" &&
+        kind !== "bridge"
+      )
         return "The whole building needs dry land. Roads can form bridges.";
     }
     if (
@@ -476,7 +540,7 @@ export class Simulation {
       return `Place this on a ${kind === "quarry" ? "stone" : "metal"} deposit.`;
     const cost =
       kind === "road" || kind === "bridge"
-        ? terrain(x, y) === "water"
+        ? terrain(x, y, this.state.terrain) === "water"
           ? 35
           : 12
         : isDecoration(kind)
@@ -532,7 +596,15 @@ export class Simulation {
     const c = envelope.command;
     if (
       !c ||
-      !["place", "demolish", "toggle", "rotate", "upgrade"].includes(c.type)
+      ![
+        "place",
+        "demolish",
+        "toggle",
+        "rotate",
+        "upgrade",
+        "terrain",
+        "undoTerrain",
+      ].includes(c.type)
     )
       return {
         ok: false,
@@ -541,7 +613,50 @@ export class Simulation {
       };
     let message = "",
       networkChanged = true;
-    if (c.type === "place") {
+    if (c.type === "terrain") {
+      const plan = planTerrain(this.state, c);
+      if (plan.error)
+        return {
+          ok: false,
+          message: plan.error,
+          revision: this.state.revision,
+        };
+      this.terrainUndo = {
+        revision: this.state.revision + 1,
+        map: structuredClone(this.state.terrain ?? {}),
+        decorations: structuredClone(this.state.decorations),
+        cost: plan.cost,
+      };
+      this.state.terrain ??= {};
+      for (const cell of plan.changes)
+        this.state.terrain[key(cell)] = {
+          kind: cell.kind,
+          height: cell.height,
+        };
+      this.state.decorations = this.state.decorations.filter(
+        (d) =>
+          !plan.changes.some(
+            (p) => p.kind === "water" && p.x === d.x && p.y === d.y,
+          ),
+      );
+      this.state.money -= plan.cost;
+      message = `Terrain reshaped · ${plan.cost} gold.`;
+      networkChanged = false;
+    } else if (c.type === "undoTerrain") {
+      if (!this.canUndoTerrain())
+        return {
+          ok: false,
+          message: "Only the latest terrain edit can be undone.",
+          revision: this.state.revision,
+        };
+      const undo = this.terrainUndo!;
+      this.state.terrain = undo.map;
+      this.state.decorations = undo.decorations;
+      this.state.money += undo.cost;
+      this.terrainUndo = undefined;
+      message = "Terrain edit undone. Gold returned.";
+      networkChanged = false;
+    } else if (c.type === "place") {
       if (c.rotation !== undefined && ![0, 1, 2, 3].includes(c.rotation))
         return {
           ok: false,
@@ -564,7 +679,7 @@ export class Simulation {
         return { ok: false, message: error, revision: this.state.revision };
       const cost =
         c.kind === "road" || c.kind === "bridge"
-          ? terrain(c.x, c.y) === "water"
+          ? terrain(c.x, c.y, this.state.terrain) === "water"
             ? 35
             : 12
           : isDecoration(c.kind)
@@ -609,7 +724,7 @@ export class Simulation {
         });
       message =
         c.kind === "road" || c.kind === "bridge"
-          ? terrain(c.x, c.y) === "water"
+          ? terrain(c.x, c.y, this.state.terrain) === "water"
             ? "Bridge built. Connect both ends to roads."
             : "Road laid."
           : `${isDecoration(c.kind) ? DECORATIONS[c.kind].name : BUILDINGS[c.kind].name} built.`;
@@ -640,7 +755,8 @@ export class Simulation {
         this.state.money += Math.floor(buildingInvestment(b) / 2);
       } else if (this.roadSet.has(key(c))) {
         this.state.roads = this.state.roads.filter((k) => k !== key(c));
-        this.state.money += terrain(c.x, c.y) === "water" ? 17 : 6;
+        this.state.money +=
+          terrain(c.x, c.y, this.state.terrain) === "water" ? 17 : 6;
       } else if (decoration) {
         this.state.decorations = this.state.decorations.filter(
           (d) => d.id !== decoration.id,
@@ -672,7 +788,9 @@ export class Simulation {
         cells.some(
           (p) =>
             !inside(p.x, p.y) ||
-            terrain(p.x, p.y) === "water" ||
+            groundHeight(p.x, p.y, this.state.terrain) !==
+              groundHeight(b.x, b.y, this.state.terrain) ||
+            terrain(p.x, p.y, this.state.terrain) === "water" ||
             this.roads.has(key(p)) ||
             this.state.buildings.some(
               (other) =>
@@ -988,6 +1106,7 @@ export function parseSave(raw: string): World {
   )
     throw new Error("This save is not compatible with this version.");
   const legacy = s.version === 1;
+  validateTerrain(s.terrain);
   const occupied = new Set<string>();
   const ids = new Set<number>();
   if (
@@ -1020,7 +1139,7 @@ export function parseSave(raw: string): World {
     }
     if (
       !inside(b.x, b.y) ||
-      terrain(b.x, b.y) !== "land" ||
+      terrain(b.x, b.y, s.terrain) !== "land" ||
       !Object.hasOwn(BUILDINGS, b.kind) ||
       !Number.isInteger(b.id) ||
       b.id < 1 ||
@@ -1051,7 +1170,9 @@ export function parseSave(raw: string): World {
       : footprint(b.kind, b.x, b.y, b.rotation, b.plot)) {
       if (
         !inside(p.x, p.y) ||
-        terrain(p.x, p.y) !== "land" ||
+        groundHeight(p.x, p.y, s.terrain) !==
+          groundHeight(b.x, b.y, s.terrain) ||
+        terrain(p.x, p.y, s.terrain) !== "land" ||
         occupied.has(key(p))
       )
         throw new Error("Building footprint overlaps.");
@@ -1083,7 +1204,7 @@ export function parseSave(raw: string): World {
           footprint(b.kind, p.x, p.y, b.rotation, b.plot).every(
             (c) =>
               inside(c.x, c.y) &&
-              terrain(c.x, c.y) === "land" &&
+              terrain(c.x, c.y, s.terrain) === "land" &&
               !taken.has(key(c)),
           ),
       );
@@ -1122,7 +1243,7 @@ export function parseSave(raw: string): World {
         d.id < 1 ||
         ids.has(d.id) ||
         !inside(d.x, d.y) ||
-        terrain(d.x, d.y) === "water" ||
+        terrain(d.x, d.y, s.terrain) === "water" ||
         !isDecoration(d.kind) ||
         typeof d.natural !== "boolean" ||
         occupied.has(key(d)) ||
@@ -1164,7 +1285,7 @@ export function parseSave(raw: string): World {
   s.decorations ??= initialDecorations(
     new Set(s.roads),
     (x, y) =>
-      terrain(x, y) === "water" ||
+      terrain(x, y, s.terrain) === "water" ||
       occupied.has(key({ x, y })) ||
       !!DEPOSITS[key({ x, y })],
     () => s.nextId++,

@@ -89,8 +89,18 @@ export class BridgeArt {
     }
   }
   private variant(sim: Simulation, tile: Point) {
-    const open = bridgeRails(sim.roads, tile, sim.state.buildings);
-    const land = bridgeLandings(sim.roads, tile, sim.state.buildings);
+    const open = bridgeRails(
+      sim.roads,
+      tile,
+      sim.state.buildings,
+      sim.state.terrain,
+    );
+    const land = bridgeLandings(
+      sim.roads,
+      tile,
+      sim.state.buildings,
+      sim.state.terrain,
+    );
     const id = open.map(Number).join("") + land.map(Number).join("");
     const existing = this.variants.get(id);
     if (existing) return existing;
@@ -98,7 +108,16 @@ export class BridgeArt {
       const p = iso(u, v);
       return {
         x: p.x,
-        y: p.y - deckHeight(sim.roads, tile, u, v, sim.state.buildings),
+        y:
+          p.y -
+          deckHeight(
+            sim.roads,
+            tile,
+            u,
+            v,
+            sim.state.buildings,
+            sim.state.terrain,
+          ),
       };
     };
     const line = (
@@ -305,7 +324,7 @@ export class BridgeArt {
     this.images = [];
     for (const road of sim.roads) {
       const [x, y] = road.split(",").map(Number);
-      if (!isBridge(sim.roads, x, y)) continue;
+      if (!isBridge(sim.roads, x, y, sim.state.terrain)) continue;
       const p = iso(x, y),
         art = this.variant(sim, { x, y });
       const add = (texture: string, depth: number) =>

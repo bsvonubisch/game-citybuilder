@@ -32,6 +32,17 @@ import {
   productionActivity,
 } from "./logistics.js";
 import { TerrainArt } from "./terrain-art.js";
+import { ElevationArt } from "./elevation-art.js";
+import {
+  groundHeight,
+  terrainCell,
+  brushCells,
+  planTerrain,
+  HEIGHT_STEP,
+  type TerrainMode,
+  type TerrainCommand,
+  type TerrainPlan,
+} from "./terrain.js";
 import { WaterArt } from "./water-art.js";
 import { lanePose, lanePoint, LANE_OFFSET, WALK_OFFSET } from "./traffic.js";
 import { BridgeArt } from "./bridge-art.js";
@@ -90,6 +101,43 @@ export class TownScene extends Phaser.Scene {
   onHover: (p: Point | null) => void = () => {};
   onCamera: () => void = () => {};
   private terrainArt!: TerrainArt;
+  private elevationArt!: ElevationArt;
+  terrainMode: TerrainMode = "raise";
+  terrainSize = 1;
+  terrainTarget: Point | null = null;
+  private terrainDrag: {
+    point: Point;
+    y: number;
+    command: TerrainCommand;
+  } | null = null;
+  onTerrainPreview: (plan: TerrainPlan | null) => void = () => {};
+  onTerrainApply: (command: TerrainCommand) => void = () => {};
+  terrainCommand(): TerrainCommand | null {
+    if (this.terrainDrag) return this.terrainDrag.command;
+    return this.terrainTarget
+      ? {
+          type: "terrain",
+          ...this.terrainTarget,
+          size: this.terrainSize,
+          mode: this.terrainMode,
+        }
+      : null;
+  }
+  pickTile(x: number, y: number) {
+    for (let level = 6; level >= -3; level--) {
+      const p = fromIso(x, y + level * HEIGHT_STEP);
+      if (
+        inside(p.x, p.y) &&
+        terrainCell(p.x, p.y, this.simulation.state.terrain).height === level
+      )
+        return p;
+    }
+    return fromIso(x, y);
+  }
+  previewTerrain(p: Point) {
+    this.terrainTarget = p;
+    this.drawOverlay();
+  }
   private plotArt!: PlotArt;
   private buildingAlerts!: BuildingAlerts;
   private cameraKey = "";
@@ -169,6 +217,7 @@ export class TownScene extends Phaser.Scene {
     );
     this.waterArt = new WaterArt(this);
     this.terrainArt = new TerrainArt(this);
+    this.elevationArt = new ElevationArt(this);
     this.bridgeArt = new BridgeArt(this);
     this.fenceArt = new FenceArt(this);
     this.gridCache = this.add
@@ -206,10 +255,34 @@ export class TownScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
     this.keys = this.input.keyboard!.addKeys(
       "W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE",
+      false,
     ) as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (p.wasTouch) {
         this.touches.start(p.id, { x: p.x, y: p.y });
+        return;
+      }
+      if (
+        this.tool === "terrain" &&
+        p.button === 0 &&
+        !this.keys.SPACE.isDown
+      ) {
+        const world = this.cameras.main.getWorldPoint(p.x, p.y),
+          point = this.pickTile(world.x, world.y);
+        if (inside(point.x, point.y)) {
+          this.terrainTarget = point;
+          this.terrainDrag = {
+            point,
+            y: p.y,
+            command: {
+              type: "terrain",
+              ...point,
+              size: this.terrainSize,
+              mode: this.terrainMode,
+            },
+          };
+          this.drawOverlay();
+        }
         return;
       }
       this.dragging =
@@ -233,6 +306,21 @@ export class TownScene extends Phaser.Scene {
         }
         return;
       }
+      if (p.isDown && this.terrainDrag) {
+        if (this.terrainMode === "raise" || this.terrainMode === "lower") {
+          const steps = Math.round((this.terrainDrag.y - p.y) / 24);
+          this.terrainDrag.command = {
+            type: "terrain",
+            ...this.terrainDrag.point,
+            size: this.terrainSize,
+            mode:
+              steps === 0 ? this.terrainMode : steps > 0 ? "raise" : "lower",
+            steps: Math.min(9, Math.max(1, Math.abs(steps))),
+          };
+        }
+        this.drawOverlay();
+        return;
+      }
       if (p.isDown && this.dragging) {
         const dx = p.x - this.lastPointer.x,
           dy = p.y - this.lastPointer.y;
@@ -243,10 +331,11 @@ export class TownScene extends Phaser.Scene {
         this.clampCamera();
       }
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-      const t = fromIso(wp.x, wp.y);
+      const t = this.pickTile(wp.x, wp.y);
       const hover = inside(t.x, t.y) ? t : null;
       if (hover?.x !== this.hover?.x || hover?.y !== this.hover?.y) {
         this.hover = hover;
+        if (this.tool === "terrain") this.terrainTarget = hover;
         this.onHover(this.hover);
         this.drawOverlay();
       }
@@ -254,9 +343,15 @@ export class TownScene extends Phaser.Scene {
     this.input.on(
       "pointerup",
       (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+        if (this.terrainDrag && !p.wasTouch) {
+          const command = this.terrainDrag.command;
+          this.terrainDrag = null;
+          this.onTerrainApply(command);
+          return;
+        }
         if (p.wasTouch) {
           if (p.event.type === "touchcancel") this.touches.cancel();
-          else this.touches.move(p.id, {x:p.x,y:p.y});
+          else this.touches.move(p.id, { x: p.x, y: p.y });
         }
         const tap = p.wasTouch
           ? this.touches.end(p.id)
@@ -280,7 +375,7 @@ export class TownScene extends Phaser.Scene {
           else if (hit) this.onSelect(hit.getData("buildingId"));
           else {
             const wp = this.cameras.main.getWorldPoint(p.x, p.y),
-              t = fromIso(wp.x, wp.y);
+              t = this.pickTile(wp.x, wp.y);
             if (inside(t.x, t.y)) this.onTile(t);
           }
         }
@@ -288,6 +383,7 @@ export class TownScene extends Phaser.Scene {
       },
     );
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => {
+      this.terrainDrag = null;
       if (p.wasTouch) this.touches.end(p.id);
       this.dragging = false;
     });
@@ -362,16 +458,24 @@ export class TownScene extends Phaser.Scene {
     houseTier: Building["houseTier"] = 1,
   ) {
     this.plotArt.place(sprite, kind, x, y, rotation, plot, houseTier);
+    sprite.y -= groundHeight(x, y, this.simulation.state.terrain);
   }
   private artPoint(b: Building, x: number, y: number) {
     const sprite = this.buildings.get(b.id)!;
     const p = this.plotArt.point(b.kind, b.rotation, x, y, b.plot, b.houseTier),
       origin = iso(b.x, b.y);
-    return { ...p, x: origin.x + p.x, y: origin.y + p.y, depth: sprite.depth };
+    return {
+      ...p,
+      x: origin.x + p.x,
+      y: origin.y + p.y - groundHeight(b.x, b.y, this.simulation.state.terrain),
+      depth: sprite.depth,
+    };
   }
   redraw() {
     this.renderRevision = this.simulation.state.revision;
     this.terrainArt.redraw(this.simulation);
+    this.elevationArt.redraw(this.simulation);
+    this.waterArt.redraw(this.simulation);
     this.bridgeArt.redraw(this.simulation);
     this.trees.forEach((t) => t.destroy());
     this.trees = [];
@@ -380,7 +484,7 @@ export class TownScene extends Phaser.Scene {
       for (let x = 0; x < SIZE; x++) {
         const p = iso(x, y),
           h = hash(x, y),
-          water = terrain(x, y) === "water",
+          water = terrain(x, y, this.simulation.state.terrain) === "water",
           road = this.simulation.roads.has(key({ x, y }));
         const occupied = this.simulation.buildingAt(x, y);
         if (water && !road && h > 0.3) {
@@ -392,7 +496,7 @@ export class TownScene extends Phaser.Scene {
           ].find(
             (n) =>
               inside(n.x, n.y) &&
-              terrain(n.x, n.y) === "land" &&
+              terrain(n.x, n.y, this.simulation.state.terrain) === "land" &&
               !this.simulation.roads.has(key(n)),
           );
           if (bank) {
@@ -425,7 +529,10 @@ export class TownScene extends Phaser.Scene {
           );
           rock
             .setScale(fit.scale)
-            .setPosition(p.x + fit.x, p.y + fit.y)
+            .setPosition(
+              p.x + fit.x,
+              p.y + fit.y - groundHeight(x, y, this.simulation.state.terrain),
+            )
             .setDepth((x + y) * 32 + 6);
           this.trees.push(rock);
           continue;
@@ -448,6 +555,7 @@ export class TownScene extends Phaser.Scene {
           d.y,
           fenceMask(d, this.simulation.state.decorations),
         );
+      sprite.y -= groundHeight(d.x, d.y, this.simulation.state.terrain);
       this.trees.push(sprite);
     }
     for (const [id, sprite] of this.buildings) {
@@ -489,8 +597,9 @@ export class TownScene extends Phaser.Scene {
     });
     this.drawOverlay();
   }
-  private diamond(p: Point, color: number, alpha: number) {
+  private diamond(p: Point, color: number, alpha: number, height?: number) {
     const v = iso(p.x, p.y);
+    v.y -= height ?? groundHeight(p.x, p.y, this.simulation.state.terrain);
     poly(
       this.overlay,
       color,
@@ -516,7 +625,41 @@ export class TownScene extends Phaser.Scene {
     this.ghost?.setVisible(false);
     this.decorationGhost?.setVisible(false);
     this.ghostRotor?.setVisible(false);
-    this.gridCache.setVisible(this.showGrid);
+    const raised = Object.values(this.simulation.state.terrain ?? {}).some(
+      (c) => c.height !== 0,
+    );
+    this.gridCache.setVisible(this.showGrid && !raised);
+    if (this.showGrid && raised)
+      for (let y = 0; y < SIZE; y++)
+        for (let x = 0; x < SIZE; x++) this.diamond({ x, y }, 0xe8e9ca, 0.04);
+    if (this.tool === "terrain") {
+      const command = this.terrainCommand(),
+        plan = command ? planTerrain(this.simulation.state, command) : null;
+      if (command && plan) {
+        const cells = new Map(
+          [
+            ...brushCells(command.x, command.y, command.size),
+            ...plan.changes,
+          ].map((p) => [key(p), p]),
+        );
+        for (const p of cells.values()) {
+          const change = plan.changes.find((c) => c.x === p.x && c.y === p.y);
+          const before = groundHeight(p.x, p.y, this.simulation.state.terrain),
+            after = change ? change.height * HEIGHT_STEP : before;
+          const color = plan.error ? 0xea8c72 : 0xa7e2a2;
+          this.diamond(p, color, 0.15, before);
+          if (after !== before) {
+            this.diamond(p, color, 0.3, after);
+            const pos = iso(p.x, p.y);
+            this.overlay
+              .lineStyle(1, color, 0.8)
+              .lineBetween(pos.x, pos.y - before, pos.x, pos.y - after);
+          }
+        }
+      }
+      this.onTerrainPreview(plan);
+      return;
+    }
     if (this.selected) {
       const b = this.simulation.building(this.selected);
       if (b) {
@@ -566,6 +709,11 @@ export class TownScene extends Phaser.Scene {
             this.hover.y,
             fenceMask(this.hover, this.simulation.state.decorations),
           );
+        this.decorationGhost.y -= groundHeight(
+          this.hover.x,
+          this.hover.y,
+          this.simulation.state.terrain,
+        );
       }
       if (isBuilding(this.tool)) {
         this.drawFront(this.tool, this.hover.x, this.hover.y, this.rotation);
@@ -590,7 +738,16 @@ export class TownScene extends Phaser.Scene {
             origin = iso(this.hover.x, this.hover.y);
           this.ghostRotor
             .setVisible(true)
-            .setPosition(p.x + origin.x, p.y + origin.y)
+            .setPosition(
+              p.x + origin.x,
+              p.y +
+                origin.y -
+                groundHeight(
+                  this.hover.x,
+                  this.hover.y,
+                  this.simulation.state.terrain,
+                ),
+            )
             .setScale((p.scale * 0.7) / ROTOR_SCALE)
             .setFlipX(this.rotation % 2 === 1)
             .setDepth(5002)
@@ -610,8 +767,11 @@ export class TownScene extends Phaser.Scene {
     const g = this.frontOverlay;
     const [w, h] = dimensions(kind, rotation, plot),
       d = FRONT_DIRECTIONS[rotation];
-    const connected = frontage(kind, x, y, rotation, plot).some((p) =>
-      this.simulation.roads.has(key(p)),
+    const connected = frontage(kind, x, y, rotation, plot).some(
+      (p) =>
+        this.simulation.roads.has(key(p)) &&
+        groundHeight(p.x, p.y, this.simulation.state.terrain) ===
+          groundHeight(x, y, this.simulation.state.terrain),
     );
     const color = connected ? 0x79f2b0 : 0xffce73;
     const edge = {
@@ -620,6 +780,9 @@ export class TownScene extends Phaser.Scene {
     };
     const from = iso(edge.x - d.x * 0.35, edge.y - d.y * 0.35),
       to = iso(edge.x + d.x * 0.35, edge.y + d.y * 0.35);
+    const elevation = groundHeight(x, y, this.simulation.state.terrain);
+    from.y -= elevation;
+    to.y -= elevation;
     g.lineStyle(3, color, 1).lineBetween(from.x, from.y, to.x, to.y);
     const tip1 = iso(
         edge.x + d.x * 0.1 - d.y * 0.18,
@@ -629,6 +792,8 @@ export class TownScene extends Phaser.Scene {
         edge.x + d.x * 0.1 + d.y * 0.18,
         edge.y + d.y * 0.1 - d.x * 0.18,
       );
+    tip1.y -= elevation;
+    tip2.y -= elevation;
     g.lineBetween(to.x, to.y, tip1.x, tip1.y).lineBetween(
       to.x,
       to.y,
@@ -640,6 +805,8 @@ export class TownScene extends Phaser.Scene {
         edge.y - (d.x ? h / 2 : 0),
       ),
       edgeEnd = iso(edge.x + (d.y ? w / 2 : 0), edge.y + (d.x ? h / 2 : 0));
+    edgeStart.y -= elevation;
+    edgeEnd.y -= elevation;
     g.lineStyle(2, color, 0.9).lineBetween(
       edgeStart.x,
       edgeStart.y,
@@ -669,6 +836,7 @@ export class TownScene extends Phaser.Scene {
               p.x,
               p.y,
               this.simulation.state.buildings,
+              this.simulation.state.terrain,
             ),
         };
       });
@@ -685,6 +853,7 @@ export class TownScene extends Phaser.Scene {
             p.x,
             p.y,
             this.simulation.state.buildings,
+            this.simulation.state.terrain,
           ),
         a.kind === "person" ? 12 : 27,
         8,
@@ -704,6 +873,7 @@ export class TownScene extends Phaser.Scene {
           p.x,
           p.y,
           this.simulation.state.buildings,
+          this.simulation.state.terrain,
         ),
     };
   }
@@ -840,10 +1010,16 @@ export class TownScene extends Phaser.Scene {
     if (this.simulation.state.revision !== this.renderRevision) this.redraw();
     const c = this.cameras.main,
       move = (Math.min(delta, 40) * 0.6) / c.zoom;
-    if (this.keys.W.isDown || this.keys.UP.isDown) c.scrollY -= move;
-    if (this.keys.S.isDown || this.keys.DOWN.isDown) c.scrollY += move;
-    if (this.keys.A.isDown || this.keys.LEFT.isDown) c.scrollX -= move;
-    if (this.keys.D.isDown || this.keys.RIGHT.isDown) c.scrollX += move;
+    if (
+      !["INPUT", "TEXTAREA", "SELECT"].includes(
+        document.activeElement?.tagName ?? "",
+      )
+    ) {
+      if (this.keys.W.isDown || this.keys.UP.isDown) c.scrollY -= move;
+      if (this.keys.S.isDown || this.keys.DOWN.isDown) c.scrollY += move;
+      if (this.keys.A.isDown || this.keys.LEFT.isDown) c.scrollX -= move;
+      if (this.keys.D.isDown || this.keys.RIGHT.isDown) c.scrollX += move;
+    }
     const live = new Set(this.simulation.state.agents.map((a) => a.id));
     for (const [id, s] of this.people)
       if (!live.has(id)) {
@@ -904,6 +1080,7 @@ export class TownScene extends Phaser.Scene {
             p.x,
             p.y,
             this.simulation.state.buildings,
+            this.simulation.state.terrain,
           ) +
           bob,
       )

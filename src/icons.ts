@@ -1,5 +1,10 @@
 const paths: Record<string, string> = {
   tree: "M12 2 5 12h4l-5 6h6v4h4v-4h6l-5-6h4L12 2Z",
+  terrain: "m2 19 6-12 5 7 3-4 6 9H2Zm5-10 4 1",
+  water: "M2 7q3-4 6 0t6 0 6 0M2 12q3-4 6 0t6 0 6 0M2 17q3-4 6 0t6 0 6 0",
+  raise: "M12 17V3m-5 5 5-5 5 5M3 21h18",
+  lower: "M12 3v14m-5-5 5 5 5-5M3 21h18",
+  level: "M3 12h18M7 6l-4 6 4 6m10-12 4 6-4 6",
   home: "m3 11 9-8 9 8M5 10v11h14V10M10 21v-7h4v7",
   road: "m8 2-5 20M16 2l5 20M12 3v3m0 4v4m0 4v3",
   "road-off": "m8 2-5 20M16 2l5 20M12 3v3m0 12v3M6 9l12 6M18 9 6 15",

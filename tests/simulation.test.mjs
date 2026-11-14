@@ -1067,3 +1067,161 @@ test("pinch zoom preserves the world point beneath the moving finger midpoint, i
     assert.ok(n.zoom >= 0.55 && n.zoom <= 2.7);
   }
 });
+
+import {
+  planTerrain,
+  terrainCell,
+  groundHeight,
+} from "../.test-dist/terrain.js";
+test("terrain brushes charge once, persist, protect structures and refund undo without resetting production", () => {
+  const sim = new Simulation();
+  const money = sim.state.money;
+  const b = sim.state.buildings.find((b) => b.kind === "sawmill");
+  b.progress = 2.5;
+  const cmd = { type: "terrain", mode: "raise", x: 2, y: 2, size: 3, steps: 2 };
+  assert.equal(planTerrain(sim.state, cmd).cost, 144);
+  assert.equal(execute(sim, cmd, "height-once").ok, true);
+  assert.equal(execute(sim, cmd, "height-once").ok, true);
+  assert.equal(sim.state.money, money - 144);
+  assert.equal(groundHeight(2, 2, sim.state.terrain), 16);
+  assert.equal(b.progress, 2.5);
+  const loaded = parseSave(JSON.stringify(sim.snapshot()));
+  assert.deepEqual(loaded.terrain, sim.state.terrain);
+  const before = sim.snapshot();
+  assert.equal(execute(sim, { ...cmd, x: 6, y: 10, size: 1 }).ok, false);
+  assert.deepEqual(sim.snapshot(), before);
+  assert.equal(execute(sim, { type: "undoTerrain" }).ok, true);
+  assert.equal(sim.state.money, money);
+  assert.equal(groundHeight(2, 2, sim.state.terrain), 0);
+  assert.equal(execute(sim, { type: "undoTerrain" }).ok, false);
+});
+test("brushes raise the lowest terraces, lower the highest, and level to the selected center", () => {
+  const sim = new Simulation();
+  sim.state.terrain = { "1,1": { kind: "land", height: 2 } };
+  let plan = planTerrain(sim.state, {
+    type: "terrain",
+    mode: "raise",
+    x: 2,
+    y: 2,
+    size: 3,
+  });
+  assert.ok(!plan.changes.some((p) => p.x === 1 && p.y === 1));
+  assert.ok(plan.changes.every((c) => c.height === 1));
+  assert.equal(
+    execute(sim, { type: "terrain", mode: "lower", x: 2, y: 2, size: 3 }).ok,
+    true,
+  );
+  assert.equal(terrainCell(1, 1, sim.state.terrain).height, 1);
+  assert.equal(
+    execute(sim, { type: "terrain", mode: "level", x: 2, y: 2, size: 3 }).ok,
+    true,
+  );
+  assert.equal(terrainCell(1, 1, sim.state.terrain).height, 0);
+});
+test("ponds flood connected low ground, permit real bridges, and filling water permits buildings", () => {
+  const sim = new Simulation();
+  sim.state.decorations = [];
+  sim.state.terrain = {
+    "1,1": { kind: "land", height: -2 },
+    "2,1": { kind: "land", height: -1 },
+  };
+  assert.equal(
+    execute(sim, { type: "terrain", mode: "water", x: 1, y: 1, size: 1 }).ok,
+    true,
+  );
+  assert.equal(terrainCell(2, 1, sim.state.terrain).kind, "water");
+  assert.equal(terrainCell(3, 1, sim.state.terrain).kind, "land");
+  assert.equal(
+    execute(sim, { type: "place", kind: "bridge", x: 1, y: 1 }).ok,
+    true,
+  );
+  assert.equal(isBridge(sim.roads, 1, 1, sim.state.terrain), true);
+  assert.ok(
+    roadHeight(sim.roads, 1, 1, sim.state.buildings, sim.state.terrain) > 0,
+  );
+  assert.equal(
+    execute(sim, { type: "terrain", mode: "land", x: 26, y: 21, size: 2 }).ok,
+    true,
+  );
+  assert.equal(
+    execute(sim, { type: "place", kind: "house", x: 26, y: 21 }).ok,
+    true,
+  );
+  assert.ok(
+    parseSave(JSON.stringify(sim.snapshot())).buildings.some(
+      (b) => b.x === 26 && b.y === 21,
+    ),
+  );
+});
+test("buildings require level ground and sloping roads meet continuously at shared edges", () => {
+  const sim = new Simulation();
+  sim.state.decorations = [];
+  assert.equal(
+    execute(sim, { type: "terrain", mode: "raise", x: 1, y: 1, size: 1 }).ok,
+    true,
+  );
+  assert.match(sim.canPlace("house", 1, 1), /Level/);
+  sim.state.terrain = {
+    "1,1": { kind: "land", height: 1 },
+    "2,1": { kind: "land", height: 2 },
+    "3,1": { kind: "land", height: 3 },
+  };
+  for (const x of [1, 2, 3])
+    assert.equal(
+      execute(sim, { type: "place", kind: "road", x, y: 1 }).ok,
+      true,
+    );
+  for (const x of [1.5, 2.5])
+    for (const y of [0.6, 1, 1.4])
+      assert.ok(
+        Math.abs(
+          roadHeight(sim.roads, x - 1e-7, y, [], sim.state.terrain) -
+            roadHeight(sim.roads, x + 1e-7, y, [], sim.state.terrain),
+        ) < 1e-4,
+      );
+  assert.equal(
+    execute(sim, { type: "place", kind: "road", x: 4, y: 1 }).ok,
+    false,
+    "roads cannot jump a cliff",
+  );
+});
+test("invalid terrain, unaffordable edits, and occupied flood areas leave towns intact", () => {
+  const sim = new Simulation();
+  const baseline = sim.snapshot();
+  for (const command of [
+    { mode: "raise", size: 0 },
+    { mode: "raise", size: 1, steps: 99 },
+    { mode: "water", size: 5, x: 6, y: 10 },
+  ]) {
+    assert.equal(
+      execute(sim, { type: "terrain", x: 2, y: 2, ...command }).ok,
+      false,
+    );
+    assert.deepEqual(sim.snapshot(), baseline);
+  }
+  sim.state.money = 0;
+  assert.equal(
+    execute(sim, { type: "terrain", x: 2, y: 2, size: 1, mode: "raise" }).ok,
+    false,
+  );
+  for (const cell of [
+    { kind: "land", height: 100 },
+    { kind: "water", height: 2 },
+    { kind: "lava", height: 0 },
+  ])
+    assert.throws(
+      () =>
+        parseSave(JSON.stringify({ ...baseline, terrain: { "1,1": cell } })),
+      /terrain/,
+    );
+  assert.throws(
+    () =>
+      parseSave(
+        JSON.stringify({
+          ...baseline,
+          terrain: { "99,1": { kind: "land", height: 1 } },
+        }),
+      ),
+    /terrain/,
+  );
+});

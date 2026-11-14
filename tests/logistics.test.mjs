@@ -87,15 +87,21 @@ test("production links follow recipe chains, warehouse export rules and front en
 
 test("sawmills deliver usable construction planks to warehouses while workshops keep producing", () => {
   const sim = new Simulation();
-  for (let i=0;i<4800;i++) sim.step();
-  assert.ok(sim.stored('planks') >= 16, 'enough planks must reach storage for a grand house');
-  assert.ok(building(sim,'workshop').produced > 10, 'warehouse deliveries must not starve workshops');
-  const house = building(sim,'house');
-  execute(sim,{type:'upgrade',id:house.id});
-  const before=sim.stored('planks');
-  execute(sim,{type:'upgrade',id:house.id});
-  assert.equal(sim.stored('planks'), before-16);
-  assert.equal(house.houseTier,3);
+  for (let i = 0; i < 4800; i++) sim.step();
+  assert.ok(
+    sim.stored("planks") >= 16,
+    "enough planks must reach storage for a grand house",
+  );
+  assert.ok(
+    building(sim, "workshop").produced > 10,
+    "warehouse deliveries must not starve workshops",
+  );
+  const house = building(sim, "house");
+  execute(sim, { type: "upgrade", id: house.id });
+  const before = sim.stored("planks");
+  execute(sim, { type: "upgrade", id: house.id });
+  assert.equal(sim.stored("planks"), before - 16);
+  assert.equal(house.houseTier, 3);
 });
 
 test("cached routes survive simulation ticks, invalidate after road changes, and respect replaced towns", () => {

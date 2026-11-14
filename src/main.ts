@@ -28,6 +28,7 @@ import {
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
 import { TownScene } from "./scene.js";
+import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
 import { buildingArt } from "./building-art.js";
 import { alertIcon } from "./building-alerts.js";
@@ -141,6 +142,7 @@ $("#app").innerHTML = `
    ["inspect", "inspect", "Explore", "V"],
    ["road", "road", "Road", "R"],
    ["bridge", "bridge", "Bridge", "B"],
+   ["terrain", "terrain", "Terrain", "T"],
    ["bulldoze", "hammer", "Remove", "X"],
  ]
    .map(
@@ -211,6 +213,7 @@ function toast(message: string) {
   );
 }
 function setTool(next: Tool) {
+  const wasTerrain = tool === "terrain";
   setMobileMenu(false);
   if (next !== "inspect") closeInspection();
   tool = next;
@@ -245,6 +248,17 @@ function setTool(next: Tool) {
             ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if (next === "terrain") {
+    tab = "build";
+    $("#placement-hint").innerHTML =
+      `${icon("terrain")}<span id="terrain-cost">Choose ground to preview the brush.</span><button id="apply-terrain" class="rotate-placement" disabled>Apply</button>`;
+    $("#apply-terrain").onclick = () => {
+      const c = scene.terrainCommand();
+      if (c) scene.onTerrainApply(c);
+    };
+    renderSidebar();
+    if (matchMedia("(max-width:760px)").matches) setMobileMenu(true);
+  } else if (wasTerrain) renderSidebar();
   updateEntranceHint();
   scene.drawOverlay();
 }
@@ -268,8 +282,11 @@ function updateEntranceHint() {
   if (!el || !isBuilding(tool)) return;
   const connected =
     hovered &&
-    frontage(tool, hovered.x, hovered.y, scene.rotation).some((p) =>
-      simulation.roads.has(key(p)),
+    frontage(tool, hovered.x, hovered.y, scene.rotation).some(
+      (p) =>
+        simulation.roads.has(key(p)) &&
+        terrainCell(p.x, p.y, simulation.state.terrain).height ===
+          terrainCell(hovered!.x, hovered!.y, simulation.state.terrain).height,
     );
   el.textContent = connected
     ? "Front connected to road"
@@ -283,6 +300,53 @@ function renderSidebar() {
     $("#sidebar-content").innerHTML =
       `<div class="town-overview"><span class="eyebrow">GROWING TOGETHER</span><h3>Life in Pinehaven</h3><div id="town-stats"></div><h4>Town inventory</h4><p class="muted">Across buildings and deliveries.</p><div id="inventory"></div><div class="chain-note">${icon("cloud")} Single-player foundation<br><small>Firebase cloud saves · Shared worlds planned</small></div></div>`;
     updateUI();
+    return;
+  }
+  if (tool === "terrain") {
+    const modes: Record<TerrainMode, string> = {
+      raise: "Raise land",
+      lower: "Lower land",
+      level: "Level land",
+      water: "Add water",
+      land: "Add ground",
+    };
+    $("#sidebar-content").innerHTML =
+      `<section class="terrain-tools"><span class="eyebrow">SHAPE THE VALLEY</span><h3>Land & water</h3><p>Choose a brush, then preview it on the map.</p><div class="terrain-modes">${Object.entries(
+        modes,
+      )
+        .map(
+          ([id, name]) =>
+            `<button data-terrain-mode="${id}" class="${scene.terrainMode === id ? "active" : ""}" aria-pressed="${scene.terrainMode === id}">${icon(id === "water" ? "water" : id === "land" ? "leaf" : id === "raise" ? "raise" : id === "lower" ? "lower" : "level")}${name}</button>`,
+        )
+        .join(
+          "",
+        )}</div><label for="terrain-size">Brush size <b id="brush-label">${scene.terrainSize} × ${scene.terrainSize}</b></label><input id="terrain-size" type="range" min="1" max="5" step="1" value="${scene.terrainSize}"><p class="muted">Drag up or down to change height. On a phone, tap the ground then Apply. Drag and pinch still move the map.</p><p class="muted">Raise lifts the lowest selected ground. Lower cuts the highest. Level matches the center tile. Water fills at river level.</p><button class="primary" id="use-terrain">Use brush</button><button id="undo-terrain" class="quiet" ${simulation.canUndoTerrain() ? "" : "disabled"}>${icon("reset")} Undo last terrain edit</button><button id="terrain-back" class="quiet">Back to buildings</button></section>`;
+    document.querySelectorAll<HTMLElement>("[data-terrain-mode]").forEach(
+      (el) =>
+        (el.onclick = () => {
+          scene.terrainMode = el.dataset.terrainMode as TerrainMode;
+          renderSidebar();
+          scene.drawOverlay();
+        }),
+    );
+    $<HTMLInputElement>("#terrain-size").oninput = (e) => {
+      scene.terrainSize = Number((e.target as HTMLInputElement).value);
+      $("#brush-label").textContent =
+        `${scene.terrainSize} × ${scene.terrainSize}`;
+      scene.drawOverlay();
+    };
+    $("#use-terrain").onclick = () => setMobileMenu(false);
+    $("#terrain-back").onclick = () => setTool("inspect");
+    $("#undo-terrain").onclick = async () => {
+      const result = await gateway.command({ type: "undoTerrain" });
+      toast(result.message);
+      if (result.ok) {
+        scene.redraw();
+        save(false);
+        updateUI();
+        renderSidebar();
+      }
+    };
     return;
   }
   const names = {
@@ -337,6 +401,10 @@ function renderSidebar() {
   $("#production-guide").onclick = showChains;
 }
 scene.onTile = async (p: Point) => {
+  if (tool === "terrain") {
+    scene.previewTerrain(p);
+    return;
+  }
   if (tool === "inspect") {
     selectedAgent = null;
     scene.selectedAgent = null;
@@ -363,6 +431,26 @@ scene.onTile = async (p: Point) => {
     scene.redraw();
     save(false);
     updateUI();
+  }
+};
+scene.onTerrainPreview = (plan) => {
+  const label = document.querySelector("#terrain-cost"),
+    button = document.querySelector<HTMLButtonElement>("#apply-terrain");
+  if (label)
+    label.textContent = plan
+      ? (plan.error ??
+        `${scene.terrainCommand()?.mode} · ${plan.changes.length} tiles · ${plan.cost} gold`)
+      : "Choose ground to preview the brush.";
+  if (button) button.disabled = !plan || !!plan.error;
+};
+scene.onTerrainApply = async (command) => {
+  const result = await gateway.command(command);
+  toast(result.message);
+  if (result.ok) {
+    scene.redraw();
+    save(false);
+    updateUI();
+    renderSidebar();
   }
 };
 scene.onHover = (p) => {
@@ -652,7 +740,11 @@ function drawMinimap() {
   for (let y = 0; y < 28; y++)
     for (let x = 0; x < 28; x++) {
       const p = map(x, y);
-      ctx.fillStyle = x > 23 ? "#82aaa0" : "#8fa57c";
+      const cell = terrainCell(x, y, simulation.state.terrain);
+      ctx.fillStyle =
+        cell.kind === "water"
+          ? "#82aaa0"
+          : `hsl(91 21% ${55 + cell.height * 3}%)`;
       ctx.fillRect(p.x, p.y, 3, 2);
     }
   simulation.state.roads.forEach((k) => {
@@ -937,6 +1029,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (k === "x") setTool("bulldoze");
   if (k === "b") setTool("bridge");
+  if (k === "t") setTool("terrain");
   if (k === "g") $("#grid").click();
 });
 window.addEventListener("beforeunload", () => save(false));

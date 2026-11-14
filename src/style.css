@@ -2245,3 +2245,60 @@ dialog p.muted {
     max-height: calc(100dvh - 150px);
   }
 }
+.terrain-tools h3 {
+  font:
+    500 25px "Fraunces",
+    Georgia,
+    serif;
+  margin: 10px 0;
+}
+.terrain-tools p {
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 10px 0 16px;
+}
+.terrain-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 18px 0;
+}
+.terrain-modes button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-height: 68px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 12px 5px;
+}
+.terrain-modes button.active {
+  background: #e0ead6;
+  border-color: #7e9b71;
+}
+.terrain-tools label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.terrain-tools input {
+  width: 100%;
+  min-height: 44px;
+  accent-color: #527951;
+}
+.terrain-tools > button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 9px;
+  justify-content: center;
+}
+@media (max-width: 760px) {
+  .tool-button {
+    font-size: 9px;
+  }
+  #terrain-cost {
+    max-width: calc(100vw - 120px);
+  }
+}

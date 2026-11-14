@@ -143,6 +143,7 @@ export type Tool =
   | DecorationKind
   | "road"
   | "bridge"
+  | "terrain"
   | "bulldoze"
   | "inspect";
 export const isBuilding = (kind: string): kind is BuildingKind =>
