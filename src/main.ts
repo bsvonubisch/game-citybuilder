@@ -1050,7 +1050,7 @@ window.addEventListener("keydown", (e) => {
   if (k === "escape" || k === "v") setTool("inspect");
   if (k === "r") {
     if (isBuilding(tool) || tool === "move") rotatePlacement();
-    else if (tool !== "move") setTool("road");
+    else setTool("road");
   }
   if (k === "x") setTool("bulldoze");
   if (k === "b") setTool("bridge");
