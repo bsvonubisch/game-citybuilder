@@ -9,6 +9,7 @@
   },
   "include": [
     "src/boat-wake.ts",
+    "src/fishing-motion.ts",
     "src/view-world.ts",
     "src/roadwork-sites.ts",
     "src/sprite-ground.ts",

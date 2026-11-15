@@ -6,6 +6,7 @@ import { fisheryCells, fisheryLayout } from "../.test-dist/shoreline.js";
 import { builderPosition } from "../.test-dist/construction.js";
 import { canSupply, productionConnections } from "../.test-dist/logistics.js";
 import {BoatWake,WAKE_LIFETIME} from '../.test-dist/boat-wake.js';
+import {boatFloat,fishingNet} from '../.test-dist/fishing-motion.js';
 import {
   fishingRoute,
   boatPose,
@@ -39,6 +40,19 @@ test('wake emission is frame-rate independent, bounded, and cannot streak across
  a.marks.forEach((p,i)=>assert.ok(Math.hypot(p.x-b.marks[i].x,p.y-b.marks[i].y)<1e-6));
  a.update({x:40,y:40},10.1,true);assert.equal(a.marks.length,0);
  a.update({x:40.1,y:40},10.3,true);a.update({x:40.1,y:40},9,true);assert.equal(a.marks.length,0);
+});
+
+test('boat buoyancy stays subtle and repeatable; fishing gear completes one cycle per catch',()=>{
+ for(const sailing of [false,true])for(const moored of [false,true])for(let t=0;t<60;t+=.1){
+  const p=boatFloat(t,7,sailing,moored);assert.ok(Math.abs(p.height)<=.82);assert.ok(Math.abs(p.drift)<=.012);assert.deepEqual(p,boatFloat(t,7,sailing,moored),'Paused time holds its exact pose');
+ }
+ const seconds=BUILDINGS.fishery.recipe.seconds;
+ assert.equal(fishingNet(0,seconds).extension,0);
+ assert.equal(fishingNet(seconds*.4,seconds).soaking,true);
+ assert.equal(fishingNet(seconds*.8,seconds).catchVisible,true);
+ assert.equal(fishingNet(seconds,seconds).visibility,0,'Gear is stowed before sailing home');
+ let previous=fishingNet(0,seconds);
+ for(let i=1;i<=1000;i++){const p=fishingNet(seconds*i/1000,seconds);assert.ok(Math.abs(p.extension-previous.extension)<.01,'Net never jumps between phases');previous=p;}
 });
 function shore(sim, x, y, rotation) {
   sim.state.terrain ??= {};
