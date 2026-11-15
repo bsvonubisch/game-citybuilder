@@ -135,6 +135,7 @@ export function buildingGuidance(
           action: { type: "workforce" },
         };
   }
+  if(alert.kind==="road")return build("road","Connect this entrance to a warehouse with dirt, stone or brick roads. Pedestrian pavements carry people only; keep a vehicle route for deliveries.");
   if (alert.kind === "depleted")
     return {
       message:
@@ -159,7 +160,7 @@ export function buildingGuidance(
         );
   }
   if (b.kind === "forester" && alert.kind === "input")
-    return {message:"Stumps regrow into mature trees after two days. Keep a clear land route to natural oak, pine or birch trees within the highlighted area, or move the lodge closer to woodland. Planted garden trees stay protected.",label:"Move near woodland",action:{type:"move"}};
+    return {message:"Stumps regrow into mature trees after two minutes. Keep a clear land route to natural oak, pine or birch trees within the highlighted area, or move the lodge closer to woodland. Planted garden trees stay protected.",label:"Move near woodland",action:{type:"move"}};
   if (["quarry","mine"].includes(b.kind) && alert.kind==="input")return{message:"Workers need a clear land route from this workplace's entrance to an exposed rock face within 8 tiles. Clear obstacles or move closer to the matching deposit; roads must reach the workplace but do not need to cover the rocks.",label:"Move beside deposit",action:{type:"move"}};
   if (b.kind === "fishery" && alert.kind === "input")
     return {

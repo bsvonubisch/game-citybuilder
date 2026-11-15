@@ -3525,3 +3525,7 @@ dialog p.muted {
 }
 
 .building-hover-name { position:absolute; z-index:26; pointer-events:none; background:#faf7e9ee; color:#304e3c; padding:7px 11px; border:1px solid #cdd4bd; border-radius:6px; box-shadow:0 2px 8px #26392c25; font-size:12px; font-weight:600; max-width:240px; }
+
+.road-surfaces { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.road-swatch.road-pavement { background:#cdc5b4; border-color:#f5ecd9; }
+@media(max-width:600px){.road-surfaces{grid-template-columns:repeat(2,minmax(0,1fr));}}

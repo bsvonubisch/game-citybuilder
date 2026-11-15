@@ -16,6 +16,9 @@ export function prepareRoadSurfaces(scene: Phaser.Scene) {
     ctx.globalCompositeOperation = "source-over";
     texture.refresh();
   }
+  const paving=scene.textures.createCanvas("road-pavement",512,512)!;
+  paving.context.drawImage(slate,0,0,512,512);
+  paving.context.globalCompositeOperation="source-atop";paving.context.fillStyle="#e3d9ba55";paving.context.fillRect(0,0,512,512);paving.refresh();
   const texture = scene.textures.createCanvas("road-brick", 512, 512)!;
   paintBrickSurface(texture.context, slate);
   texture.refresh();
@@ -55,6 +58,6 @@ export function paintBrickSurface(ctx: CanvasRenderingContext2D, slate: CanvasIm
 }
 
 export function roadSurface(scene: Phaser.Scene, kind: RoadType, x: number, y: number) {
-  const name = kind === "stone" ? "slate" : kind === "brick" ? "road-brick" : `road-dirt-${x % 2}-${y % 2}`;
+  const name = kind === "pavement" ? "road-pavement" : kind === "stone" ? "slate" : kind === "brick" ? "road-brick" : `road-dirt-${x % 2}-${y % 2}`;
   return scene.textures.get(name).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
 }

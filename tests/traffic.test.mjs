@@ -98,7 +98,8 @@ test("pedestrians, cars and deliveries travel faster on better roads without fal
   const path = line(0, 0, 1, 0, 12);
   for (const kind of ["person", "car", "truck"]) {
     const times = [];
-    for (const [type, road] of Object.entries(ROAD_TYPES)) {
+    for (const type of ["dirt","stone","brick"]) {
+      const road=ROAD_TYPES[type];
       const types = Object.fromEntries(path.map((p) => [`${p.x},${p.y}`, type]));
       const result = complete([vehicle(1, path, kind)], path, 700, types);
       const expected = (path.length - 1) / (AGENT_SPEED[kind] * road.speed);

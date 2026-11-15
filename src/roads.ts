@@ -2,6 +2,7 @@ import { AGENT_SPEED } from "./catalog.js";
 import type { Agent, Point } from "./simulation.js";
 
 export const ROAD_TYPES = {
+  pavement: { name: "Pavement", cost: 10, speed: 1, description: "Pedestrians only", color: "#cbc4b0" },
   dirt: { name: "Dirt", cost: 6, speed: 0.75, description: "25% slower", color: "#a17b4e" },
   stone: { name: "Stone", cost: 12, speed: 1, description: "Standard speed", color: "#a3a49f" },
   brick: { name: "Brick", cost: 24, speed: 1.35, description: "35% faster", color: "#bc7860" },

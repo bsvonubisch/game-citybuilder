@@ -411,7 +411,9 @@ export class Simulation {
       }
     return [...perimeter.values()];
   }
-  path(start: Point, end: Point): Point[] | null {
+  path(start: Point, end: Point, kind:Agent["kind"]="person"): Point[] | null {
+    const allowed=(p:Point)=>kind==="person"||roadTypeAt(this.state.roadTypes,p)!=="pavement";
+    if(!allowed(start)||!allowed(end))return null;
     if (!this.roadSet.has(key(start)) || !this.roadSet.has(key(end)))
       return null;
     const queue = [start],
@@ -431,7 +433,7 @@ export class Simulation {
         const n = { x: p.x + d.x, y: p.y + d.y },
           k = key(n);
         if (
-          this.roadSet.has(k) &&
+          this.roadSet.has(k) && allowed(n) &&
           !parents.has(k) &&
           Math.abs(
             groundHeight(n.x, n.y, this.state.terrain) -
@@ -445,10 +447,10 @@ export class Simulation {
     }
     return null;
   }
-  route(a: Point, b: Point) {
+  route(a: Point, b: Point, kind:Agent["kind"]="person") {
     for (const from of this.adjacent(a))
       for (const to of this.adjacent(b)) {
-        const p = this.path(from, to);
+        const p = this.path(from, to,kind);
         if (p) return p;
       }
     return null;
@@ -457,6 +459,7 @@ export class Simulation {
     const travellers = preserveTravel ? [...this.state.agents] : [];
     this.roadSet = new Set(this.state.roads);
     this.traffic.configure(this.roadSet, this.state.roadTypes);
+    for(const a of travellers)if(a.kind==="car"&&a.path.slice(a.segment).some(p=>roadTypeAt(this.state.roadTypes,p)==="pavement"))a.kind="person";
     const warehouses = this.state.buildings.filter(
       (b) =>
         b.kind === "warehouse" &&
@@ -563,7 +566,7 @@ export class Simulation {
         this.adjacent(targetBuilding).some(
           (p) => key(p) === key(a.path[a.path.length - 1]),
         ) &&
-        a.path.slice(a.segment).every((p) => this.roadSet.has(key(p)));
+        a.path.slice(a.segment).every((p) => this.roadSet.has(key(p))&&roadTypeAt(this.state.roadTypes,p)!=="pavement");
       if (!valid && a.cargo) {
         const source = this.building(a.source) ?? warehouses[0];
         if (source)
@@ -600,7 +603,7 @@ export class Simulation {
         if (existing.onsite && !destination.construction && destination.kind !== "forester" && !isExtractor(destination.kind)) {
           delete existing.onsite;
           existing.wait = 0;
-          existing.path = this.route(destination, home) ?? existing.path;
+          existing.path = this.route(destination, home,existing.kind) ?? existing.path;
           existing.segment = 0;
           existing.progress = 0;
           existing.returning = true;
@@ -613,7 +616,7 @@ export class Simulation {
           id: this.state.nextId++,
           kind: destination.construction || destination.kind === "forester" || isExtractor(destination.kind)
             ? "person"
-            : r.id % 4 === 0
+            : r.id % 4 === 0 && p.every(tile=>roadTypeAt(this.state.roadTypes,tile)!=="pavement")
               ? "car"
               : "person",
           path: p,
@@ -656,11 +659,14 @@ export class Simulation {
   }
   private retarget(a: Agent, destination: Building) {
     const entrances = this.adjacent(destination);
+    const remaining=a.path.slice(a.segment);
+    const valid=remaining.every(p=>this.roadSet.has(key(p))&&(a.kind==="person"||roadTypeAt(this.state.roadTypes,p)!=="pavement"));
+    if(!valid)return false;
     if (entrances.some((p) => key(p) === key(a.path[a.path.length - 1])))
       return true;
     const next = Math.min(a.segment + 1, a.path.length - 1);
     for (const entrance of entrances) {
-      const route = this.path(a.path[next], entrance);
+      const route = this.path(a.path[next], entrance,a.kind);
       if (!route) continue;
       // Keep the current segment intact so a moving vehicle never teleports.
       a.path = [...a.path.slice(0, next), ...route];
@@ -954,7 +960,7 @@ export class Simulation {
       this.state.roads.push(...added);
       this.state.roadTypes ??= {};
       for (const p of [...plan.additions, ...plan.upgrades]) {
-        if (terrain(p.x, p.y, this.state.terrain) === "water" || roadType === "stone")
+        if ((terrain(p.x, p.y, this.state.terrain) === "water" && roadType!=="pavement") || roadType === "stone")
           delete this.state.roadTypes[key(p)];
         else this.state.roadTypes[key(p)] = roadType;
       }
@@ -1356,7 +1362,8 @@ export class Simulation {
           destination = r && this.residentDestination(r),
           home = this.building(a.source);
         if (destination && home && destination.id !== a.target) {
-          const path = this.route(home, destination);
+          let path = this.route(home, destination,a.kind);
+          if(!path&&a.kind==="car"){a.kind="person";path=this.route(home,destination);}
           if (path) {
             a.target = destination.id;
             a.path = path;
@@ -1439,6 +1446,7 @@ export class Simulation {
               ? this.route(
                   a.returning ? home : destination,
                   a.returning ? destination : home,
+                  a.kind,
                 )
               : null;
           a.path = reverse ?? [...a.path].reverse();
@@ -1533,7 +1541,7 @@ export class Simulation {
           dest.kind !== "warehouse"
         )
           continue;
-        const p = this.route(b, dest);
+        const p = this.route(b, dest,"truck");
         if (!p) continue;
         const amount = Math.min(6, b.inventory[r.output] ?? 0);
         b.inventory[r.output]! -= amount;
@@ -1628,6 +1636,7 @@ export class Simulation {
         message:
           "This layer is exhausted. Dig deeper here to unlock another large reserve without moving the building.",
       };
+    if(d.recipe&&!this.state.buildings.some(w=>w.kind==="warehouse"&&!!this.route(b,w,"truck")))return{kind:"road",title:"No delivery road",message:"People can use pavements, but goods need a dirt, stone or brick road from this entrance to a warehouse."};
     if (d.recipe && (b.inventory[d.recipe.output] ?? 0) >= outputCapacity(b))
       return {
         kind: "output",
@@ -1760,7 +1769,7 @@ export function parseSave(raw: string): World {
     !s.roadTypes || typeof s.roadTypes !== "object" || Array.isArray(s.roadTypes) ||
     Object.entries(s.roadTypes).some(([k, type]) => {
       const [x, y] = k.split(",").map(Number);
-      return !occupied.has(k) || !isRoadType(type) || terrain(x, y, s.terrain) === "water";
+      return !occupied.has(k) || !isRoadType(type) || (terrain(x, y, s.terrain) === "water" && type!=="pavement");
     })
   )) throw new Error("Invalid road surfaces.");
   for (const b of s.buildings) {

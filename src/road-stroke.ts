@@ -31,7 +31,7 @@ export function roadStroke(from: Point, to: Point): Point[] {
 export function planRoad(sim: Simulation, from: Point, to: Point, roadType: RoadType = "stone"): RoadPlan {
   const tiles = roadStroke(from, to);
   const plan: RoadPlan = { tiles, additions: tiles.filter((p) => !sim.roads.has(tileKey(p))), upgrades: [], cost: 0, bridges: 0 };
-  if (!isRoadType(roadType)) return { ...plan, error: "Choose dirt, stone or brick roads." };
+  if (!isRoadType(roadType)) return { ...plan, error: "Choose a road surface or pedestrian pavement." };
   if (!tiles.length) return { ...plan, error: "Keep both ends of the road inside the valley." };
   const planned = new Set(tiles.map(tileKey));
   for (const p of plan.additions) {
@@ -55,11 +55,13 @@ export function planRoad(sim: Simulation, from: Point, to: Point, roadType: Road
     }
   }
   for (const p of tiles) {
-    if (!sim.roads.has(tileKey(p)) || terrainCell(p.x, p.y, sim.state.terrain).kind === "water") continue;
+    if (!sim.roads.has(tileKey(p))) continue;
+    const previous=roadTypeAt(sim.state.roadTypes,p),conversion=(previous==="pavement")!==(roadType==="pavement");
+    if(terrainCell(p.x,p.y,sim.state.terrain).kind==="water"&&!conversion)continue;
     const current = ROAD_TYPES[roadTypeAt(sim.state.roadTypes, p)];
-    if (ROAD_TYPES[roadType].cost > current.cost) {
+    if (conversion || ROAD_TYPES[roadType].cost > current.cost) {
       plan.upgrades.push(p);
-      plan.cost += ROAD_TYPES[roadType].cost - current.cost;
+      plan.cost += conversion?Math.max(6,ROAD_TYPES[roadType].cost-current.cost):ROAD_TYPES[roadType].cost-current.cost;
     }
   }
   if (!plan.error && plan.cost > sim.state.money) plan.error = `Need ${Math.ceil(plan.cost-sim.state.money)} more gold. Shorten the stretch or wait for taxes and exports.`;

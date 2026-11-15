@@ -2446,3 +2446,21 @@ test("road widening moves lamps onto free curbs and clears posts trapped inside 
   assert.equal(kept.length,1);assert.equal(kept[0].edge,2);
   assert.equal(reconcileRoadLamps(kept,new Set(['3,3','4,3','3,4','3,2','2,3'])).length,0);
 });
+
+
+test("pavements keep pedestrian access, block freight and save as footbridges",()=>{
+  const sim=new Simulation(),depot=sim.state.buildings.find(b=>b.kind==="warehouse"),mill=sim.state.buildings.find(b=>b.kind==="sawmill");
+  sim.state.roadTypes=Object.fromEntries(sim.state.roads.map(k=>[k,"pavement"]));sim.reconnect(true);
+  assert.ok(sim.route(mill,depot,"person"));assert.equal(sim.route(mill,depot,"truck"),null);assert.equal(sim.route(mill,depot,"car"),null);
+  assert.equal(sim.alert(mill).title,"No delivery road");
+  const cargo=sim.state.agents.filter(a=>a.kind==="truck");assert.equal(cargo.length,0);
+  advance(sim,15);assert.ok(sim.state.agents.length);assert.ok(sim.state.agents.every(a=>a.kind==="person"));
+  assert.doesNotThrow(()=>parseSave(JSON.stringify(sim.snapshot())));
+  const p=sim.adjacent(mill)[0];assert.equal(execute(sim,{type:"roadStroke",from:p,to:p,roadType:"stone"}).ok,true);
+  assert.equal(roadTypeAt(sim.state.roadTypes,p),"stone");
+});
+test("cars take a longer vehicle route while pedestrians can use a pavement shortcut",()=>{
+  const sim=new Simulation();sim.state.roads=['1,1','2,1','3,1','1,2','2,2','3,2'];sim.state.roadTypes={'2,1':'pavement'};sim.reconnect();
+  assert.equal(sim.path({x:1,y:1},{x:3,y:1},"person").length,3);
+  const route=sim.path({x:1,y:1},{x:3,y:1},"car");assert.equal(route.length,5);assert.ok(route.every(p=>key(p)!=='2,1'));
+});

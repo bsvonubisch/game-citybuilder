@@ -52,7 +52,7 @@ export function productionConnections(
     source: source.id,
     target: target.id,
     resource: BUILDINGS[source.kind].recipe!.output,
-    path: sim.route(source, target),
+    path: sim.route(source, target,"truck"),
   });
   return {
     building: id,

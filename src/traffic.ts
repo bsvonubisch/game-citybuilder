@@ -140,6 +140,7 @@ export class Traffic {
   private roadTypes?: RoadTypes;
   configure(roads: ReadonlySet<string>, roadTypes?: RoadTypes) {
     this.roadTypes = roadTypes;
+    roads=new Set([...roads].filter(k=>roadTypes?.[k]!=="pavement"));
     this.junctionTiles.clear();
     this.junctions.clear();
     this.junctionGroups.clear();

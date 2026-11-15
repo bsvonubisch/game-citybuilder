@@ -306,7 +306,7 @@ function setTool(next: Tool) {
     : decoration
       ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
       : next === "road"
-        ? `<div class="road-surfaces" role="group" aria-label="Road surface">${Object.entries(ROAD_TYPES).map(([kind, d]) => `<button type="button" data-road-type="${kind}" aria-pressed="${scene.roadType === kind}"><span class="road-swatch road-${kind}" aria-hidden="true"></span><b>${d.name}</b><span>${d.cost} gold / tile</span><small>${d.description}</small></button>`).join("")}</div><span class="road-instructions">Drag to build or upgrade · Pay only the upgrade difference</span><span id="road-stroke-cost" aria-live="polite"></span><small>Wooden bridges: 35 gold · Standard speed<br>Two fingers to pan/zoom · Space-drag to pan · Esc to cancel</small>`
+        ? `<div class="road-surfaces" role="group" aria-label="Road surface">${Object.entries(ROAD_TYPES).map(([kind, d]) => `<button type="button" data-road-type="${kind}" aria-pressed="${scene.roadType === kind}"><span class="road-swatch road-${kind}" aria-hidden="true"></span><b>${d.name}</b><span>${d.cost} gold / tile</span><small>${d.description}</small></button>`).join("")}</div><span class="road-instructions">Drag to lay roads or footpaths · Converting access costs at least 6 gold/tile</span><span id="road-stroke-cost" aria-live="polite"></span><small>Wooden bridges: 35 gold · Pavement keeps them pedestrian-only<br>Two fingers to pan/zoom · Space-drag to pan · Esc to cancel</small>`
         : next === "bridge"
           ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
           : next === "bulldoze"
