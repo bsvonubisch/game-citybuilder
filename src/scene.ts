@@ -1,6 +1,7 @@
 import {RoadWorkAlerts} from './roadwork-alerts.js';
 import {ViewWorld} from './view-world.js';
 import {deliveryVehicle} from './delivery-vehicles.js';
+import {civilianCar} from './civilian-vehicles.js';
 import {quarter} from './view-space.js';
 import type {RoadWorkSite} from './roadwork-sites.js';
 import {roadWorkerPosition,roadVisualState} from './roadworks.js';
@@ -316,6 +317,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("vehicles", "/vehicles-directions.png");
     this.load.image('delivery-industrial','/delivery-industrial-v1.png');
     this.load.image('delivery-town','/delivery-town-v1.png');
+    this.load.image('civilian-cars','/civilian-cars-v1.png');
     this.load.image("walkers", "/pedestrian-walk.png");
     this.load.image("vehicles-turns", "/vehicles-turns.png");
     this.load.image("walkers-turns", "/pedestrian-turns.png");
@@ -384,6 +386,7 @@ export class TownScene extends Phaser.Scene {
     this.trimAtlas("vehicles", 4, 4);
     this.trimAtlas('delivery-industrial',8,4);
     this.trimAtlas('delivery-town',8,4);
+    this.trimAtlas('civilian-cars',8,4);
     this.trimAtlas("walkers", 8, 4);
     this.trimAtlas("vehicles-turns", 4, 4);
     this.trimAtlas("walkers-turns", 8, 4);
@@ -722,6 +725,14 @@ export class TownScene extends Phaser.Scene {
     sprite.y -= groundHeight(x, y, this.simulation.state.terrain);
   }
   private travellerScale(a: Agent, row: number, texture: string) {
+    if(texture==='civilian-cars'){
+      let scale=this.travellerScales.get('civilian-common');
+      if(scale===undefined){
+        const atlas=this.textures.get(texture),width=[8,10,12,14].reduce((n,frame)=>n+atlas.get(frame).width,0)/4;
+        scale=25/width;this.travellerScales.set('civilian-common',scale);
+      }
+      return scale;
+    }
     if(texture.startsWith('delivery-')){
       // Both sheets share one chassis scale; front views remain naturally
       // narrower and changing cargo or turning never enlarges the vehicle.
@@ -1522,7 +1533,8 @@ export class TownScene extends Phaser.Scene {
         direction = Math.floor(heading / 2),
         intermediate = heading % 2 === 1;
       const delivery=a.kind==='truck'?deliveryVehicle(a.cargo):undefined;
-      const texture = delivery?.texture ?? (
+      const car=a.kind==='car'?civilianCar(a):undefined;
+      const texture = delivery?.texture ?? (car&&!car.classic?'civilian-cars':
         (a.kind === "person" ? "walkers" : "vehicles") +
         (intermediate ? "-turns" : ""));
       const row =
@@ -1530,7 +1542,7 @@ export class TownScene extends Phaser.Scene {
           ? a.id % 2
           : delivery
             ? delivery.row
-            : a.id % 2;
+            : car?.row??a.id % 2;
       const walk = walkFrame(
         direction,
         a.id % 2,
@@ -1538,7 +1550,7 @@ export class TownScene extends Phaser.Scene {
         a.wait > 0 || !a.active,
         intermediate,
       );
-      const frame = a.kind === "person" ? walk.frame : delivery ? row * 8 + heading : row * 4 + direction;
+      const frame = a.kind === "person" ? walk.frame : delivery||(car&&!car.classic) ? row * 8 + heading : row * 4 + direction;
       if (!s) {
         s = this.add
           .image(0, 0, texture, frame)

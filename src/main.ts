@@ -3,6 +3,7 @@ import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
 import {deliveryVehicle} from './delivery-vehicles.js';
+import {civilianCar} from './civilian-vehicles.js';
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 import {farmSummary} from './farming.js';
@@ -1135,7 +1136,7 @@ function updateAgentInspector() {
     a.kind === "person"
       ? "Walking around Pinehaven"
       : a.kind === "car"
-        ? "Driving · keeps right"
+        ? `${civilianCar(a).name} · keeps right`
         : "Delivering goods · keeps right";
   const from = simulation.building(a.returning ? a.target : a.source),
     to = simulation.building(a.returning ? a.source : a.target);
