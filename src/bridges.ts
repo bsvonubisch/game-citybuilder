@@ -3,6 +3,7 @@ import { footprint, frontage } from "./catalog.js";
 import { groundHeight, type TerrainMap } from "./terrain.js";
 
 export const BRIDGE_HEIGHT = 6;
+export const BRIDGE_PARAPET_HEIGHT = 9;
 export const DIRECTIONS = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },

@@ -2,6 +2,7 @@ import {roadTypeAt} from "./roads.js";
 import {roadSurface} from "./road-art.js";
 import type Phaser from "phaser";
 import {
+  BRIDGE_PARAPET_HEIGHT,
   bridgeRails,
   bridgeLandings,
   deckHeight,
@@ -382,7 +383,7 @@ export class BridgeArt {
         const p=point(a.x+(b.x-a.x)*i/2,a.y+(b.y-a.y)*i/2),q=point(a.x+(b.x-a.x)*(i+1)/2,a.y+(b.y-a.y)*(i+1)/2);
         this.quad(ctx,[{x:p.x,y:p.y-8},{x:q.x,y:q.y-8},q,p],i*wall.width/2,0,wall.width/2,wall.height*.3,wall);
         ctx.strokeStyle=tint.edge;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y-7);ctx.lineTo(q.x,q.y-7);ctx.stroke();
-        ctx.strokeStyle=tint.cap;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(p.x,p.y-9);ctx.lineTo(q.x,q.y-9);ctx.stroke();
+        ctx.strokeStyle=tint.cap;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(p.x,p.y-BRIDGE_PARAPET_HEIGHT);ctx.lineTo(q.x,q.y-BRIDGE_PARAPET_HEIGHT);ctx.stroke();
       }
     }));
     const result={deck,supports,rails};this.variants.set(id,result);return result;

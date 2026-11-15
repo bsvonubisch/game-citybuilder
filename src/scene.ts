@@ -4,7 +4,7 @@ import {FOUNDATION_HEIGHT} from "./foundation.js";
 import Phaser from "phaser";
 import {planRemoval} from "./removal.js";
 import {nearestFenceSide,fenceCenter} from "./fences.js";
-import {lampPoint,nearestRoadEdge} from "./streetlights.js";
+import {lampPoint,lampPlacement,nearestRoadEdge} from "./streetlights.js";
 import { NightArt } from "./night-art.js";
 import { ShadowArt } from "./shadow-art.js";
 import { planRoad, type RoadPlan } from "./road-stroke.js";
@@ -789,7 +789,7 @@ export class TownScene extends Phaser.Scene {
           d,
           this.simulation.state.decorations,
         );
-      sprite.y -= groundHeight(d.x, d.y, this.simulation.state.terrain);
+      if(d.kind==="streetlight"){const placement=lampPlacement(this.simulation,d);sprite.setPosition(placement.screen.x,placement.screen.y);sprite.setData("lampGround",placement.screen);}else sprite.y -= groundHeight(d.x, d.y, this.simulation.state.terrain);
       sprite.setData("streetlight", d.kind === "streetlight");
       this.trees.push(sprite);
     }
@@ -840,7 +840,7 @@ export class TownScene extends Phaser.Scene {
     for(const rock of this.trees) {
       const decoration=rock.getData("decoration");
       const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?fenceCenter(decoration):undefined)) as Point|undefined;
-      if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots,decoration?.kind==="fence")-.1);
+      if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots,decoration?.kind==="fence")+(decoration?.kind==="streetlight"&&lampPlacement(this.simulation,decoration).bridge? .3 : -.1));
     }
     this.drawOverlay();
   }
@@ -1014,11 +1014,7 @@ export class TownScene extends Phaser.Scene {
             this.simulation.state.decorations,
           );
         if(this.tool==="planter")this.planterArt.place(this.decorationGhost,this.hover.x,this.hover.y,planterMask(this.hover,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction));
-        this.decorationGhost.y -= groundHeight(
-          this.hover.x,
-          this.hover.y,
-          this.simulation.state.terrain,
-        );
+        if(this.tool==="streetlight"){const p=lampPlacement(this.simulation,{...this.hover,edge:this.simulation.roads.has(key(this.hover))?this.rotation:undefined}).screen;this.decorationGhost.setPosition(p.x,p.y);}else this.decorationGhost.y -= groundHeight(this.hover.x,this.hover.y,this.simulation.state.terrain);
       }
       if (isBuilding(kind)) {
         if(kind==="forester")this.drawForestRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));

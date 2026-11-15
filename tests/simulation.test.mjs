@@ -2558,3 +2558,18 @@ test("little cottages use one tile, retain residents during upgrades and restore
  assert.equal(townNeeds(loaded).find(n=>n.id==='homes').have,loaded.state.buildings.filter(b=>b.connected&&(!b.construction||b.construction.upgradeTo||b.construction.upgradeLevel)).reduce((n,b)=>n+houseCapacity(b),0));
  for(let r=0;r<4;r++)assert.deepEqual(dimensions('cottage',r),[1,1]);
 });
+
+test("bridge lamps follow ramps and mount on masonry coping on both curbs",async()=>{
+ const {lampPlacement}=await import('../.test-dist/streetlights.js');
+ const sim=new Simulation();sim.state.buildings=[];sim.state.terrain=Object.fromEntries(['1,1','2,1','3,1','1,2','1,3'].map(k=>[k,{kind:'water',height:0}]));
+ for(const reverse of [false,true])for(const kind of ['dirt','stone','brick']){
+   const points=Array.from({length:5},(_,i)=>reverse?{x:1,y:i}:{x:i,y:1});
+   sim.state.roads=points.map(key);sim.state.roadTypes=Object.fromEntries(points.map(p=>[key(p),kind]));sim.reconnect();
+   for(const tile of points.slice(1,4))for(const edge of reverse?[0,2]:[1,3]){
+     const p=lampPlacement(sim,{...tile,edge}),height=roadHeight(sim.roads,p.point.x,p.point.y,[],sim.state.terrain);
+     assert.equal(p.elevation,height+(kind==='dirt'?0:9));
+     assert.equal(p.screen.y,(p.point.x+p.point.y)*16-p.elevation);
+     assert.equal(p.bridge,true);
+   }
+ }
+});

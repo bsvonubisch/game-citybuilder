@@ -1,3 +1,4 @@
+import {lampPlacement} from "./streetlights.js";
 import type Phaser from "phaser";
 import { dimensions } from "./catalog.js";
 import { castShadow, type Lamp } from "./lighting.js";
@@ -40,6 +41,8 @@ export class ShadowArt {
       const b = sim.building(source.getData("buildingId")),
         d = source.getData("decoration");
       if (!b && (!d || d.kind === "fence" || d.kind === "planter")) continue;
+      // The ground-shadow pass cannot clip to a narrow elevated deck.
+      if(d?.kind === "streetlight" && lampPlacement(sim,d).bridge)continue;
       const [w, h] = b
         ? dimensions(b.kind, b.rotation, b.plot)
         : d.kind === "bench"
