@@ -17,8 +17,8 @@ function canvasFixture(){
   return {data};
  }})})};return crops;
 }
-test('uneven church atlas crops are measured exactly as drawn, without stretching their aspect',()=>{
- const crops=canvasFixture(),art=buildingArt('church',2),source={width:1261,height:1247};
+test('explicit uneven atlas crops are measured exactly as drawn, without stretching their aspect',()=>{
+ const crops=canvasFixture(),art={...buildingArt('church',2),sourceRect:[0,610,630,637]},source={width:1261,height:1247};
  const measured=groundedArt(art,source);
  assert.deepEqual(crops[0].slice(0,4),art.sourceRect);
  assert.deepEqual(measured.size,art.sourceRect.slice(2));
@@ -35,6 +35,8 @@ test('all four orientations keep one scale and include the projecting doorstep i
  assert.ok(scales.every(s=>s===scales[0]));
 });
 test('hunter frontage maps to the entrance views and modular parks retain their own geometry',()=>{
- assert.equal(buildingArt('hunter',0).frame,1);assert.equal(buildingArt('hunter',1).frame,0);
+ for(const kind of ['hunter','church','cottage','warehouse','forester','sawmill','workshop','brickworks'])for(let r=0;r<4;r++){
+  const art=buildingArt(kind,r);assert.equal(art.frame,r);assert.deepEqual(art.size,kind==='forester'?[887,443]:[627,627]);assert.equal(art.sourceRect,undefined);
+ }
  const park=buildingArt('park',0);assert.strictEqual(groundedArt(park,{width:1024,height:1024}),park);
 });

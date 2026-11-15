@@ -7,7 +7,7 @@ import {
   type HouseTier,
 } from "../src/catalog.js";
 import { buildingArt } from "../src/building-art.js";
-import { iso } from "../src/rendering.js";
+import { iso,opaqueBounds } from "../src/rendering.js";
 import { drawPlot, plotBounds, artTransform } from "../src/plot-art.js";
 import {resolvedBuildingArt} from '../src/sprite-ground.js';
 import { drawRotor, rotorView } from "../src/windmill.js";
@@ -37,6 +37,11 @@ await Promise.all([
   wood.decode(),
   meadow.decode(),walker.decode(),
 ]);
+const walkerCell=document.createElement('canvas');
+walkerCell.width=Math.floor(walker.width/8);walkerCell.height=Math.floor(walker.height/4);
+const wc=walkerCell.getContext('2d')!;wc.drawImage(walker,0,0);
+const personBounds=opaqueBounds(wc.getImageData(0,0,walkerCell.width,walkerCell.height).data,walkerCell.width,walkerCell.height);
+const personWidth=personBounds.width/personBounds.height*22;
 for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
   if (filter && !filter.includes(kind)) continue;
   for (const tier of (kind === "house"
@@ -128,7 +133,7 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
           }
         ctx.drawImage(sprite, left, top, right - left, bottom - top);
         const person=iso(w-.1,h-.1);
-        ctx.drawImage(walker,0,0,walker.width/8,walker.height/4,person.x-11,person.y-22,22,22);
+        ctx.drawImage(walker,personBounds.x,personBounds.y,personBounds.width,personBounds.height,person.x-personWidth/2,person.y-22,personWidth,22);
         if (contacts.checked) {
           poly(
             [

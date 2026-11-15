@@ -1,0 +1,170 @@
+{
+  "generator": "Built-in image generation",
+  "date": "2026-11-15",
+  "standards": "SPRITE-STANDARDS.md",
+  "assets": [
+    {
+      "file": "public/building-warehouse.png",
+      "guide": "docs/art-guides/warehouse.png",
+      "generationSpecification": "Texture the exact 2:1 blockout as a cozy timber warehouse, four consistent quarter-turn views. Broad open front loading doors, short ramp, dark evergreen shingles, small loft windows, crates/barrels inside the footprint. Transparent no broad platform, ground, shadow or smoke.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          627,
+          627
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-805631c5-23eb-4fff-848d-520fcc72dfe5.png"
+    },
+    {
+      "file": "public/building-hunter.png",
+      "guide": "docs/art-guides/hunter.png",
+      "generationSpecification": "Texture the exact 2:1 blockout as a cozy timber-and-cream hunter lodge, four consistent quarter-turn views. Green roof, front wooden door and compact porch canopy, bow/quiver, antler sign, small boots/basket. Transparent no platform, ground, shadow or smoke.",
+      "finalEdit": "Correct only HUMAN SCALE and ROTATION CONSISTENCY on this exact hunter-lodge atlas. Preserve all four wall outlines, exact 2:1 camera and floor slopes, roof silhouette, atlas positions, and warm pixel style. In BOTH FRONT views reduce the ordinary wooden door to 90px clear height within each 627px cell (current ~140px is oversized), keep the bottom on the same floor and centre on facade; fill above with matching cream plaster/timber. Make all ordinary window glass about 38px tall, smaller than current. Keep smaller lantern, bow, quiver, boots appropriate to a 78px-tall person. Make shingles finer/more numerous to match that human scale. Remove the mismatched lean-to log storage rack entirely in all four views so the building geometry is consistent around the back. Keep one chimney but place it at CENTRE of roof ridge in all views, not one side, with its top perpendicular to the same isometric axes. Top two front doors, bottom two no door. No other structural changes. True transparent background, no broad base, no shadow, no text.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          627,
+          627
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-426c9ab2-17ca-47f0-8618-90065a64cecd.png"
+    },
+    {
+      "file": "public/building-forester.png",
+      "guide": "docs/art-guides/forester.png",
+      "prompt": "Texture this exact geometric blockout into a cozy pixel-art city-building game atlas, preserving all four silhouettes, wall corners, roof planes and 2:1 floor baselines precisely. Do not change camera or flatten the front. Four quarter-turn views of the SAME building with identical physical scale. First row fronts with door; second row real backs without front door. Detailed warm timber, deep green individual shingles, honey highlights, amber windows, crisp hand-painted pixel texture. True transparent background, equal 2x2 cells. NO platform, no broad base slab, no grass/floor/paving, no shadows, no people, no smoke, no text/grid. Subject: a FORESTER'S LOG CABIN, small single-storey woodland workplace. Walls are horizontal honey-brown rounded logs with joined corners. Small normal wooden entrance on front gable, two small side windows, a little square stone chimney at rear-left roof corner, copper lantern. A tidy low stacked log rack against one side, a small chopping stump and axe immediately by the front, tiny woodland flower clusters at wall feet. One modest spruce immediately behind cabin, not huge and not protruding sideways beyond the plot. All logs/stump/tree positions correspond across the four rotations. Compact readable working area, no floating props, no platform. Preserve guide's door height and small window size.",
+      "finalEdit": "Correct only HUMAN SCALE and ROTATION CONSISTENCY on this exact forester-cabin atlas. Keep all four building wall outlines, exact floor slopes and camera, roof silhouette and framing unchanged. Ordinary wooden front doors must be about 90 pixels clear height in each 627px cell (current ~140px is too tall), with bottom at same floor and centred on facade, matching log wall above. All ordinary window glass about 38px tall. Make the logs and roof shingles finer and more numerous: roughly 1.5 times the existing count along each wall/roof direction so they are human scale. Reduce log rack, stump, axe and lantern correspondingly; person would be 78px tall. One small stone chimney placed at CENTRE OF RIDGE in all four views, not jumping between corners. Remove the tree behind roof (the game adds separate trees). No other changes, preserve warm cozy detailed pixel style and precise 2:1 geometry. True transparent background, no platform, no ground texture, no shadow, no baked smoke or text.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          887,
+          443
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-58d508fc-e05b-4ba4-8394-d7b6140d1459.png"
+    },
+    {
+      "file": "public/building-cottage.png",
+      "guide": "docs/art-guides/cottage.png",
+      "prompt": "Texture this exact geometric blockout into a cozy pixel-art city-building game atlas, preserving all four silhouettes, wall corners, roof planes and 2:1 floor baselines precisely. Do not change camera or flatten the front. Four quarter-turn views of the SAME building with identical physical scale. First row fronts with door; second row real backs without front door. Detailed warm timber, deep green individual shingles, honey highlights, amber windows, crisp hand-painted pixel texture. True transparent background, equal 2x2 cells. NO platform, no broad base slab, no grass/floor/paving, no shadows, no people, no smoke, no text/grid. Subject: tiny ONE-TILE RESIDENTIAL COTTAGE for one household. Square timber-and-cream plaster single room, a pyramid hip roof exactly as guide, modest small brick chimney at rear-left roof slope, ordinary human-sized wood front door precisely centered on front wall, iron handle and tiny warm copper lantern beside it. Two modest side windows and one back window, as guide, no door on rear. Dark timber beams, no huge flower beds or verandas. A small amount of firewood tight to the rear wall. This cottage's door is nearly as tall as the entire wall because the hut is small, don't shrink it or add a second storey. Door must be on wall, never folded around corner. Keep window/door proportions from guide.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          627,
+          627
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-abca1963-a0a2-4937-9d86-3cf9074dfee5.png",
+      "finalEdit": "Change only the chimney placement in this four-view cottage sprite atlas. Keep every wall, door, window, wood stack, roof outline, pixel texture, colour, building size, atlas cell position and 2:1 perspective EXACTLY unchanged. The current chimney incorrectly stays at screen-left in every rotation. Move the small brick chimney to emerge at the exact CENTRAL APEX of the pyramid hip roof in all four frames; then it has one consistent physical position when rotated. Same small chimney size and height in all four views, fine brickwork, no smoke. Fill its old off-centre location with matching green roof shingles. No other changes, do not resize or reframe. Preserve equal 2x2 square atlas and true transparency."
+    },
+    {
+      "file": "public/building-sawmill.png",
+      "guide": "docs/art-guides/sawmill.png",
+      "prompt": "Transform this exact four-view 2:1 dimetric blockout into a detailed cozy pixel-art SAWMILL atlas for a city builder. Preserve guide corners, floor slopes ±0.5, roof planes and equal-cell framing exactly. No flattened or perspective front. Same physical building rotated four quarter turns; top left front-left, top right front-right, bottom left rear-left, bottom right rear-right. An open front timber saw shed with dark evergreen fine shingles, honey brown beams, a modest circular saw table in the open bay, a short stack of cut planks beside it wholly inside the walls' footprint, a copper belt/pulley motor on one side, and one narrow copper flue at back centre on the roof ridge (same placement every view). Machinery occluded behind walls in back views. Ordinary side windows are SMALL, about 38 pixels high within a 627-pixel cell; tool handles and building materials have human scale, a person would be about 78 source pixels tall. Roof tiles and wall planks are fine and numerous, not giant. Follow the guide's open bay size. Warm copper highlights, subtle amber windows, rich hand-painted pixel detail, matches cozy village buildings. Transparent background, no floor slab, no broad stone base, no paving/grass/ground/shadow, no baked smoke, no people/text. Upright wall corners vertical and all horizontal walls, gutters and ridges parallel to the exact ground axes. One consistent small-scale timber workshop, not toy proportions.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          627,
+          627
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-524ca107-3552-49d6-890c-29d20268384c.png"
+    },
+    {
+      "file": "public/building-workshop.png",
+      "guide": "docs/art-guides/workshop.png",
+      "prompt": "Paint detailed cozy pixel-art materials onto this exact geometry guide: COPPER WORKSHOP, same physical building in four quarter-turn views, equal 2x2 cells. Do not change floor slopes ±0.5, roof ridge, wall corners or camera; exact orthographic 2:1 dimetric. Timber framing and reddish brick walls, dark evergreen fine shingles, two narrow copper exhaust stacks on the ridge at rear centre (positions correspond in every rotation), a compact copper boiler beside the front wall, an iron forge opening with warm orange furnace and a very short small conveyor/workbench along the front inside the footprint. A normal staff door next to the forge, SMALL normal side windows. Human scale: a person is 78 source pixels tall in a 627 cell, ordinary door opening is about 90 pixels high, ordinary windows 38 pixels high. Do not inflate door/window sizes or bricks to fill the building. Detailed fine bricks/roof shingles/wood, copper glow and amber windows. Front door and furnace appear in top two views only; rear two views have back wall and small windows, correctly hidden furnace. Same architecture not four different workshops. Transparent background; no surrounding platform/floor/grass/paving/ground shadow, no smoke/characters/text. Narrow wall footing allowed, engine adds stone base.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          627,
+          627
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-2a1d0c53-27a2-4305-b977-436799fcdfbd.png"
+    },
+    {
+      "file": "public/building-church.png",
+      "guide": "docs/art-guides/church.png",
+      "prompt": "Render this exact architectural guide as a detailed cozy pixel-art VILLAGE CHURCH sprite atlas. Preserve the 2:1 dimetric camera, wall base slopes ±0.5, rectangular nave width/depth ratio 2:3, roof planes and scale across all four views. A small stone parish church, fine warm grey masonry blocks, timber trim, dark evergreen fine shingles, narrow arched stained glass side windows and a wooden double entrance in the front gable. The square belltower is on the SAME front corner shown by guide; keep coherent quarter-turn rotation, tower partly hidden behind main roof in rear views. Give tower two louvered bell openings and a small warm metal cross on the green cap. Fix any guide overlap by physically joining tower into the wall at ground level, no floating tower. Normal human scale: person is approximately 70px tall in a 627px cell, main double entrance approx100px high, small stone blocks and fine roof shingles. Simple short entrance step wholly within plot. Both top views show door, both bottom views show rear, NOT different church designs. Warm amber interior, modest lanterns at front. True transparent equal2x2 atlas, no full base platform/paving/floor/shadow, no people, smoke or text. Keep generous padding for cross at top and all four silhouettes fully in separate cells.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          627,
+          627
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-9e4bcdb2-e302-47da-8179-ff5f324afd65.png"
+    },
+    {
+      "file": "public/building-brickworks.png",
+      "guide": "docs/art-guides/brickworks.png",
+      "prompt": "Texture the supplied geometric blockout into detailed cozy pixel-art BRICK KILN WORKS, same building rotated through four views, fixed camera and scale. Preserve precise wall-base ±0.5 slopes, wall corners, roof planes and framing of guide. Rich reddish brick single-storey workshop, dark evergreen fine roof tiles, a square masonry chimney centred at rear of ridge; small warm side windows. Front gable has a modest wooden staff door and a kiln arch with glowing orange interior, a short stack of finished small red bricks within the ground footprint. Compact metal tongs/tool rack. Both front views have same front kiln and door; back views have rear windows and no kiln opening. A person is 78 source pixels high in a627-pixel cell; normal staff door90px, window38px. Fine many bricks/shingles, human-sized door/windows, not huge toy masonry. Four quarter-turns of one consistent architecture with chimney rotating accurately. Warm subtle copper details and honey highlights matching cozy city sprites. Transparent equal2x2 atlas, no broad base/floor/paving/grass or surrounding shadow, no smoke, people or text. Roof can overhang, ground clutter stays inside walls' plot.",
+      "atlas": {
+        "columns": 2,
+        "rows": 2,
+        "cellSize": [
+          627,
+          627
+        ],
+        "frameOrder": [
+          "southwest",
+          "southeast",
+          "northeast",
+          "northwest"
+        ]
+      },
+      "source": "exec-2147994e-d704-4b03-95ed-3c169ff3a1a3.png"
+    }
+  ]
+}

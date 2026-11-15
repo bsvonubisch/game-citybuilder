@@ -280,7 +280,7 @@ export class TownAnimation {
           );
         }
       }
-      if (b.kind === "sawmill") {
+      if (b.kind === "sawmill" && b.rotation < 2) {
         const p = this.point(b, ...art.mechanism!),
           r = 22 * p.scale;
         g.lineStyle(0.6, 0xe2ddd0, 0.8);
@@ -300,15 +300,12 @@ export class TownAnimation {
         for(let i=0;i<6;i++){const age=(phase*1.4+i/6)%1,side=b.rotation===0?1:-1;g.fillStyle(0xd7ad67,(1-age)*.8).fillRect(p.x+side*age*13,p.y+2+age*age*9,1,.7);}
       }
       if (b.kind === "workshop" && active && b.rotation < 2) {
-        const t = (phase * 0.25) % 1;
-        const center = art.mechanism!;
-        dot(
-          center[0] + t * 50 * (b.rotation === 0 ? 1 : -1),
-          center[1] + t * 20,
-          8,
-          0xe6bd7d,
-          0.7,
-        );
+        const p=this.point(b,...art.mechanism!);
+        g.fillStyle(0xffb34a,.3+.1*Math.sin(phase*9)).fillEllipse(p.x,p.y,28*p.scale,23*p.scale,12);
+        for(let i=0;i<3;i++){
+          const age=(phase*1.5+i/3)%1;
+          g.fillStyle(0xffd27b,(1-age)*.75).fillRect(p.x+Math.sin(i*2+phase)*age*4,p.y-age*7,.65,.65);
+        }
       }
     }
   }

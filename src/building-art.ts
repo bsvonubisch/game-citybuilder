@@ -22,15 +22,11 @@ export interface BuildingArt {
 }
 // Original ground contacts align the base-free cutouts without shearing them.
 // The shared raised foundation fills the exact occupied grid in every view.
-const grounds: Record<
+const grounds: Partial<Record<
   Exclude<BuildingKind, "fishery"|"garden"|"market">,
   readonly PlotCorners[]
-> = {
+>> = {
   butcher:[[[76,389],[311,507],[551,387]],[[76,389],[311,507],[551,387]],[[76,389],[311,507],[551,387]],[[76,389],[311,507],[551,387]]],
-  hunter:[[[30,445],[312,586],[594,445]],[[25,445],[307,586],[589,445]],[[25,449],[307,590],[589,449]],[[28,449],[310,590],[592,449]]],
-  church:[[[28,450],[346,609],[558,503]],[[38,504],[250,610],[568,451]],[[47,472],[263,580],[587,418]],[[45,414],[369,576],[585,468]]],
-  cottage:[[[236,331],[450,438],[664,331]],[[219,331],[433,438],[647,331]],[[236,339],[450,446],[664,339]],[[217,339],[431,446],[645,339]]],
-  brickworks:[[[40,475],[320,615],[600,475]],[[25,480],[305,620],[585,480]],[[35,472],[315,612],[595,472]],[[35,472],[315,612],[595,472]]],
   tavern: [
     [
       [80, 483],
@@ -141,94 +137,6 @@ const grounds: Record<
       [596, 419],
     ],
   ],
-  forester: [
-    [
-      [42, 428],
-      [306, 582],
-      [608, 410],
-    ],
-    [
-      [25, 415],
-      [320, 580],
-      [608, 415],
-    ],
-    [
-      [19, 408],
-      [309, 569],
-      [598, 408],
-    ],
-    [
-      [21, 408],
-      [313, 574],
-      [610, 408],
-    ],
-  ],
-  sawmill: [
-    [
-      [64, 360],
-      [384, 520],
-      [704, 360],
-    ],
-    [
-      [35, 350],
-      [355, 510],
-      [675, 350],
-    ],
-    [
-      [88, 330],
-      [408, 490],
-      [728, 330],
-    ],
-    [
-      [38, 340],
-      [358, 500],
-      [678, 340],
-    ],
-  ],
-  workshop: [
-    [
-      [57, 485],
-      [288, 597],
-      [609, 423],
-    ],
-    [
-      [52, 404],
-      [323, 593],
-      [575, 496],
-    ],
-    [
-      [49, 443],
-      [273, 547],
-      [588, 394],
-    ],
-    [
-      [27, 382],
-      [301, 580],
-      [574, 465],
-    ],
-  ],
-  warehouse: [
-    [
-      [30, 461],
-      [298, 587],
-      [608, 437],
-    ],
-    [
-      [19, 437],
-      [329, 587],
-      [596, 459],
-    ],
-    [
-      [33, 411],
-      [328, 549],
-      [608, 417],
-    ],
-    [
-      [19, 418],
-      [298, 550],
-      [595, 410],
-    ],
-  ],
   park: [
     [
       [31, 410],
@@ -298,7 +206,6 @@ const grounds: Record<
 };
 const chimneys: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
   tavern:[[458,31],[172,32],[458,33],[171,36]],
-  cottage:[[341,88],[545,87],[539,90],[336,91]],
   house: [
     [221, 16],
     [391, 16],
@@ -311,24 +218,6 @@ const chimneys: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
     [223, 81],
     [250, 101],
   ],
-  forester: [
-    [252, 103],
-    [288, 133],
-    [393, 99],
-    [337, 97],
-  ],
-  sawmill: [
-    [563, 62],
-    [246, 38],
-    [308, 125],
-    [260, 52],
-  ],
-  workshop: [
-    [240, 48],
-    [270, 48],
-    [333, 49],
-    [307, 27],
-  ],
   mine: [
     [194, 35],
     [243, 27],
@@ -337,7 +226,6 @@ const chimneys: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
   ],
 };
 const mechanisms: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
-  brickworks:[[319,540],[73,481],[0,0],[0,0]],
   bakery:[[480,370],[0,0],[0,0],[0,0]],
   mill: [
     [270, 172],
@@ -351,18 +239,23 @@ const mechanisms: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
     [316, 232],
     [308, 232],
   ],
-  sawmill: [
-    [392, 302],
-    [424, 315],
-    [244, 252],
-    [234, 325],
-  ],
-  workshop: [
-    [285, 459],
-    [458, 452],
-    [456, 375],
-    [100, 349],
-  ],
+};
+/** Geometry-guided redraws: equal cells within each atlas, direct SW/SE/NE/NW order.
+ * Keep source anchors here; the renderer uses one measured scale for all views. */
+const redrawn: Partial<Record<BuildingKind, {
+  size?: readonly [number,number];
+  ground: readonly PlotCorners[];
+  chimneys?: readonly GroundPoint[];
+  mechanisms?: readonly GroundPoint[];
+}>> = {
+  warehouse:{ground:[[[110,440],[307,508],[496,430]],[[130,430],[321,508],[518,440]],[[113,420],[311,489],[498,420]],[[130,420],[319,489],[514,420]]]},
+  hunter:{ground:[[[126,429],[313,497],[489,429]],[[137,429],[319,497],[502,429]],[[126,430],[314,499],[490,430]],[[137,430],[319,499],[502,430]]],chimneys:[[299,110],[298,111],[298,86],[299,88]]},
+  forester:{size:[887,443],ground:[[[345,355],[510,402],[711,332]],[[170,332],[373,402],[548,355]],[[350,350],[510,402],[711,332]],[[170,332],[373,402],[548,350]]],chimneys:[[528,62],[353,62],[528,61],[353,61]]},
+  cottage:{ground:[[[126,409],[309,490],[488,409]],[[130,409],[313,490],[490,409]],[[124,405],[307,481],[490,405]],[[130,405],[313,481],[490,405]]],chimneys:[[309,54],[310,54],[309,54],[310,54]]},
+  church:{ground:[[[95,467],[264,529],[523,407]],[[75,407],[345,529],[515,467]],[[90,461],[250,538],[522,418]],[[79,418],[349,538],[518,461]]]},
+  sawmill:{ground:[[[109,439],[327,510],[505,432]],[[121,432],[307,510],[530,439]],[[110,408],[325,484],[505,408]],[[121,408],[307,484],[530,408]]],chimneys:[[322,96],[283,96],[311,79],[295,79]],mechanisms:[[217,387],[396,387],[0,0],[0,0]]},
+  workshop:{ground:[[[119,419],[305,490],[485,418]],[[135,418],[316,490],[501,419]],[[119,420],[305,470],[485,420]],[[135,420],[316,470],[501,420]]],chimneys:[[296,99],[306,99],[298,75],[301,75]],mechanisms:[[225,409],[392,409],[0,0],[0,0]]},
+  brickworks:{ground:[[[79,444],[294,520],[488,432]],[[136,432],[329,520],[543,444]],[[79,430],[295,505],[489,430]],[[136,430],[330,505],[543,430]]],chimneys:[[312,94],[288,94],[310,84],[289,84]],mechanisms:[[242,413],[359,413],[0,0],[0,0]]},
 };
 export function buildingArt(
   kind: BuildingKind,
@@ -370,10 +263,8 @@ export function buildingArt(
   houseTier: HouseTier = 1,
 ): BuildingArt {
   if(kind==="market")return {texture:"market-stalls",frame:rotation,columns:4,rows:3,size:[444,296],ground:[[0,148],[222,259],[444,148]]};
-  if(kind==="church"){
-    const frame=[1,0,2,3][rotation],y=frame<2?0:610,height=frame<2?610:637;
-    return {texture:"building-church",frame,columns:2,rows:2,size:[630,height],sourceRect:[frame%2*630,y,630,height],ground:grounds.church[frame].map(([x,y])=>[x,y+(frame>=2?25:12)]) as unknown as PlotCorners};
-  }
+  const redraw=redrawn[kind];
+  if(redraw)return {texture:`building-${kind}`,frame:rotation,columns:2,rows:2,size:redraw.size??[627,627],ground:redraw.ground[rotation],chimney:redraw.chimneys?.[rotation],mechanism:redraw.mechanisms?.[rotation]};
   if (kind === "fishery") {
     // Atlas frames are mirrored pairs; map them to the four road-facing edges.
     const frame = [1, 0, 3, 2][rotation];
@@ -497,17 +388,15 @@ export function buildingArt(
   }
   return {
     texture: `building-${kind}`,
-    frame: kind==="hunter"?[1,0,2,3][rotation]:rotation,
+    frame: rotation,
     columns: kind === "mine" || kind === "quarry" ? 4 : 2,
     rows: 2,
     size:
-      kind === "cottage" ? [887,443] : kind === "sawmill"
-        ? [768, 512]
-        : kind === "mine" || kind === "quarry"
+       kind === "mine" || kind === "quarry"
           ? [443, 443]
           : [627, 627],
-    ground: grounds[kind][rotation],
-    chimney: kind==="butcher"?([[250,96],[338,97],[250,99],[338,100]] as const)[rotation]:kind==="hunter"?([[427,80],[215,83],[210,115],[435,116]] as const)[rotation]:kind==="brickworks"?([[458,50],[450,55],[208,52],[173,48]] as const)[rotation]:chimneys[kind]?.[rotation],
+    ground: grounds[kind]![rotation],
+    chimney: kind==="butcher"?([[250,96],[338,97],[250,99],[338,100]] as const)[rotation]:chimneys[kind]?.[rotation],
     mechanism: mechanisms[kind]?.[rotation],
   };
 }
