@@ -8,6 +8,7 @@ export function daylight(tick: number) {
   const light = smooth((hour - 5) / 2) * (1 - smooth((hour - 18) / 3));
   const night = hour < 6 || hour >= 20;
   return {
+    day: Math.floor((tick + 80) / 240) + 1,
     hour,
     light,
     darkness: 1 - light,

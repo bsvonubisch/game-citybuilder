@@ -11,6 +11,8 @@ import { Simulation } from "../.test-dist/simulation.js";
 import { agentDistance } from "../.test-dist/rendering.js";
 import { STEP } from "../.test-dist/catalog.js";
 import { trafficQueues } from "../.test-dist/traffic-queues.js";
+import { laneCuts, laneBounds, vehicleExtents } from "../.test-dist/lanes.js";
+import { travelFacing } from "../.test-dist/rendering.js";
 const vehicle = (id, path, kind = "car") => ({
   id,
   kind,
@@ -88,6 +90,62 @@ test("opposite directions use their own right-hand lane on both road axes", () =
       Math.abs(Math.hypot(p.x - reverse.x, p.y - reverse.y) - 2 * LANE_OFFSET) <
         1e-9,
     );
+  }
+});
+
+test("cars and pedestrians round every left and right corner with continuous position and heading", () => {
+  for (const kind of ["car", "truck", "person"])
+    for (let rotation = 0; rotation < 4; rotation++)
+      for (const turn of [-1, 1]) {
+        const rotate = ({ x, y }) => {
+          for (let r = 0; r < rotation; r++) [x, y] = [-y, x];
+          return { x, y };
+        };
+        const path = [
+          ...line(-3, 0, 1, 0, 4),
+          ...line(0, turn, 0, turn, 3),
+        ].map(rotate);
+        const a = vehicle(1, path, kind),
+          headings = new Set();
+        for (let d = 2.5; d <= 3.5; d += 0.01) {
+          const p = lanePose(a, d),
+            q = lanePose(a, d + 0.00001);
+          assert.ok(Math.hypot(p.x - q.x, p.y - q.y) < 0.00003);
+          assert.ok(Math.hypot(p.dx - q.dx, p.dy - q.dy) < 0.0001);
+          headings.add(travelFacing(p.dx, p.dy));
+        }
+        assert.equal(
+          headings.size,
+          3,
+          "the middle yaw view must appear between road directions",
+        );
+        const cuts = laneCuts(a, 0, path.length - 1);
+        for (let i = 1; i < cuts.length; i++) {
+          const from = cuts[i - 1],
+            to = cuts[i],
+            p = lanePose(a, from),
+            q = lanePose(a, to);
+          const bounds = laneBounds(a, from, to);
+          for (let n = 0; n <= 20; n++) {
+            const t = n / 20,
+              d = from + (to - from) * t,
+              pose = lanePose(a, d),
+              extents = vehicleExtents(a, d);
+            for (const axis of ["x", "y"])
+              assert.ok(
+                Math.abs(pose[axis] - (p[axis] + (q[axis] - p[axis]) * t)) +
+                  extents[axis] <=
+                  bounds[axis] + 1e-9,
+              );
+          }
+        }
+      }
+});
+
+test("all eight ground-plane headings select the matching upright artwork", () => {
+  for (let i = 0; i < 8; i++) {
+    const angle = (i * Math.PI) / 4;
+    assert.equal(travelFacing(Math.cos(angle), Math.sin(angle)), i);
   }
 });
 

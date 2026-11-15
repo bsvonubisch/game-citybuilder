@@ -67,7 +67,7 @@ See [Firebase setup](docs/FIREBASE.md). GitHub Actions reads `FIREBASE_WEB_CONFI
 - `src/scene.ts`: Phaser rendering, asset atlas frames, camera, picking, and overlays.
 - `src/building-art.ts` / `src/plot-art.ts`: four-view art for buildings and house tiers, rigid sprite fitting, separate paved lots and animation anchors.
 - `src/fences.ts` / `src/fence-art.ts`: automatic cardinal fence connections and cached timber geometry.
-- `src/traffic.ts`: right-hand lanes, continuous swept collision checks, junction queues and entry spacing.
+- `src/lanes.ts` / `src/traffic.ts`: rounded right-hand lanes, continuous swept collision checks, junction queues and entry spacing.
 - `src/decorations.ts`: persisted decorations and one-time migration of procedural scenery.
 - `src/rendering.ts`: ground fitting and smooth road movement between simulation ticks.
 - `src/terrain-art.ts`: detailed cached terrain chunks, slate curbs, and shoreline transitions.
@@ -86,7 +86,7 @@ Artwork defaults to Automatic scaling: smooth below 200% zoom and crisp for clos
 
 This is a single-player foundation, not live multiplayer. Firebase account/save code is implemented; project-specific provider setup and an authenticated Firebase CLI are required. Firestore ownership, schema, and shared-world isolation rules are covered by emulator tests (Java 21 required). See [the multiplayer plan](docs/MULTIPLAYER.md) for the authority and synchronization boundary.
 
-The economy is intentionally forgiving and not balanced for a full game. Traffic uses a deterministic road model rather than a general physics engine; pedestrians use the pavement edge. Seasons, terrain editing, power, zoning, and advanced logistics are future work. Elevated roofs and tree canopies may visually occlude neighboring ground. Foundation corners determine plot alignment; atlas padding does not. Save schema 3 adds decorations and explicit legacy plot dimensions, and migrates versions 1 and 2. Local version 2 saves are backed up before the entrance upgrade.
+The economy is intentionally forgiving and not balanced for a full game. Traffic uses a deterministic road model rather than a general physics engine; pedestrians use the pavement edge. Seasons, power, zoning, and advanced logistics are future work. Elevated roofs and tree canopies may visually occlude neighboring ground. Foundation corners determine plot alignment; atlas padding does not. Save schema 3 adds decorations and explicit legacy plot dimensions, and migrates versions 1 and 2. Local version 2 saves are backed up before the entrance upgrade.
 
 ### Terrain and touch controls
 
@@ -107,3 +107,7 @@ The Copper Mug tavern is a 2×2 evening leisure building (280 gold, 12 wood, 8 p
 Residents have a saved leisure need that slowly falls. Completed visits restore it: fountains +22, taverns +45. Food and leisure contribute to happiness. Low-leisure homes display an actionable warning. Evening journeys choose an available local service; satisfied residents stay home. Jobs are assigned to nearby connected homes first and have a maximum commute of 28 road tiles.
 
 All buildings have three functional levels. Existing house tiers remain; industries gain +35% production pace per level and storage of 20/40/60. Leisure buildings gain visitor capacity while retaining their walking range. Warehouse upgrades improve tool export prices. Upgrades cost materials and construction labor, keep inventory, identity and footprint, and persist in saves. Warehouse road access remains available during improvements. Extraction depth is separate and repeatable beyond level 3. Other actions stay under More actions; there is one main button.
+
+### Rounded turns
+
+Cars, trucks and pedestrians follow tangent-continuous curves through corners. Eight upright yaw views replace the old four-direction snap; gait continues through the turn and sprite scale stays constant across frames. Selected travel routes follow the same curves. Traffic uses those exact curves and the changing vehicle body bounds, with continuous checks between simulation ticks. Conflicting approaches leave room for turning trucks; compatible opposing lanes and same-lane convoys can proceed together. The dev-only `/tests/turns.html` audit shows both turns in all four orientations with a position slider and playback.

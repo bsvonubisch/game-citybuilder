@@ -21,7 +21,7 @@ import {
   type BuildingKind,
 } from "./catalog.js";
 import {
-  facing,
+  travelFacing,
   opaqueBounds,
   iso,
   fitGround,
@@ -57,7 +57,8 @@ import {
   type TerrainPlan,
 } from "./terrain.js";
 import { WaterArt } from "./water-art.js";
-import { lanePose, lanePoint, LANE_OFFSET, WALK_OFFSET } from "./traffic.js";
+import { lanePose, lanePoint, LANE_OFFSET } from "./traffic.js";
+import { laneCuts } from "./lanes.js";
 import { BridgeArt } from "./bridge-art.js";
 import { FenceArt } from "./fence-art.js";
 import { fenceMask } from "./fences.js";
@@ -192,6 +193,7 @@ export class TownScene extends Phaser.Scene {
   private animation!: TownAnimation;
   private nightArt!: NightArt;
   private lightSources: Phaser.GameObjects.Image[] = [];
+  private travellerScales = new Map<string, number>();
   private ghost?: Phaser.GameObjects.Image;
   private ghostRotor?: Phaser.GameObjects.Image;
   private hover: Point | null = null;
@@ -221,6 +223,8 @@ export class TownScene extends Phaser.Scene {
     this.load.image("props", "/town-props.png");
     this.load.image("vehicles", "/vehicles-directions.png");
     this.load.image("walkers", "/pedestrian-walk.png");
+    this.load.image("vehicles-turns", "/vehicles-turns.png");
+    this.load.image("walkers-turns", "/pedestrian-turns.png");
     this.load.image("meadow", "/meadow-hd.png");
     this.load.image("slate", "/slate-hd.png");
     this.load.image("shore", "/shore-details.png");
@@ -262,6 +266,8 @@ export class TownScene extends Phaser.Scene {
     this.events.once("shutdown", () => this.buildingAlerts.clear());
     this.trimAtlas("vehicles", 4, 4);
     this.trimAtlas("walkers", 8, 4);
+    this.trimAtlas("vehicles-turns", 4, 4);
+    this.trimAtlas("walkers-turns", 8, 4);
     this.trimAtlas("deposits", 4, 2);
     this.trimAtlas("shore", 4, 2);
     this.trimAtlas("garden", 4, 4);
@@ -546,6 +552,31 @@ export class TownScene extends Phaser.Scene {
   ) {
     this.plotArt.place(sprite, kind, x, y, rotation, plot, houseTier);
     sprite.y -= groundHeight(x, y, this.simulation.state.terrain);
+  }
+  private travellerScale(a: Agent, row: number, texture: string) {
+    const cacheKey = `${a.kind}:${row}:${texture}`;
+    const cached = this.travellerScales.get(cacheKey);
+    if (cached !== undefined) return cached;
+    const person = a.kind === "person",
+      base = person ? "walkers" : "vehicles";
+    const original = this.textures.get(base),
+      variant = this.textures.get(texture);
+    const source = original.getSourceImage() as HTMLImageElement;
+    const target = variant.getSourceImage() as HTMLImageElement;
+    const frames = person
+      ? Array.from(
+          { length: 16 },
+          (_, i) =>
+            original.get(Math.floor(i / 4) * 8 + (a.id % 2) * 4 + (i % 4))
+              .height,
+        )
+      : Array.from({ length: 4 }, (_, i) => original.get(row * 4 + i).width);
+    const size = frames.reduce((sum, n) => sum + n, 0) / frames.length;
+    const scale =
+      (((person ? 22 : a.kind === "truck" ? 29 : 25) / size) * source.height) /
+      target.height;
+    this.travellerScales.set(cacheKey, scale);
+    return scale;
   }
   private artPoint(b: Building, x: number, y: number) {
     const sprite = this.buildings.get(b.id)!;
@@ -978,10 +1009,8 @@ export class TownScene extends Phaser.Scene {
       (a) => a.id === this.selectedAgent,
     );
     if (!a) return;
-    const offset = a.kind === "person" ? WALK_OFFSET : LANE_OFFSET;
-    const points = a.path
-      .slice(a.segment)
-      .map((_, i) => lanePoint(a.path, i + a.segment, offset))
+    const points = laneCuts(a, agentDistance(a, this.acc), a.path.length - 1)
+      .map((distance) => lanePose(a, distance))
       .map((p) => {
         const v = iso(p.x, p.y);
         return {
@@ -1215,11 +1244,15 @@ export class TownScene extends Phaser.Scene {
       let s = this.people.get(a.id);
       const site = a.onsite ? this.simulation.building(a.onsite) : undefined;
       const p = lanePose(a, agentDistance(a, this.acc)),
-        direction = facing(p.dx, p.dy);
-      const texture = a.kind === "person" ? "walkers" : "vehicles";
+        heading = travelFacing(p.dx, p.dy),
+        direction = Math.floor(heading / 2),
+        intermediate = heading % 2 === 1;
+      const texture =
+        (a.kind === "person" ? "walkers" : "vehicles") +
+        (intermediate ? "-turns" : "");
       const row =
         a.kind === "person"
-          ? a.id % 4
+          ? a.id % 2
           : a.kind === "truck"
             ? 2 + (a.id % 2)
             : a.id % 2;
@@ -1228,6 +1261,7 @@ export class TownScene extends Phaser.Scene {
         a.id % 2,
         agentDistance(a, this.acc),
         a.wait > 0 || !a.active,
+        intermediate,
       );
       const frame = a.kind === "person" ? walk.frame : row * 4 + direction;
       if (!s) {
@@ -1244,11 +1278,7 @@ export class TownScene extends Phaser.Scene {
         !s.getData("sized")
       ) {
         s.setTexture(texture, frame)
-          .setScale(
-            a.kind === "person"
-              ? 22 / s.frame.height
-              : (a.kind === "truck" ? 29 : 25) / s.frame.width,
-          )
+          .setScale(this.travellerScale(a, row, texture))
           .setData("sized", true);
       }
       const v = iso(p.x, p.y),
@@ -1314,7 +1344,7 @@ export class TownScene extends Phaser.Scene {
         this.animation.vehicle(
           a,
           s,
-          direction,
+          heading,
           this.simulation.state.tick * STEP + this.acc,
         );
     }

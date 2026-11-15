@@ -1,50 +1,15 @@
 import { AGENT_SPEED, STEP } from "./catalog.js";
 import type { Agent, Point } from "./simulation.js";
-
-export const LANE_OFFSET = 0.24,
-  WALK_OFFSET = 0.4;
-const direction = (a: Point, b: Point) => ({ x: b.x - a.x, y: b.y - a.y });
-/** Right-hand lanes in world space. Mitered waypoints keep the lane continuous
- * through all four turn directions; pedestrians use the outer pavement edge. */
-export function lanePoint(
-  path: readonly Point[],
-  index: number,
-  offset: number,
-) {
-  const p = path[index];
-  const before =
-    index > 0
-      ? direction(path[index - 1], p)
-      : direction(p, path[Math.min(1, path.length - 1)]);
-  const after =
-    index < path.length - 1 ? direction(p, path[index + 1]) : before;
-  const corner = before.x !== after.x || before.y !== after.y;
-  return {
-    x: p.x - (before.y + (corner ? after.y : 0)) * offset,
-    y: p.y + (before.x + (corner ? after.x : 0)) * offset,
-  };
-}
-export function lanePose(a: Agent, distance = a.segment + a.progress) {
-  const end = a.path.length - 1,
-    segment = Math.min(Math.floor(distance), Math.max(0, end - 1)),
-    t = Math.min(1, distance - segment);
-  const offset = a.kind === "person" ? WALK_OFFSET : LANE_OFFSET;
-  const p = lanePoint(a.path, segment, offset),
-    q = lanePoint(a.path, Math.min(segment + 1, end), offset);
-  const d = direction(a.path[segment], a.path[Math.min(segment + 1, end)]);
-  return {
-    x: p.x + (q.x - p.x) * t,
-    y: p.y + (q.y - p.y) * t,
-    dx: d.x,
-    dy: d.y,
-  };
-}
+import {
+  lanePose,
+  laneCuts,
+  laneBounds,
+  vehicleExtents as extents,
+} from "./lanes.js";
+export { lanePoint, lanePose, LANE_OFFSET, WALK_OFFSET } from "./lanes.js";
 const key = (p: Point) => `${p.x},${p.y}`;
-function extents(a: Agent, distance: number) {
-  const p = lanePose(a, distance),
-    length = a.kind === "truck" ? 0.38 : 0.33;
-  return { x: p.dx ? length : 0.15, y: p.dx ? 0.15 : length };
-}
+const STOP_DISTANCE = 1.3,
+  RELEASE_DISTANCE = 0.6;
 function overlaps(a: Agent, da: number, b: Agent, db: number) {
   const p = lanePose(a, da),
     q = lanePose(b, db);
@@ -59,31 +24,30 @@ export function vehiclesOverlap(a: Agent, b: Agent) {
   return overlaps(a, a.segment + a.progress, b, b.segment + b.progress);
 }
 
-/** Swept bounds over the whole tick, split exactly at every turn. Sampling only
- * a few instants misses short overlaps when a car changes direction mid-tick. */
+/** Swept bounds include every curved path slice and the rotating vehicle body. */
 function sweptOverlap(a: Agent, ma: number, b: Agent, mb: number) {
   const da = a.segment + a.progress,
     db = b.segment + b.progress,
     cuts = [0, 1];
-  for (const [distance, move] of [
-    [da, ma],
-    [db, mb],
-  ])
+  for (const [agent, distance, move] of [
+    [a, da, ma],
+    [b, db, mb],
+  ] as const)
     if (move > 0)
-      for (let node = Math.floor(distance) + 1; node < distance + move; node++)
+      for (const node of laneCuts(agent, distance, distance + move).slice(
+        1,
+        -1,
+      ))
         cuts.push((node - distance) / move);
   cuts.sort((a, b) => a - b);
   if (cuts.some((t) => overlaps(a, da + ma * t, b, db + mb * t))) return true;
-  for (let i = 1; i < cuts.length; i++) {
-    const start = cuts[i - 1],
-      end = cuts[i],
-      mid = (start + end) / 2;
+  const intersects = (start: number, end: number, depth = 0): boolean => {
     const p = lanePose(a, da + ma * start),
       q = lanePose(b, db + mb * start),
       p1 = lanePose(a, da + ma * end),
       q1 = lanePose(b, db + mb * end);
-    const ea = extents(a, da + ma * mid),
-      eb = extents(b, db + mb * mid);
+    const ea = laneBounds(a, da + ma * start, da + ma * end),
+      eb = laneBounds(b, db + mb * start, db + mb * end);
     let enter = 0,
       leave = 1;
     for (const axis of ["x", "y"] as const) {
@@ -102,9 +66,17 @@ function sweptOverlap(a: Agent, ma: number, b: Agent, mb: number) {
         leave = Math.min(leave, Math.max(t0, t1));
       }
     }
-    if (enter < leave - 1e-10) return true;
-  }
-  return false;
+    if (enter >= leave - 1e-10) return false;
+    const mid = (start + end) / 2;
+    if (overlaps(a, da + ma * mid, b, db + mb * mid)) return true;
+    // A rotated body's maximum bounds must not be applied at the start of
+    // an entire curve: that makes its rear grow backwards into its follower.
+    // Refine uncertain intervals until separation is proven, retaining a
+    // conservative answer at the precision limit for very short contacts.
+    if (depth >= 12) return true;
+    return intersects(start, mid, depth + 1) || intersects(mid, end, depth + 1);
+  };
+  return cuts.some((end, i) => i > 0 && intersects(cuts[i - 1], end));
 }
 
 /** Independent swept corridors allow compatible lanes to share a junction.
@@ -119,14 +91,15 @@ function corridorsOverlap(
 ) {
   const segments = (agent: Agent, from: number, to: number) => {
     const parts = [];
-    for (let d = from; d < to - 1e-8; ) {
-      const end = Math.min(to, Math.floor(d + 1e-8) + 1);
+    const cuts = laneCuts(agent, from, to);
+    for (let i = 1; i < cuts.length; i++) {
+      const d = cuts[i - 1],
+        end = cuts[i];
       parts.push({
         p: lanePose(agent, d),
         q: lanePose(agent, end),
-        e: extents(agent, (d + end) / 2),
+        e: laneBounds(agent, d, end),
       });
-      d = end;
     }
     return parts;
   };
@@ -231,13 +204,14 @@ export class Traffic {
       for (const id of ids) {
         const a = cars.find((a) => a.id === id);
         // Release once the rear has cleared, before stopping at the next crossing.
-        // The old 1.1-tile radius overlapped the next crossing's stop line.
+        // Keep this below the gap to the next crossing's stop line. Waiting
+        // approaches leave space for the full body of a turning truck.
         if (
           !a?.active ||
           !a.path.some(
             (p, i) =>
               this.junctionGroups.get(key(p)) === junction &&
-              i >= a.segment + a.progress - 0.7 &&
+              i >= a.segment + a.progress - RELEASE_DISTANCE &&
               i <= a.segment + a.progress + 1.8,
           )
         )
@@ -248,13 +222,14 @@ export class Traffic {
     const range = (a: Agent, junction: string) => {
       const at = a.segment + a.progress;
       const nodes = a.path.flatMap((p, i) =>
-        this.junctionGroups.get(key(p)) === junction && i >= at - 0.7
+        this.junctionGroups.get(key(p)) === junction &&
+        i >= at - RELEASE_DISTANCE
           ? [i]
           : [],
       );
       if (!nodes.length) return [at, Math.min(a.path.length - 1, at + 0.8)];
       return [
-        Math.max(at, nodes[0] - 1.1),
+        Math.max(at, nodes[0] - STOP_DISTANCE),
         Math.min(a.path.length - 1, nodes[nodes.length - 1] + 0.8),
       ];
     };
@@ -362,7 +337,7 @@ export class Traffic {
           distance = i - at;
         if (
           !junction ||
-          distance < -0.7 ||
+          distance < -RELEASE_DISTANCE ||
           distance > 1.8 ||
           this.junctions.get(junction)?.has(a.id)
         )
@@ -409,7 +384,7 @@ export class Traffic {
       ) {
         const group = this.junctionGroups.get(key(a.path[i]));
         if (group !== undefined && blockedByOwner(a, group) && i >= at)
-          desired = Math.min(desired, Math.max(0, i - at - 1.1));
+          desired = Math.min(desired, Math.max(0, i - at - STOP_DISTANCE));
       }
       const clear = (move: number) =>
         cars.every(

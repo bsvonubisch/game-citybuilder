@@ -157,6 +157,12 @@ export function facing(dx: number, dy: number): 0 | 1 | 2 | 3 {
   return 3; // northeast
 }
 
+/** Eight yaw views around the ground plane: SE, S, SW, W, NW, N, NE, E.
+ * Upright sprites are never rotated or skewed in screen space. */
+export function travelFacing(dx: number, dy: number) {
+  return ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
+}
+
 /** Bounds exclude alpha padding, so image origins refer to visible ground contact. */
 export function opaqueBounds(
   data: Uint8ClampedArray,

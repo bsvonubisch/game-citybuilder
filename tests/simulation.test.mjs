@@ -81,6 +81,14 @@ const execute = (sim, command, id = "test-" + sim.state.revision) =>
 const advance = (sim, seconds) => {
   for (let i = 0; i < seconds * 4; i++) sim.step();
 };
+test("the displayed day advances at midnight while keeping the 08:00 start", () => {
+  assert.equal(daylight(0).day, 1);
+  assert.equal(daylight(0).hour, 8);
+  assert.equal(daylight(159).day, 1);
+  assert.equal(daylight(160).day, 2);
+  assert.equal(daylight(160).hour, 0);
+  assert.equal(daylight(240).day, 2);
+});
 const finishConstruction = (sim, b) => {
   for (let i = 0; i < 5000 && b.construction; i++) sim.step();
   assert.equal(b.construction, undefined, "builders complete their work");
@@ -1798,7 +1806,7 @@ test("unaffordable and duplicate excavation commands are atomic; malformed depth
 
 test("daylight is continuous, repeats daily and night production slows without changing inventory", () => {
   assert.equal(daylight(0).hour, 8);
-  assert.deepEqual(daylight(240), daylight(0));
+  assert.deepEqual(daylight(240), { ...daylight(0), day: 2 });
   assert.equal(daylight(150).night, true);
   assert.equal(daylight(150).workRate, 0.25);
   for (let tick = 0; tick < 240; tick += 0.25)

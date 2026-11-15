@@ -1293,8 +1293,7 @@ function updateUI() {
     `Food ${s.food}% · leisure ${simulation.leisure()}% · actual nearby visits improve leisure`;
   const light = daylight(s.tick),
     clock = `${String(Math.floor(light.hour)).padStart(2, "0")}:${String(Math.floor((light.hour % 1) * 60)).padStart(2, "0")}`;
-  $("#day").textContent =
-    `Day ${Math.floor(s.tick / 240) + 1} · ${clock} · ${light.phase}`;
+  $("#day").textContent = `Day ${light.day} · ${clock} · ${light.phase}`;
   $("#day").title = light.night
     ? "Night shift: 25% work pace, fewer deliveries; most residents stay home."
     : "Day shift: full work pace.";

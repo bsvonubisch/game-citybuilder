@@ -20,13 +20,15 @@ export function walkFrame(
   variant: number,
   distance: number,
   waiting: boolean,
+  intermediate = false,
 ) {
   let phase = waiting ? 1 : Math.floor(distance * 10) % 4;
   // One generated rear-view passing pose has the wrong bag; use the matching pose.
-  if (variant === 1 && direction === 3 && phase === 1) phase = 3;
+  if (!intermediate && variant === 1 && direction === 3 && phase === 1)
+    phase = 3;
   return {
     frame: direction * 8 + variant * 4 + phase,
-    flip: variant === 0 && direction === 0 && phase === 2,
+    flip: !intermediate && variant === 0 && direction === 0 && phase === 2,
   };
 }
 
@@ -108,7 +110,7 @@ export class TownAnimation {
   vehicle(
     a: Agent,
     sprite: Phaser.GameObjects.Image,
-    direction: number,
+    heading: number,
     time: number,
   ) {
     let g = this.wheels.get(a.id);
@@ -126,15 +128,25 @@ export class TownAnimation {
     const left = sprite.x - sprite.displayWidth / 2,
       top = sprite.y - sprite.displayHeight * sprite.originY;
     const positions =
-      direction % 2 === 0
-        ? [
-            [0.12, 0.65],
-            [0.5, 0.84],
-          ]
-        : [
-            [0.5, 0.84],
-            [0.87, 0.65],
-          ];
+      heading % 2 === 1
+        ? heading === 1 || heading === 5
+          ? [
+              [0.1, 0.88],
+              [0.9, 0.88],
+            ]
+          : [
+              [0.24, 0.85],
+              [0.8, 0.85],
+            ]
+        : Math.floor(heading / 2) % 2 === 0
+          ? [
+              [0.12, 0.65],
+              [0.5, 0.84],
+            ]
+          : [
+              [0.5, 0.84],
+              [0.87, 0.65],
+            ];
     const r = a.kind === "truck" ? 1.2 : 1;
     for (const [u, v] of positions) {
       const x = left + u * sprite.displayWidth,
