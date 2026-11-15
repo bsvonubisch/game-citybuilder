@@ -2,7 +2,7 @@ import {SIZE} from './catalog.js';
 import type {Point,World} from './simulation.js';
 
 export const TOWN_EVENT_LIMIT=100;
-export const EVENT_KINDS=['notice','arrival','departure','construction','upgrade','demolition','building','road','landscape','farm'] as const;
+export const EVENT_KINDS=['notice','arrival','departure','construction','upgrade','demolition','building','road','landscape','farm','shortage','recovery','leisure'] as const;
 export type TownEventKind=typeof EVENT_KINDS[number];
 export interface TownEvent {
   id:number;
@@ -12,6 +12,8 @@ export interface TownEvent {
   message:string;
   buildingId?:number;
   tile?:Point;
+  topic?:string;
+  state?:string;
 }
 type EventWorld=Pick<World,'tick'|'events'|'history'>;
 export function recordTownEvent(world:EventWorld,kind:TownEventKind,message:string,target?:{buildingId?:number;tile?:Point}) {
@@ -35,6 +37,7 @@ export function restoreTownEvents(world:EventWorld) {
     ids.add(e.id);const clean:TownEvent={id:e.id,kind:e.kind,message:e.message};
     if(e.tick!==undefined)clean.tick=e.tick;
     if(Number.isSafeInteger(e.buildingId)&&e.buildingId!>0)clean.buildingId=e.buildingId;
+    if(typeof e.topic==='string'&&e.topic.length<80&&typeof e.state==='string'&&e.state.length<120){clean.topic=e.topic;clean.state=e.state;}
     if(e.tile&&[e.tile.x,e.tile.y].every(n=>Number.isFinite(n)&&n>=0&&n<SIZE))clean.tile={x:e.tile.x,y:e.tile.y};
     return [clean];
   }).sort((a,b)=>b.id-a.id);

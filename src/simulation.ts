@@ -1,4 +1,5 @@
 import {queueRoadWork,roadWorkAt,stepRoadWorks,validateRoadWorks,type RoadWork} from './roadworks.js';
+import {TownStatusLog} from './town-status-log.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown,landscapeStarterTown} from './starter-town.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
@@ -284,6 +285,7 @@ export class Simulation {
   private initializing = true;
   private leisureByResident = new Map<number, Building[]>();
   private roadSet = new Set<string>();
+  private statusLog = new TownStatusLog();
   private processed = new Map<string, Result>();
   private terrainUndo?: {
     revision: number;
@@ -1558,6 +1560,7 @@ export class Simulation {
     this.traffic.plan(this.state.agents);
     const stalled=this.stoppedVehicles.update(this.state.agents);
     if(stalled)this.recoverVehicle(stalled);
+    this.statusLog.update(this);
     if (this.state.tick % DAY_TICKS === 0) {
       this.earn(this.state.residents.length * 6,"tax");
       let demand = Math.ceil(this.state.residents.length / 3);

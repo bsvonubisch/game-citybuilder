@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {Simulation,parseSave} from '../.test-dist/simulation.js';
 import {recordTownEvent,restoreTownEvents,TOWN_EVENT_LIMIT} from '../.test-dist/town-events.js';
+import {TownStatusLog} from '../.test-dist/town-status-log.js';
 const execute=(s,command,id=Math.random().toString())=>s.execute({id,expectedRevision:s.state.revision,command});
 test('construction completion logs the real finished building and new residents only once',()=>{
  const s=new Simulation();for(const b of s.state.buildings)b.enabled=false;
@@ -23,4 +24,26 @@ test('events remain bounded, migrate older history and discard only malformed lo
 test('failed and duplicate commands do not add repeated journal entries',()=>{
  const s=new Simulation();const command={type:'toggle',id:s.state.buildings.find(b=>b.kind==='workshop').id};assert.ok(execute(s,command,'same-command').ok);const count=s.state.events.length;execute(s,command,'same-command');assert.equal(s.state.events.length,count);
  const b=s.state.buildings[0];assert.equal(execute(s,{type:'place',kind:'house',x:b.x,y:b.y}).ok,false);assert.equal(s.state.events.length,count);
+});
+
+test('sustained input shortages log once, explain the remedy, survive reload and report recovery',()=>{
+ const s=new Simulation(),b=s.state.buildings.find(b=>b.kind==='workshop'),log=new TownStatusLog(),topic=`work:${b.id}`;
+ b.inventory={metal:0};s.state.tick=1000;
+ const sample=(count)=>{for(let i=0;i<count;i++){s.state.tick+=8;log.update(s);}};
+ sample(5);assert.equal(s.state.events.filter(e=>e.topic===topic).length,0,'brief gaps are quiet');
+ sample(10);let entries=s.state.events.filter(e=>e.topic===topic);assert.equal(entries.length,1);assert.match(entries[0].message,/waiting for metal.*supplying industry/i);assert.equal(entries[0].buildingId,b.id);
+ const reloaded=new Simulation(parseSave(JSON.stringify(s.snapshot()))),next=new TownStatusLog();
+ for(let i=0;i<12;i++){reloaded.state.tick+=8;next.update(reloaded);}assert.equal(reloaded.state.events.filter(e=>e.topic===topic).length,1);
+ reloaded.building(b.id).inventory.metal=10;
+ for(let i=0;i<5;i++){reloaded.state.tick+=8;next.update(reloaded);}
+ entries=reloaded.state.events.filter(e=>e.topic===topic);assert.equal(entries.length,2);assert.equal(entries[0].kind,'recovery');assert.match(entries[0].message,/work can resume/);
+});
+
+test('leisure and religion changes are grouped and clear when residents recover',()=>{
+ const s=new Simulation(),log=new TownStatusLog();for(const r of s.state.residents){r.leisure=10;r.faith=10;}
+ for(let i=0;i<8;i++){s.state.tick+=8;log.update(s);}
+ assert.equal(s.state.events.filter(e=>e.kind==='leisure').length,2,'one event per need, not one per resident');
+ for(const r of s.state.residents){r.leisure=75;r.faith=75;}
+ for(let i=0;i<5;i++){s.state.tick+=8;log.update(s);}
+ assert.equal(s.state.events.filter(e=>e.kind==='recovery'&&e.topic.startsWith('town:')).length,2);
 });

@@ -3572,3 +3572,5 @@ dialog p.muted {
 .world:has(.inspector:not([hidden])) .town-log,.world:has(#build-drawer:not([hidden])) .town-log{display:none}
 @media(max-width:1250px){.town-log{bottom:96px}}
 @media(max-width:700px){.town-log{right:12px;bottom:calc(105px + env(safe-area-inset-bottom,0px));width:min(280px,calc(100% - 24px))}.town-log-list{max-height:min(30vh,220px)}}
+
+.town-log-item[data-kind=shortage] .town-log-symbol{background:#fae4cc;color:#a15d25}.town-log-item[data-kind=leisure] .town-log-symbol{background:#ede1f1;color:#866098}.town-log-item[data-kind=recovery] .town-log-symbol{background:#dff1df;color:#46754a}

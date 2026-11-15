@@ -3,7 +3,7 @@ import {icon} from './icons.js';
 import type {TownEvent,TownEventKind} from './town-events.js';
 import type {World} from './simulation.js';
 
-const ICONS:Record<TownEventKind,string>={notice:'flag',arrival:'people',departure:'arrow',construction:'hammer',upgrade:'home',demolition:'demolition',building:'home',road:'road',landscape:'leaf',farm:'leaf'};
+const ICONS:Record<TownEventKind,string>={notice:'flag',arrival:'people',departure:'arrow',construction:'hammer',upgrade:'home',demolition:'demolition',building:'home',road:'road',landscape:'leaf',farm:'leaf',shortage:'box',recovery:'check',leisure:'heart'};
 const time=(event:TownEvent)=>{
   if(event.tick===undefined)return 'Earlier';
   const day=daylight(event.tick),minutes=Math.floor(day.hour*60+1e-7);
