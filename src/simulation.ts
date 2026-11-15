@@ -1,11 +1,12 @@
 import {queueRoadWork,roadWorkAt,stepRoadWorks,validateRoadWorks,type RoadWork} from './roadworks.js';
 import {TownStatusLog} from './town-status-log.js';
+import {isLivestock,stepLivestock,ensureHerd,validPenPlot,livestockCapacity,LIVESTOCK,isButcherCut,BUTCHER_CUTS,type Herd,type ButcherCut} from './livestock.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown,landscapeStarterTown} from './starter-town.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
 import {ensureField,prepareField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
-import {buildingRecipe,FOOD_RESOURCES} from './catalog.js';
+import {buildingRecipe,buildingOutputs,FOOD_RESOURCES} from './catalog.js';
 import {marketDestination,marketOpen,buyAtMarket,marketStock,marketVendors,MARKET_GOODS} from "./market.js";
 import {validMarketPlot,marketStalls} from "./market-layout.js";
 import {buildingJobs,buildingPrice} from "./catalog.js";
@@ -100,6 +101,8 @@ export interface Point {
   y: number;
 }
 export interface Building extends Point {
+  herd?:Herd;
+  cut?:ButcherCut;
   crop?:Crop|null;
   nextCrop?:Crop;
   field?:Field;
@@ -184,6 +187,7 @@ export interface World {
   clearedDeposits?: string[];
 }
 export type Command =
+  | {type:'butcherCut';id:number;cut:ButcherCut}
   | {type:'crop';id:number;crop:Crop}
   | {type:"removeDecoration";id:number}
   | {type:"removeStroke";from:Point;to:Point}
@@ -361,6 +365,7 @@ export class Simulation {
       }
     }
     for(const b of this.state.buildings)if(b.kind==='farm')prepareField(b);
+    for(const b of this.state.buildings)if(isLivestock(b.kind))ensureHerd(b);
     this.reconnect(!!saved);
     ensureWildlife(this);
     this.initializing=false;
@@ -604,7 +609,7 @@ export class Simulation {
         existing &&
         this.retarget(existing, existing.returning ? home : destination)
       ) {
-        if (existing.onsite && (r.job !== destination.id || !destination.connected || !destination.enabled || (!destination.construction && destination.kind !== "farm" && destination.kind !== "hunter" && destination.kind !== "forester" && destination.kind !== "market" && !isExtractor(destination.kind)))) {
+        if (existing.onsite && (r.job !== destination.id || !destination.connected || !destination.enabled || (!destination.construction && destination.kind !== "farm" && !isLivestock(destination.kind) && destination.kind !== "hunter" && destination.kind !== "forester" && destination.kind !== "market" && !isExtractor(destination.kind)))) {
           delete existing.onsite;
           existing.wait = 0;
           existing.path = this.route(destination, home,existing.kind) ?? existing.path;
@@ -618,7 +623,7 @@ export class Simulation {
       if (p)
         this.state.agents.push({
           id: this.state.nextId++,
-          kind: destination.construction || destination.kind === "farm" || destination.kind === "hunter" || destination.kind === "market" || destination.kind === "forester" || isExtractor(destination.kind)
+          kind: destination.construction || destination.kind === "farm" || isLivestock(destination.kind) || destination.kind === "hunter" || destination.kind === "market" || destination.kind === "forester" || isExtractor(destination.kind)
             ? "person"
             : r.id % 4 === 0 && p.every(tile=>roadTypeAt(this.state.roadTypes,tile)!=="pavement")
               ? "car"
@@ -768,7 +773,7 @@ export class Simulation {
     rotation = 0,
     plot?:readonly[number,number],
   ): string | null {
-    if(plot!==undefined&&!(kind==='farm'?validFarmPlot(plot):kind==='market'&&validMarketPlot(plot)))return kind==='farm'?"Fields must be between 1×1 and 10×10 tiles.":"Market plots must be between 1×1 and 5×5 tiles.";
+    if(plot!==undefined&&!(isLivestock(kind)?validPenPlot(plot):kind==='farm'?validFarmPlot(plot):kind==='market'&&validMarketPlot(plot)))return isLivestock(kind)?'Livestock pens must be between 2×2 and 10×10 tiles.':kind==='farm'?"Fields must be between 1×1 and 10×10 tiles.":"Market plots must be between 1×1 and 5×5 tiles.";
     if (!inside(x, y)) return "Choose a tile inside the valley.";
     if(kind==="fence"){
       if(!Number.isInteger(rotation)||rotation<0||rotation>3)return "Choose one of the four tile edges.";
@@ -939,6 +944,7 @@ export class Simulation {
       ![
         "place",
         "crop",
+        "butcherCut",
         "roadStroke",
         "removeStroke",
         "removeDecoration",
@@ -1109,7 +1115,7 @@ export class Simulation {
           construction: (()=>{
             const tiles=footprint(c.kind,c.x,c.y,c.rotation??0,c.plot).filter(p=>exposedDeposit(this.state,p));
             if(c.kind==='farm'&&!tiles.length)return undefined;
-            return {required:(c.kind==="market"?80+dimensions(c.kind,c.rotation,c.plot).reduce((a,b)=>a*b,1)*35:c.kind==='farm'?0:constructionWork(c.kind))+tiles.length*ROCK_CLEARING_WORK,completed:0,...(tiles.length?{clearance:{tiles,work:0}}:{})};
+            return {required:(isLivestock(c.kind)?40+dimensions(c.kind,c.rotation,c.plot).reduce((a,b)=>a*b,1)*12:c.kind==="market"?80+dimensions(c.kind,c.rotation,c.plot).reduce((a,b)=>a*b,1)*35:c.kind==='farm'?0:constructionWork(c.kind))+tiles.length*ROCK_CLEARING_WORK,completed:0,...(tiles.length?{clearance:{tiles,work:0}}:{})};
           })(),
         });
       message =
@@ -1257,6 +1263,11 @@ export class Simulation {
         ...(b.kind === "house" ? { upgradeTo: tier } : { upgradeLevel: tier }),
       };
       message = `Upgrading to ${next.name.toLowerCase()}. ${isHome(b.kind) ? "Residents keep their home" : "Stored inventory stays here"} while builders work.`;
+    } else if(c.type==='butcherCut'){
+      const b=this.building(c.id);
+      if(!b||b.kind!=='butcher'||!isButcherCut(c.cut))return{ok:false,message:'Choose a cut at a butcher.',revision:this.state.revision};
+      if(b.cut!==c.cut){b.cut=c.cut;b.progress=0;}
+      message=`${BUTCHER_CUTS[c.cut].name} selected. Stored food is kept and delivered.`;
     } else if (c.type === 'crop') {
       const b=this.building(c.id);
       if(!b||b.kind!=='farm'||!isCrop(c.crop))return{ok:false,message:'Choose a farm and a valid crop.',revision:this.state.revision};
@@ -1389,6 +1400,7 @@ export class Simulation {
     }
     for (const b of this.state.buildings) {
       const recipe = buildingRecipe(b);
+      if(isLivestock(b.kind)){stepLivestock(this,b);continue;}
       if(b.kind==='farm'){stepFarm(this,b);continue;}
       if(b.kind==="hunter"){stepHunting(this,b);continue;}
       if (b.kind === "forester") { stepForestry(this,b); continue; }
@@ -1475,7 +1487,7 @@ export class Simulation {
         a.active = false;
         continue;
       }
-      if (a.onsite && (this.building(a.onsite)?.kind === "farm" || this.building(a.onsite)?.kind === "forester" || this.building(a.onsite)?.kind === "hunter" || isExtractor(this.building(a.onsite)?.kind??""))) {
+      if (a.onsite && (this.building(a.onsite)?.kind === "farm" || isLivestock(this.building(a.onsite)?.kind??"") || this.building(a.onsite)?.kind === "forester" || this.building(a.onsite)?.kind === "hunter" || isExtractor(this.building(a.onsite)?.kind??""))) {
         const lodge=this.building(a.onsite)!;
         if (lodge.field?.tasks.some(t=>t.resident===a.resident) || lodge.hunting?.some(t=>t.resident===a.resident) || lodge.forestry?.some(t=>t.resident===a.resident) || lodge.mining?.some(t=>t.resident===a.resident) || (!day.night && lodge.enabled && lodge.connected && this.state.residents.some(r=>r.id===a.resident&&r.job===lodge.id))) {
           a.wait=1; a.active=false; continue;
@@ -1545,7 +1557,7 @@ export class Simulation {
           if(a.returning&&arrival?.kind==="market"&&resident&&resident.job!==arrival.id)buyAtMarket(this,a,arrival,resident);
           if (
             a.returning &&
-            (this.building(a.target)?.construction || this.building(a.target)?.kind === "farm" || this.building(a.target)?.kind === "forester" || this.building(a.target)?.kind === "hunter" || (this.building(a.target)?.kind === "market"&&marketOpen(this.state.tick)) || isExtractor(this.building(a.target)?.kind??"")) &&
+            (this.building(a.target)?.construction || this.building(a.target)?.kind === "farm" || isLivestock(this.building(a.target)?.kind??"") || this.building(a.target)?.kind === "forester" || this.building(a.target)?.kind === "hunter" || (this.building(a.target)?.kind === "market"&&marketOpen(this.state.tick)) || isExtractor(this.building(a.target)?.kind??"")) &&
             this.state.residents.some(
               (r) => r.id === a.resident && r.job === a.target,
             )
@@ -1581,6 +1593,16 @@ export class Simulation {
     }
   }
   private dispatch() {
+    // Feed is hauled to the pens by real trucks, just like factory inputs.
+    for(const source of this.state.buildings.filter(b=>warehouseReady(b)&&b.enabled&&b.connected&&(b.inventory.grain??0)>0)){
+      if(this.state.agents.some(a=>a.kind==='truck'&&a.source===source.id))continue;
+      for(const target of this.state.buildings.filter(b=>isLivestock(b.kind)&&!b.construction&&b.enabled&&b.connected).sort((a,b)=>(a.inventory.grain??0)-(b.inventory.grain??0))){
+        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==='grain').reduce((n,a)=>n+a.amount,0),room=Math.max(8,Math.ceil(ensureHerd(target).count/4)*3)-(target.inventory.grain??0)-incoming;
+        if(room<=0)continue;const path=this.route(source,target,'truck');if(!path)continue;
+        const amount=Math.min(6,room,source.inventory.grain??0);source.inventory.grain!-=amount;
+        this.state.agents.push({id:this.state.nextId++,kind:'truck',source:source.id,target:target.id,path,segment:0,progress:0,resident:null,cargo:'grain',amount,returning:false,wait:0});break;
+      }
+    }
     // Old saves may still contain or deliver the former plank input. Return it intact.
     for(const source of this.state.buildings.filter(b=>b.kind==="workshop"&&!b.construction&&b.connected&&(b.inventory.planks??0)>0)){
       if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
@@ -1619,7 +1641,9 @@ export class Simulation {
       }
     }
     for (const b of this.state.buildings) {
-      const r = buildingRecipe(b);
+      const definition=buildingRecipe(b),r=definition?{...definition}:undefined;
+      const output=buildingOutputs(b).filter(resource=>(b.inventory[resource]??0)>0).sort((a,c)=>(b.inventory[c]??0)-(b.inventory[a]??0))[0];
+      if(r&&output&&(isLivestock(b.kind)||b.kind==='butcher')){r.output=output;r.count=1;}
       if (
         b.construction ||
         !r ||
@@ -1633,7 +1657,7 @@ export class Simulation {
       )
         continue;
       const destinations = this.state.buildings
-        .filter((t) => t.connected && t.enabled && canSupply(b, t))
+        .filter((t) => t.connected && t.enabled && canSupply(b, t,r.output))
         .sort((a, c) => {
           // Reserve one grand-house upgrade's planks before feeding continuous
           // factory demand; faster traffic must not consume every new plank.
@@ -1783,12 +1807,12 @@ export class Simulation {
       };
     if (
       d.recipe?.input &&
-      (b.inventory[d.recipe.input] ?? 0) < d.recipe.amount!
+      (isLivestock(b.kind)?ensureHerd(b).fed<=0&&(b.inventory.grain??0)<Math.max(1,Math.ceil(ensureHerd(b).count/4)):(b.inventory[d.recipe.input] ?? 0) < d.recipe.amount!)
     )
       return {
         kind: "input",
         title: `Waiting for ${d.recipe.input}`,
-        message: `Needs ${d.recipe.amount} ${d.recipe.input} per cycle. Check the supplying industry and its delivery route.`,
+        message: isLivestock(b.kind)?`Needs ${Math.max(1,Math.ceil(ensureHerd(b).count/4))} grain every 40 working seconds. Connect a wheat field or a warehouse with grain by road.`:`Needs ${d.recipe.amount} ${d.recipe.input} per cycle. Check the supplying industry and its delivery route.`,
       };
     if (b.kind === "fishery" && !b.fishing && !fishingRoute(this, b))
       return {
@@ -1817,6 +1841,7 @@ export class Simulation {
   status(b: Building) {
     const alert = this.alert(b);
     if (alert) return alert.title;
+    if(isLivestock(b.kind))return daylight(this.state.tick).night?'Animals resting · farmers return in the morning':this.state.agents.some(a=>a.onsite===b.id)?'Tending animals':'Farmers travelling to the pen';
     if(b.kind==='farm'){const fields=farmSummary(b,this.state.tick);return daylight(this.state.tick).night?'Farmers resting · crops growing':b.field?.phase==='sowing'?`Sowing · ${b.field.cells.length-fields.soil} / ${b.field.cells.length} planted`:`${fields.ripe} ready to harvest · ${fields.growing+fields.seeded} growing`;}
     if(b.kind==="market")return marketOpen(this.state.tick)?`${marketVendors(this,b).length} vendors serving · ${b.produced} sales`:"Opens at 07:00";
     if(b.kind==="hunter")return b.hunting?.some(t=>t.phase==="returning"&&t.cargo)?"Carrying meat home":b.hunting?.some(t=>t.phase==="aiming")?"Hunting wildlife":daylight(this.state.tick).night?"Hunters resting until morning":"Looking for wildlife";
@@ -2016,7 +2041,7 @@ export function parseSave(raw: string): World {
       (b.plot !== undefined &&
         (!Array.isArray(b.plot) ||
           b.plot.length !== 2 ||
-          !(b.kind==="market"&&validMarketPlot(b.plot)) && !(b.kind==='farm'&&validFarmPlot(b.plot)) && ![
+          !(isLivestock(b.kind)&&validPenPlot(b.plot)) && !(b.kind==="market"&&validMarketPlot(b.plot)) && !(b.kind==='farm'&&validFarmPlot(b.plot)) && ![
             FOOTPRINTS[b.kind].join(","),
             [...FOOTPRINTS[b.kind]].reverse().join(","),
           ].includes(b.plot.join(","))))
@@ -2024,6 +2049,8 @@ export function parseSave(raw: string): World {
       throw new Error("Invalid building.");
     if(b.hunting!==undefined&&(b.kind!=="hunter"||!Array.isArray(b.hunting)||b.hunting.length>2||!b.hunting.every(validHunt)))throw new Error("Invalid hunt.");
     validateField(b,s.tick);
+    if(b.cut!==undefined&&(b.kind!=='butcher'||!isButcherCut(b.cut)))throw new Error('Invalid butcher cut.');
+    if(b.herd!==undefined&&(!isLivestock(b.kind)||!b.herd||!Number.isInteger(b.herd.count)||b.herd.count<2||b.herd.count>livestockCapacity(b.kind,b.plot)||!finite(b.herd.growth)||b.herd.growth>LIVESTOCK[b.kind].birth||!finite(b.herd.fed)||b.herd.fed>40))throw new Error('Invalid livestock herd.');
     if (
       b.fishing !== undefined &&
       (b.kind !== "fishery" || b.construction || !validFishingTrip(b.fishing))

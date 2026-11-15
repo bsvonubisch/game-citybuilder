@@ -1,5 +1,8 @@
 import {drawFarmPreview} from './farm-art.js';
 import type {Crop} from './farm-layout.js';
+import {isLivestock,LIVESTOCK,livestockPose} from './livestock.js';
+import {iso,opaqueBounds} from './rendering.js';
+import type {Building} from './simulation.js';
 import {drawPicketFence,fenceCrops} from "./fence-art.js";
 import { buildingArt } from "./building-art.js";
 import {resolvedBuildingArt} from './sprite-ground.js';
@@ -50,8 +53,8 @@ export function buildingPreview(
         kind === "mill" ? artImage("/windmill-parts.png") : undefined,
         artImage("/foundation-stone.png"),
         kind === "fishery" ? artImage("/bridge-wood.png") : undefined,
-        kind === "garden" ? artImage("/meadow-hd.png") : undefined,
-        kind === "farm" ? artImage("/construction-earth.png") : undefined,
+        kind === "garden" || isLivestock(kind) ? artImage("/meadow-hd.png") : undefined,
+        kind === "farm" || kind === 'pigs' ? artImage("/construction-earth.png") : undefined,
       ]);
       art=resolvedBuildingArt(kind,rotation,tier,image);
       const bounds = plotBounds(art, w, h),
@@ -69,6 +72,12 @@ export function buildingPreview(
       };
       if (rotorView(rotation).rear) sail();
       if(kind==='farm'&&earth)drawFarmPreview(ctx,image,earth,w,h,crop);else drawPlot(ctx, image, art, w, h, benches, stone, wood,true,meadow,earth);
+      if(isLivestock(kind)){
+        const sheet=await artImage(`/livestock-${LIVESTOCK[kind].animal}.png`),cell=document.createElement('canvas');cell.width=sheet.width/4;cell.height=sheet.height/4;
+        const c=cell.getContext('2d')!;c.drawImage(sheet,0,0,cell.width,cell.height,0,0,cell.width,cell.height);
+        const box=opaqueBounds(c.getImageData(0,0,cell.width,cell.height).data,cell.width,cell.height),scale=LIVESTOCK[kind].height/box.height;
+        for(let i=0;i<2;i++){const p=livestockPose({id:0,kind,x:0,y:0,rotation:rotation as Building['rotation'],plot:[w,h]},i,0),v=iso(p.x,p.y);ctx.drawImage(cell,box.x,box.y,box.width,box.height,v.x-box.width*scale/2,v.y-box.height*scale,box.width*scale,box.height*scale);}
+      }
       if (!rotorView(rotation).rear) sail();
       return canvas.toDataURL();
     })();

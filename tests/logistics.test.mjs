@@ -301,7 +301,7 @@ test("output and exhausted deposits suggest useful destinations and deeper excav
   sim.state.buildings = sim.state.buildings.filter((b) => b.kind !== "mill");
   assert.deepEqual(
     buildingGuidance(sim, farm, productionConnections(sim, farm.id)).action,
-    { type: "build", kind: "mill" },
+    { type: "inspect", id: building(sim,"warehouse").id },
   );
   const quarry = building(sim, "quarry");
   for(const id of nearbyDeposits(quarry))sim.state.deposits[id] = 0;

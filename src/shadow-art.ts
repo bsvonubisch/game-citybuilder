@@ -1,4 +1,5 @@
 import {weather} from "./weather.js";
+import {isLivestock} from './livestock.js';
 import {lampPlacement} from "./streetlights.js";
 import type Phaser from "phaser";
 import { dimensions } from "./catalog.js";
@@ -43,7 +44,7 @@ export class ShadowArt {
     for (const source of casters) {
       const b = sim.building(source.getData("buildingId")),
         d = source.getData("decoration");
-      if(b?.kind==='farm')continue;
+      if(b&&(b.kind==='farm'||isLivestock(b.kind)))continue;
       if (!b && (!d || d.kind === "fence" || d.kind === "planter")) continue;
       // The ground-shadow pass cannot clip to a narrow elevated deck.
       const pole = d?.kind === "streetlight" ? lampPlacement(sim, d) : undefined;

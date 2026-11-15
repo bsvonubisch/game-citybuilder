@@ -1,4 +1,6 @@
 import {drawFarmPreview} from './farm-art.js';
+import {drawPen} from './livestock-art.js';
+import {isLivestock} from './livestock.js';
 import {sourceImage} from "./source-images.js";
 import {resolvedBuildingArt} from './sprite-ground.js';
 import {drawMarket} from "./market-art.js";
@@ -43,6 +45,7 @@ export function drawPlot(
   meadow?: HTMLImageElement,
   earth?:HTMLImageElement,
 ) {
+  if(art.livestock){drawPen(ctx,source,art.livestock,w,h,art.frame,stone,meadow,earth,plaza);return;}
   if(art.texture==='farm-crops'){if(earth)drawFarmPreview(ctx,source,earth,w,h);return;}
   if (art.land && wood) {
     const rotation = [1, 0, 3, 2].indexOf(art.frame);
@@ -84,6 +87,7 @@ export function drawPlot(
 }
 
 export function plotBounds(art: BuildingArt, w: number, h: number) {
+  if(art.livestock)return{left:-h*32-4,top:-64,right:w*32+4,bottom:(w+h)*16+4};
   if(art.texture==='farm-crops')return {left:-h*32,top:-32,right:w*32,bottom:(w+h)*16};
   if(art.texture==="market-stalls")return {left:-h*32-32,top:-78,right:w*32+32,bottom:(w+h)*16+8};
   const t = artTransform(art, w, h),
@@ -117,7 +121,7 @@ export class PlotArt {
     houseTier: HouseTier = 1,
   ) {
     const [w, h] = dimensions(kind, rotation, plot),
-      key = `fitted-${kind}-${houseTier}-${rotation}-${w}-${h}-${kind==="market"&&!sprite.getData("buildingId")?"preview":"placed"}`;
+      key = `fitted-${kind}-${houseTier}-${rotation}-${w}-${h}-${(kind==="market"||isLivestock(kind))&&!sprite.getData("buildingId")?"preview":"placed"}`;
     let fit = this.cache.get(key);
     if (!fit) {
       const raw = buildingArt(kind, rotation, houseTier),
@@ -141,8 +145,9 @@ export class PlotArt {
         sourceImage(this.scene,"park-benches") as HTMLImageElement,
         sourceImage(this.scene,"foundation-stone") as HTMLImageElement,
         sourceImage(this.scene,"bridge-wood") as HTMLImageElement,
-        kind==="market"&&!sprite.getData("buildingId"),
+        (kind==="market"||isLivestock(kind))&&!sprite.getData("buildingId"),
         sourceImage(this.scene,"meadow") as HTMLImageElement,
+        sourceImage(this.scene,"construction-earth") as HTMLImageElement,
       );
       texture.refresh();
       fit = { texture: key, x: left, y: top };

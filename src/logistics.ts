@@ -1,5 +1,6 @@
 import {MARKET_GOODS} from "./market.js";
-import { BUILDINGS, buildingRecipe, type Resource } from "./catalog.js";
+import {isLivestock} from './livestock.js';
+import { BUILDINGS, buildingRecipe,buildingOutputs, type Resource } from "./catalog.js";
 import type {
   Agent,
   Building,
@@ -27,18 +28,18 @@ export interface ProductionConnections {
 }
 
 /** Shared by dispatch and inspection: warehouses receive only these exports. */
-export function canSupply(source: Building, target: Building) {
-  const output = source.kind === "warehouse" && ["workshop","butcher"].includes(target.kind) ? buildingRecipe(target)?.input : buildingRecipe(source)?.output;
+export function canSupply(source: Building, target: Building,resource?:Resource) {
+  const output = resource?[resource]:source.kind === "warehouse" && (["workshop","butcher"].includes(target.kind)||isLivestock(target.kind)) ? [buildingRecipe(target)?.input].filter((r):r is Resource=>!!r) : buildingOutputs(source);
   return (
     !source.construction &&
     !target.construction &&
-    !!output &&
+    !!output.length &&
     source.id !== target.id &&
-    (BUILDINGS[target.kind].recipe?.input === output || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||
+    output.some(output=>(buildingRecipe(target)?.input === output || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||
       (target.kind === "warehouse" &&
-        ["potatoes","carrots","sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
+        ["steaks","roasts","grain","milk","eggs","potatoes","carrots","sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
           output,
-        )))
+        ))))
   );
 }
 
@@ -49,20 +50,20 @@ export function productionConnections(
 ): ProductionConnections | null {
   const b = sim.building(id);
   if (!b || !BUILDINGS[b.kind].recipe) return null;
-  const link = (source: Building, target: Building): GoodsConnection => ({
+  const link = (source: Building, target: Building): GoodsConnection[] => (source.kind==='warehouse'?[buildingRecipe(target)!.input!]:buildingOutputs(source)).filter(r=>canSupply(source,target,r)).map(resource=>({
     source: source.id,
     target: target.id,
-    resource: source.kind==="warehouse"?buildingRecipe(target)!.input!:buildingRecipe(source)!.output,
+    resource,
     path: sim.route(source, target,"truck"),
-  });
+  }));
   return {
     building: id,
     inputs: sim.state.buildings
       .filter((source) => canSupply(source, b))
-      .map((source) => link(source, b)),
+      .flatMap((source) => link(source, b)),
     outputs: sim.state.buildings
       .filter((target) => canSupply(b, target))
-      .map((target) => link(b, target)),
+      .flatMap((target) => link(b, target)),
     workers: sim.state.residents.filter((r) => r.job === id).map((r) => r.id),
   };
 }

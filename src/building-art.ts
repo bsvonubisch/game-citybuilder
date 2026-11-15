@@ -3,6 +3,7 @@ import { fisheryLayout } from "./shoreline.js";
 export type GroundPoint = readonly [number, number];
 export type PlotCorners = readonly [GroundPoint, GroundPoint, GroundPoint];
 export interface BuildingArt {
+  livestock?:'cattle'|'chickens'|'pigs';
   contacts?: readonly GroundPoint[];
   /** Shared atlas density: rotating a building never enlarges its windows. */
   scaleLimit?: number;
@@ -262,6 +263,7 @@ export function buildingArt(
   rotation = 0,
   houseTier: HouseTier = 1,
 ): BuildingArt {
+  if(kind==='cattle'||kind==='chickens'||kind==='pigs')return{texture:'livestock-shelter',livestock:kind,frame:rotation,columns:2,rows:2,size:[512,512],ground:[[51,400],[256,502],[461,400]]};
   if(kind==='farm')return {texture:'farm-crops',frame:0,columns:3,rows:3,size:[512,342],ground:[[0,32],[32,48],[64,32]]};
   if(kind==="market")return {texture:"market-stalls",frame:rotation,columns:4,rows:3,size:[444,296],ground:[[0,148],[222,259],[444,148]]};
   const redraw=redrawn[kind];

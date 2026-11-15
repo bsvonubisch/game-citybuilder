@@ -8,6 +8,7 @@ import { serviceCoverage } from "./proximity.js";
 import { outputCapacity } from "./upgrades.js";
 import { buildingDeposit,isExtractor } from "./deposits.js";
 import type { Simulation,Building } from "./simulation.js";
+import {isLivestock,ensureHerd,livestockCrew,livestockCapacity} from './livestock.js';
 
 export interface Need {
   id:string; label:string; have:number; need:number; unit:string;
@@ -48,7 +49,12 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
     rows.push({label:"Vendors on site",have:String(marketVendors(sim,b).length),need:String(buildingJobs(b)),ok:marketVendors(sim,b).length>0});
     rows.push({label:"Stock to sell",have:String(marketStock(b)),need:"Food or tools",ok:marketStock(b)>0});
   }
-  if(d.recipe?.input)rows.push({label:RESOURCE_NAMES[d.recipe.input],have:String(b.inventory[d.recipe.input]??0),need:`${d.recipe.amount??0} / batch`,ok:(b.inventory[d.recipe.input]??0)>=(d.recipe.amount??0)});
+  if(isLivestock(b.kind)){
+    const herd=ensureHerd(b),feed=Math.max(1,Math.ceil(herd.count/4));
+    rows.push({label:b.kind==='chickens'?'Birds':'Animals',have:String(herd.count),need:`${livestockCapacity(b.kind,b.plot)} capacity`,ok:true});
+    rows.push({label:'Farmers on site',have:String(livestockCrew(sim,b).length),need:String(buildingJobs(b)),ok:livestockCrew(sim,b).length>=buildingJobs(b)});
+    rows.push({label:'Grain feed',have:String(b.inventory.grain??0),need:`${feed} / 40s`,ok:herd.fed>0||(b.inventory.grain??0)>=feed});
+  }else if(d.recipe?.input)rows.push({label:RESOURCE_NAMES[d.recipe.input],have:String(b.inventory[d.recipe.input]??0),need:`${d.recipe.amount??0} / batch`,ok:(b.inventory[d.recipe.input]??0)>=(d.recipe.amount??0)});
   if(isExtractor(b.kind)){const reserve=sim.state.deposits[buildingDeposit(b)!]??0;rows.push({label:"Deposit",have:reserve.toLocaleString(),need:"Within reach",ok:reserve>0&&sim.alert(b)?.kind!=="input"});}
   if(b.kind==="forester")rows.push({label:"Trees",have:sim.alert(b)?.kind==="input"?"None reachable":"In reach",need:"Mature woodland",ok:sim.alert(b)?.kind!=="input"});
   if(b.kind==="hunter")rows.push({label:"Wildlife",have:sim.alert(b)?.kind==="input"?"None nearby":"In reach",need:"Woodland within 12 tiles",ok:sim.alert(b)?.kind!=="input"});

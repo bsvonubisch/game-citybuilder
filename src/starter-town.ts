@@ -18,7 +18,7 @@ export function seedStarterTown(world:World) {
   along(6,3,32); along(13,3,32); along(21,3,32);
   across(10,3,32); across(18,3,32,'brick'); across(25,3,21); across(32,3,32,'dirt');
   // A stone-road garden loop and cottage lane, linked to the main streets.
-  across(3,6,13,'stone'); across(11,6,13,'stone'); across(16,6,13,'stone');
+  across(3,6,21,'stone'); across(11,6,13,'stone'); across(16,6,13,'stone');
   along(7,11,16,'stone'); along(12,11,16,'stone');
   across(21,13,21); across(29,13,21,'dirt'); along(32,10,32,'dirt');
   const add=(kind:BuildingKind,x:number,y:number,rotation:Building['rotation'],extras:Partial<Building>={})=>{
@@ -34,6 +34,9 @@ export function seedStarterTown(world:World) {
   add('church',17,15,0); add('tavern',14,16,0);
   add('bakery',14,8,0,{inventory:{flour:10}});
   add('mill',17,8,0,{inventory:{grain:15}});
+  add('cattle',14,4,3,{inventory:{grain:8}});
+  add('pigs',18,4,1,{inventory:{grain:8}});
+  add('chickens',19,8,0,{inventory:{grain:8}});
   add('butcher',11,22,1,{inventory:{meat:12}});
   add('workshop',17,11,2,{inventory:{metal:10}});
   add('brickworks',17,19,0,{inventory:{stone:12}});

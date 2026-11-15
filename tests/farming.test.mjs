@@ -43,7 +43,7 @@ test('each crop is planted, grows, harvested and carried by real farmers before 
       delivery||=s.state.agents.some(a=>a.source===b.id&&a.cargo===CROPS[crop].output);
     }
     assert.deepEqual([...seen].sort(),['growing','ripe','seeded','soil']);assert.deepEqual([...actions].sort(),['harvest','sow']);assert.ok(cargo);assert.ok(b.produced>0);assert.ok(delivery,crop+' reaches its supply chain');
-    const warehouse=s.state.buildings.find(b=>b.kind==='warehouse');assert.equal(canSupply(b,warehouse),crop!=='wheat');assert.equal(buildingRecipe(b).output,CROPS[crop].output);
+    const warehouse=s.state.buildings.find(b=>b.kind==='warehouse');assert.equal(canSupply(b,warehouse),true,'grain also enters warehouse feed reserves');assert.equal(buildingRecipe(b).output,CROPS[crop].output);
   }
 });
 

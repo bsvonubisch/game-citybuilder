@@ -192,7 +192,7 @@ export function buildingGuidance(
         label: "Follow delivery",
         action: { type: "agent", id: delivery.id },
       };
-    const links = input ? view?.inputs : view?.outputs;
+    const links = [...(input ? view?.inputs??[] : view?.outputs??[])].sort((a,c)=>Number(sim.building(input?a.source:a.target)?.kind==='warehouse')-Number(sim.building(input?c.source:c.target)?.kind==='warehouse'));
     const linked = links?.find((link) => link.path) ?? links?.[0];
     if (linked) {
       const other = sim.building(input ? linked.source : linked.target)!;
