@@ -30,7 +30,12 @@ import {
 import { LocalGateway } from "./gateway.js";
 import { daylight } from "./daylight.js";
 import { DaylightUI } from "./daylight-ui.js";
-import { nextUpgrade, productionRate, outputCapacity } from "./upgrades.js";
+import {
+  nextUpgrade,
+  productionRate,
+  outputCapacity,
+  materialGuidance,
+} from "./upgrades.js";
 import {
   isLeisure,
   serviceCoverage,
@@ -670,6 +675,7 @@ function renderInspector() {
     );
   if (b.kind === "house") {
     $("#house-upgrade").hidden = !!b.construction;
+    if (!b.construction) $(".building-actions").after($("#house-upgrade"));
     const tier = b.houseTier ?? 1;
     if (tier < 3) {
       const nextTier = (tier + 1) as HouseTier,
@@ -777,7 +783,8 @@ function updateBuildingActions(b: Building) {
   resolve.hidden = !guide;
   $("#building-next-step").hidden = !guide;
   if (guide) {
-    $("#building-next-step").textContent = guide.message;
+    $("#building-next-step").textContent =
+      `What to do: ${guide.message}${b.kind === "house" && !b.construction && (b.houseTier ?? 1) < 3 ? ` Choose “${guide.label}” in More actions.` : ""}`;
     resolve.textContent = guide.label;
     resolve.disabled =
       guide.action.type === "deepen" && !!simulation.canDeepen(b.id);
@@ -804,20 +811,22 @@ function updateBuildingActions(b: Building) {
   const primary = buttons.find(
     (button) =>
       button.id ===
-      (guide
-        ? "resolve-issue"
-        : b.construction
-          ? "toggle-production"
-          : isExtractor(b.kind)
-            ? "deepen-deposit"
-            : b.kind === "house" && (b.houseTier ?? 1) < 3
-              ? "upgrade-house"
+      (b.kind === "house" && !b.construction && (b.houseTier ?? 1) < 3
+        ? "upgrade-house"
+        : guide
+          ? "resolve-issue"
+          : b.construction
+            ? "toggle-production"
+            : isExtractor(b.kind)
+              ? "deepen-deposit"
               : nextUpgrade(b)
                 ? "upgrade-building"
                 : BUILDINGS[b.kind].recipe
                   ? "toggle-production"
                   : "move-building"),
   )!;
+  if (primary.id === "upgrade-house")
+    $("#building-primary").after($("#building-next-step"));
   for (const button of buttons) {
     const isPrimary = button === primary;
     button.classList.toggle("primary", isPrimary);
@@ -1046,8 +1055,14 @@ function updateInspector() {
       .join("");
     const reason = simulation.canUpgrade(b.id);
     $<HTMLButtonElement>("#upgrade-building").disabled = !!reason;
-    $("#industry-upgrade-reason").textContent =
-      reason ?? `${next.labour} worker-seconds · inventory stays here.`;
+    $("#industry-upgrade-reason").textContent = reason
+      ? [
+          !b.connected ? reason : "",
+          ...materialGuidance(simulation, next.cost, next.materials),
+        ]
+          .filter(Boolean)
+          .join(" ") || reason
+      : `${next.labour} worker-seconds · inventory stays here.`;
   }
   if (isLeisure(b.kind) && !b.construction) {
     const coverage = serviceCoverage(simulation, b);
@@ -1105,9 +1120,14 @@ function updateInspector() {
       .join("");
     const reason = simulation.canDeepen(b.id);
     $<HTMLButtonElement>("#deepen-deposit").disabled = !!reason;
-    $("#deepen-reason").textContent =
-      reason ??
-      "Excavation pauses extraction. Stored goods stay here while builders prepare the next layer.";
+    $("#deepen-reason").textContent = reason
+      ? [
+          !b.connected ? reason : "",
+          ...materialGuidance(simulation, next.cost, next.materials),
+        ]
+          .filter(Boolean)
+          .join(" ") || reason
+      : "Excavation pauses extraction. Stored goods stay here while builders prepare the next layer.";
   }
   if (b.construction) {
     const progress = Math.floor(
@@ -1232,8 +1252,25 @@ function updateUpgrade(b: Building) {
     .join("");
   const reason = simulation.canUpgrade(b.id);
   $<HTMLButtonElement>("#upgrade-house").disabled = !!reason;
-  $("#upgrade-reason").textContent =
-    reason ?? "Three more neighbours can move in.";
+  $<HTMLButtonElement>("#upgrade-house").title =
+    reason ?? "Start upgrading this home";
+  const materials = materialGuidance(simulation, next.cost, next.materials);
+  const steps = [
+    ...(!b.connected
+      ? [
+          "Connect this home's front entrance to a warehouse using continuous roads. The road action in More actions shows the entrance.",
+        ]
+      : []),
+    ...materials,
+  ];
+  $("#upgrade-reason").textContent = reason
+    ? steps.join(" ") || reason
+    : "Ready to upgrade. Three more residents · same plot. Builders work automatically; current residents keep their home.";
+  $("#upgrade-reason").classList.toggle("blocked", !!reason);
+  $<HTMLButtonElement>("#upgrade-house").setAttribute(
+    "aria-describedby",
+    "upgrade-reason",
+  );
 }
 function drawMinimap() {
   const ctx = $<HTMLCanvasElement>("#minimap").getContext("2d")!;

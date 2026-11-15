@@ -1,5 +1,7 @@
 import { buildingName } from "./catalog.js";
 import { icon } from "./icons.js";
+import { buildingGuidance } from "./building-guidance.js";
+import { productionConnections } from "./logistics.js";
 import { cameraViewport } from "./rendering.js";
 import type { Building, BuildingAlert, Simulation } from "./simulation.js";
 import type Phaser from "phaser";
@@ -25,16 +27,28 @@ export class BuildingAlerts {
   private revision = "";
   private cameraKey = "";
   private state?: Simulation["state"];
+  private simulation?: Simulation;
   constructor(
     private container: HTMLElement,
     private select: (id: number) => void,
   ) {}
+  private explain(id: number) {
+    const sim = this.simulation,
+      badge = this.badges.get(id);
+    const b = sim?.building(id);
+    if (!sim || !b || !badge) return;
+    const guide = buildingGuidance(sim, b, productionConnections(sim, id));
+    const target = badge.button.querySelector(".building-alert-tip > span");
+    if (target && guide)
+      target.textContent = `${guide.message} Select this icon, then choose “${guide.label}”.`;
+  }
   update(
     sim: Simulation,
     camera: Phaser.Cameras.Scene2D.Camera,
     inspect: boolean,
     anchor: (b: Building) => { x: number; y: number } | undefined,
   ) {
+    this.simulation = sim;
     const revision = `${sim.state.revision}:${sim.state.tick}:${inspect}`;
     const changed = revision !== this.revision || this.state !== sim.state;
     if (changed) {
@@ -52,6 +66,8 @@ export class BuildingAlerts {
           button.type = "button";
           button.className = "building-alert";
           button.onclick = () => this.select(b.id);
+          button.onpointerenter = () => this.explain(b.id);
+          button.onfocus = () => this.explain(b.id);
           this.container.append(button);
           badge = { button, signature: "" };
           this.badges.set(b.id, badge);
@@ -76,6 +92,8 @@ export class BuildingAlerts {
             "aria-describedby",
             `building-alert-tip-${b.id}`,
           );
+          if (badge.button.matches(":hover, :focus-visible"))
+            this.explain(b.id);
         }
         badge.button.tabIndex = inspect ? 0 : -1;
       }

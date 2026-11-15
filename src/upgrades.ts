@@ -1,11 +1,57 @@
 import {
   BUILDINGS,
   HOUSE_TIERS,
+  RESOURCE_NAMES,
+  buildingName,
   type HouseTier,
   type Resource,
 } from "./catalog.js";
 import { constructionWork } from "./construction.js";
-import type { Building } from "./simulation.js";
+import type { Building, Simulation } from "./simulation.js";
+
+/** Explain actual warehouse shortfalls, including goods already being delivered. */
+export function materialGuidance(
+  sim: Simulation,
+  cost: number,
+  materials: Partial<Record<Resource, number>>,
+) {
+  const steps: string[] = [];
+  if (sim.state.money < cost)
+    steps.push(
+      `Earn ${Math.ceil(cost - sim.state.money)} more gold from household taxes or tool exports.`,
+    );
+  for (const [resource, required] of Object.entries(materials)) {
+    const r = resource as Resource,
+      have = sim.stored(r);
+    if (have >= required) continue;
+    const missing = required - have;
+    const inbound = sim.state.agents
+      .filter(
+        (a) => a.cargo === r && sim.building(a.target)?.kind === "warehouse",
+      )
+      .reduce((total, a) => total + a.amount, 0);
+    const supplier = sim.state.buildings.find(
+      (b) => BUILDINGS[b.kind].recipe?.output === r,
+    );
+    const producer = Object.values(BUILDINGS).find(
+      (b) => b.recipe?.output === r,
+    );
+    const supply =
+      inbound >= missing
+        ? `${inbound} are already on the way; wait for the warehouse delivery.`
+        : supplier?.construction
+          ? `Finish the ${buildingName(supplier).toLowerCase()} construction so it can supply them.`
+          : supplier
+            ? `Check the ${buildingName(supplier).toLowerCase()}: it needs staff, supplies and a road to a warehouse. Wait for its goods to be delivered.`
+            : producer
+              ? `Build and connect a ${producer.name.toLowerCase()} to supply them.`
+              : "Get these goods delivered to a warehouse.";
+    steps.push(
+      `Need ${missing} more ${RESOURCE_NAMES[r].toLowerCase()} (${have} of ${required} in warehouses). ${supply}`,
+    );
+  }
+  return steps;
+}
 export const buildingLevel = (b: Building) =>
   b.kind === "house" ? (b.houseTier ?? 1) : (b.level ?? 1);
 export const productionRate = (b: Building) => 1 + ((b.level ?? 1) - 1) * 0.35;

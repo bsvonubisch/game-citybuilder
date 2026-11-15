@@ -50,6 +50,7 @@ import {
   nextUpgrade,
   productionRate,
   outputCapacity,
+  materialGuidance,
 } from "../.test-dist/upgrades.js";
 import { walkFrame, working } from "../.test-dist/animation.js";
 import {
@@ -2037,4 +2038,43 @@ test("workers choose nearby jobs and do not commute across the entire expanded m
       sim.route(sim.building(r.home), sim.building(r.job)).length - 1 <=
         MAX_COMMUTE,
     );
+});
+
+test("upgrade help explains warehouse shortfalls without recommending duplicate suppliers or ignoring deliveries", () => {
+  const sim = new Simulation();
+  const warehouse = sim.state.buildings.find((b) => b.kind === "warehouse");
+  const sawmill = sim.state.buildings.find((b) => b.kind === "sawmill");
+  for (const b of sim.state.buildings.filter((b) => b.kind === "warehouse"))
+    b.inventory.planks = 0;
+  sawmill.inventory.planks = 30;
+  let help = materialGuidance(sim, 180, { planks: 16 });
+  assert.match(help.join(" "), /Need 16 more planks \(0 of 16 in warehouses\)/);
+  assert.match(help.join(" "), /Check the sawmill/);
+  assert.doesNotMatch(help.join(" "), /Build and connect/);
+  sim.state.agents.push({
+    id: 9999,
+    kind: "truck",
+    source: sawmill.id,
+    target: warehouse.id,
+    cargo: "planks",
+    amount: 16,
+    resident: null,
+    path: [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ],
+    segment: 0,
+    progress: 0,
+    wait: 0,
+    returning: false,
+  });
+  help = materialGuidance(sim, 180, { planks: 16 });
+  assert.match(help.join(" "), /already on the way/);
+  warehouse.inventory.planks = 16;
+  assert.deepEqual(materialGuidance(sim, 180, { planks: 16 }), []);
+  sim.state.money = 140;
+  assert.match(
+    materialGuidance(sim, 180, { planks: 16 }).join(" "),
+    /Earn 40 more gold/,
+  );
 });

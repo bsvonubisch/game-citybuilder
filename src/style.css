@@ -1370,6 +1370,14 @@ kbd {
 .building-actions .primary {
   margin-top: 0;
 }
+#upgrade-reason.blocked {
+  color: #855628;
+  background: #f4e8ce;
+  border-left: 3px solid #c69c57;
+  border-radius: 5px;
+  padding: 10px;
+  line-height: 1.6;
+}
 #building-more {
   margin-top: 8px;
   border: 1px solid #dde2d2;

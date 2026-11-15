@@ -57,7 +57,7 @@ export class TrafficAlerts {
         badge.querySelector("b")!.textContent = String(queue.agents.length);
         badge.querySelector("strong")!.textContent = label;
         badge.querySelector(".building-alert-tip > span")!.textContent =
-          `Longest delay about ${Math.floor(queue.seconds)}s. Click to inspect the queue and improve its route.`;
+          `Longest delay about ${Math.floor(queue.seconds)}s. If the queue persists, add a connected alternate road around this junction. Select this icon to inspect the vehicles and choose Add an alternate road.`;
         badge.dataset.severity = queue.severe ? "heavy" : "slow";
       }
       badge.tabIndex = inspect ? 0 : -1;
