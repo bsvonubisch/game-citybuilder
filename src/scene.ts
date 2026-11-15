@@ -866,7 +866,9 @@ export class TownScene extends Phaser.Scene {
     });
     for(const rock of this.trees) {
       const decoration=rock.getData("decoration");
-      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?fenceCenter(decoration):undefined)) as Point|undefined;
+      // Scenery and travellers share the same ground-depth origin. A different
+      // bias lets someone just behind a trunk paint over its entire canopy.
+      const point=(rock.getData("depositPoint")??(decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?fenceCenter(decoration):decoration)) as Point|undefined;
       if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots,decoration?.kind==="fence")+(decoration?.kind==="streetlight"&&lampPlacement(this.simulation,decoration).bridge? .3 : -.1));
     }
     this.occludingEdges=[...this.bridgeArt.edges,...this.trees.filter(t=>t.getData("decoration")?.kind==="fence").map(t=>{const d=t.getData("decoration"),[a,b]=fenceEnds(d,d.side??1);return {a,b,depth:t.depth,left:t.x,right:t.x+t.displayWidth,top:t.y,bottom:t.y+t.displayHeight};})];
@@ -1568,6 +1570,12 @@ export class TownScene extends Phaser.Scene {
           .setVisible(true)
           .setFlipX(false)
           .setDepth((this.buildings.get(site.id)?.depth??((site.x+site.y+w+h-2)*32+12))+.25+slot*.01);
+        if(rock){
+          // The clearing footprint is a high overlay; its workers remain on
+          // the ground, behind nearer trees, rocks and neighbouring buildings.
+          const bounds={left:s.x-s.displayWidth*s.originX,right:s.x+s.displayWidth*(1-s.originX),top:s.y-s.displayHeight*s.originY,bottom:s.y+s.displayHeight*(1-s.originY)};
+          s.setDepth(edgeDepth(p,bounds,travellerDepth(p,bounds,this.occludingPlots),this.occludingEdges));
+        }
       }
       const visiting=this.simulation.building(a.target),visit=parkVisitor(a,visiting,this.acc);
       if(visit&&visiting){
