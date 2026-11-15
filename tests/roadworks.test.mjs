@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {Simulation,parseSave,key} from '../.test-dist/simulation.js';
 import {footprint,SIZE} from '../.test-dist/catalog.js';
 import {roadTypeAt} from '../.test-dist/roads.js';
-import {roadVisualState} from '../.test-dist/roadworks.js';
+import {roadVisualState,stepRoadWorks,queueRoadWork} from '../.test-dist/roadworks.js';
 import {roadWorkSites,roadWorkCrew} from '../.test-dist/roadwork-sites.js';
 
 const execute=(sim,command)=>sim.execute({id:`work-${sim.state.revision}`,expectedRevision:sim.state.revision,command});
@@ -98,4 +98,30 @@ test('cars keep travelling on the original surface throughout road upgrades',()=
  const car={id:sim.state.nextId++,kind:'car',resident:null,source:home.id,target:home.id,path:[{x:8,y:6},p,{x:8,y:8}],segment:0,progress:0,wait:0,active:true,returning:false,cargo:null,amount:0};sim.state.agents.push(car);
  sim.step();sim.step();assert.ok(car.segment+car.progress>0,'car advances through an active upgrade');
  assert.ok(sim.state.roadWorks.length);assert.equal(roadTypeAt(sim.state.roadTypes,p),'stone');
+});
+
+for(const operation of ['build','upgrade','remove'])test(`${operation} crews continue to the nearest reachable tile from their last worksite`,()=>{
+ const sim=town(),resident=sim.state.residents[0],home=sim.building(resident.home);
+ const current={x:8,y:7},near={x:8,y:8},far={x:8,y:1};
+ queueRoadWork(sim,current,'brick',operation);
+ queueRoadWork(sim,far,'brick',operation); // Queue order must not win over distance.
+ queueRoadWork(sim,near,'brick',operation);
+ const [first,distant,nearest]=sim.state.roadWorks;first.completed=first.required-.01;
+ const crew={id:sim.state.nextId++,resident:resident.id,kind:'person',source:home.id,target:home.id,path:[current],segment:0,progress:0,returning:false,wait:1,active:true,cargo:null,amount:0,roadWork:first.id};
+ sim.state.agents=sim.state.agents.filter(a=>a.resident!==resident.id);sim.state.agents.push(crew);resident.job=null;
+ sim.state.tick=961;stepRoadWorks(sim);
+ const continued=sim.state.agents.find(a=>a.id===crew.id);
+ assert.ok(continued,'same worker is retained');assert.equal(continued.roadWork,nearest.id);
+ assert.deepEqual(continued.path,[current,near],'worker walks from their last worksite, not from home');
+ assert.equal(distant.completed,0);assert.equal(nearest.completed,0,'no labour before arriving');
+});
+
+test('nearest road work is chosen by reachable walking route, not straight-line distance',()=>{
+ const sim=town(),r=sim.state.residents[0],home=sim.building(r.home),p={x:8,y:7};
+ queueRoadWork(sim,p,'brick','upgrade');queueRoadWork(sim,{x:10,y:7},'dirt','build');queueRoadWork(sim,{x:8,y:10},'dirt','build');
+ const [first,blocked,reachable]=sim.state.roadWorks;first.completed=first.required-.01;
+ for(const q of [{x:9,y:7},{x:11,y:7},{x:10,y:6},{x:10,y:8}])sim.state.terrain[key(q)]={kind:'water',height:0};
+ const crew={id:sim.state.nextId++,resident:r.id,kind:'person',source:home.id,target:home.id,path:[p],segment:0,progress:0,returning:false,wait:1,active:true,cargo:null,amount:0,roadWork:first.id};
+ sim.state.agents=sim.state.agents.filter(a=>a.resident!==r.id);sim.state.agents.push(crew);r.job=null;sim.state.tick=961;
+ stepRoadWorks(sim);assert.equal(crew.roadWork,reachable.id);assert.equal(blocked.completed,0);
 });

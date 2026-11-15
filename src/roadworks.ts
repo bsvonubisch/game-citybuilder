@@ -46,6 +46,9 @@ export function roadWorkerPosition(a:Agent,elapsed=0) {
   return {x:p.x+(q.x-p.x)*f,y:p.y+(q.y-p.y)*f,dx:q.x-p.x,dy:q.y-p.y};
 }
 function workRoutes(sim:Simulation,start:Point,jobs:RoadWork[]) {
+  if(!jobs.length)return [];
+  // A tile may have just opened or been removed this step, before reconnect.
+  const roads=new Set(sim.state.roads);
   const blocked=new Set(sim.state.buildings.flatMap(b=>footprint(b.kind,b.x,b.y,b.rotation,b.plot).map(key)));
   for(const d of sim.state.decorations)if(d.side===undefined&&d.edge===undefined&&!roadWorkAt(sim.state,d))blocked.add(key(d));
   const fences=fenceEdgeSet(sim.state.decorations),targets=new Set(jobs.map(key)),queue=[start],parents=new Map<string,Point|null>([[key(start),null]]);
@@ -57,10 +60,10 @@ function workRoutes(sim:Simulation,start:Point,jobs:RoadWork[]) {
       return [{job,path:path.reverse()}];
     }
     // Crews can reach the next bridge tile from a bank or finished deck, never walk across an unfinished span.
-    if(terrainCell(p.x,p.y,sim.state.terrain).kind==='water'&&!sim.roads.has(key(p)))continue;
+    if(terrainCell(p.x,p.y,sim.state.terrain).kind==='water'&&!roads.has(key(p)))continue;
     for(const d of dirs){const q={x:p.x+d.x,y:p.y+d.y},k=key(q);
       if(q.x<0||q.y<0||q.x>=SIZE||q.y>=SIZE||parents.has(k)||blocked.has(k)||exposedDeposit(sim.state,q)||crossesFence(p,q,fences)||Math.abs(groundHeight(p.x,p.y,sim.state.terrain)-groundHeight(q.x,q.y,sim.state.terrain))>8)continue;
-      if(terrainCell(q.x,q.y,sim.state.terrain).kind==='water'&&!sim.roads.has(k)&&!targets.has(k))continue;
+      if(terrainCell(q.x,q.y,sim.state.terrain).kind==='water'&&!roads.has(k)&&!targets.has(k))continue;
       parents.set(k,p);queue.push(q);
     }
   }
@@ -105,7 +108,14 @@ export function stepRoadWorks(sim:Simulation) {
           const group=sim.state.roadWorks!.filter(j=>j.operation==='remove'&&(j.group??j.id)===(w.group??w.id));
           if(group.every(j=>j.completed>=j.required))for(const j of group)finish(sim,j);
         }else finish(sim,w);
-        delete a.roadWork;changed=true;
+        // Keep this crew member on site and walk straight to the closest
+        // reachable unclaimed tile. Reconnecting first would send them back
+        // through household/job assignment and lose their current position.
+        const busy=new Set(sim.state.agents.filter(other=>other!==a&&other.roadWork!==undefined).map(other=>other.roadWork));
+        const next=day.night?undefined:workRoutes(sim,w,(sim.state.roadWorks??[]).filter(job=>job.completed<job.required&&!busy.has(job.id)))[0];
+        if(next){a.roadWork=next.job.id;a.path=next.path;a.segment=0;a.progress=0;a.wait=0;a.move=0;}
+        else delete a.roadWork;
+        changed=true;
       }
     }else a.wait=0;
   }
