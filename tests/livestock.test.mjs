@@ -72,19 +72,20 @@ test('milk, eggs and surplus meat have delivery routes; butcher keeps and delive
  }
  butcher.inventory={meat:40,sausages:7};
  for(const cut of ['steaks','roasts']){
-  const result=sim.execute({id:cut,expectedRevision:sim.state.revision,command:{type:'butcherCut',id:butcher.id,cut}});assert.equal(result.ok,true,result.message);assert.equal(buildingRecipe(butcher).output,cut);
+  const result=sim.execute({id:cut,expectedRevision:sim.state.revision,command:{type:'butcherCut',id:butcher.id,cut}});assert.equal(result.ok,true,result.message);assert.deepEqual(buildingRecipe(butcher).outputs,{sausages:4,steaks:3,roasts:4});
   assert.equal(butcher.inventory.sausages,7);assert.ok(canSupply(butcher,warehouse,'sausages'));
  }
- assert.equal(parseSave(JSON.stringify(sim.snapshot())).buildings.find(b=>b.id===butcher.id).cut,'roasts');
+ assert.equal(parseSave(JSON.stringify(sim.snapshot())).buildings.find(b=>b.id===butcher.id).cut,undefined);
  const recipe=JSON.stringify(BUILDINGS.butcher.recipe);sim.dispatch();assert.equal(JSON.stringify(BUILDINGS.butcher.recipe),recipe);
  assert.ok(sim.state.agents.some(a=>a.source===butcher.id&&a.cargo==='sausages'));
 });
-test('each new butcher recipe consumes actual meat and produces its chosen cut',()=>{
+test('every butcher batch makes all cuts even when an old save had selected a single cut',()=>{
  for(const cut of ['steaks','roasts']){
   const sim=new Simulation(),b=sim.state.buildings.find(b=>b.kind==='butcher');
   b.cut=cut;b.inventory={meat:40};sim.dispatch=()=>{};
-  const recipe=buildingRecipe(b);for(let i=0;i<80;i++)sim.step();
-  assert.ok(b.inventory[cut]>=recipe.count);assert.equal(40-b.inventory.meat,b.inventory[cut]/recipe.count*recipe.amount);
+  const recipe=buildingRecipe(b);b.progress=recipe.seconds-.25;sim.step();
+  for(const [resource,count] of Object.entries(recipe.outputs))assert.equal(b.inventory[resource],count);
+  assert.equal(b.inventory.meat,40-recipe.amount);
  }
 });
 test('starter livestock receives real farmers and feed; dairy and poultry produce while the pig herd grows',()=>{

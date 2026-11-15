@@ -1,7 +1,7 @@
 import {smokePuffs,weather} from "./weather.js";
 import {isHome,isPark} from "./catalog.js";
 import type Phaser from "phaser";
-import { BUILDINGS } from "./catalog.js";
+import { BUILDINGS,fullProductionOutput } from "./catalog.js";
 import { daylight } from "./daylight.js";
 import { productionRate, outputCapacity } from "./upgrades.js";
 import { nearbyDeposits } from "./deposits.js";
@@ -47,7 +47,7 @@ export function working(sim: Simulation, b: Building) {
     return false;
   return (
     (!r.input || (b.inventory[r.input] ?? 0) >= (r.amount ?? 0)) &&
-    (b.inventory[r.output] ?? 0) < outputCapacity(b)
+    !fullProductionOutput(b,outputCapacity(b))
   );
 }
 

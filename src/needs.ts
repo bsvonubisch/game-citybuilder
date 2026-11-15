@@ -1,4 +1,4 @@
-import {buildingRecipe,FOOD_RESOURCES} from './catalog.js';
+import {buildingRecipe,recipeProducts,FOOD_RESOURCES} from './catalog.js';
 import {buildingJobs} from "./catalog.js";
 import {isHome} from "./catalog.js";
 import {marketStock,marketVendors} from "./market.js";
@@ -65,6 +65,6 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
     rows.push({label:"Religion",have:`${faith}%`,need:"Church visits",ok:faith>=60});
     rows.push({label:"Leisure",have:`${leisure}%`,need:"Nearby visits",ok:leisure>=60});
   }
-  if(d.recipe)rows.push({label:RESOURCE_NAMES[d.recipe.output],have:String(b.inventory[d.recipe.output]??0),need:`${outputCapacity(b)} storage`,ok:(b.inventory[d.recipe.output]??0)<outputCapacity(b)});
+  if(d.recipe)for(const [resource,count] of recipeProducts(d.recipe))rows.push({label:RESOURCE_NAMES[resource],have:String(b.inventory[resource]??0),need:`${outputCapacity(b)} storage`,ok:d.recipe.outputs?(b.inventory[resource]??0)+count<=outputCapacity(b):(b.inventory[resource]??0)<outputCapacity(b)});
   return rows;
 }

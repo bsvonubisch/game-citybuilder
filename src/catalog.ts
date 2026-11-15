@@ -195,6 +195,7 @@ export interface Definition {
     input?: Resource;
     amount?: number;
     output: Resource;
+    outputs?: Partial<Record<Resource,number>>;
     count: number;
     seconds: number;
   };
@@ -203,7 +204,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
   cattle:{name:"Dairy pasture",...penPrice('cattle'),jobs:1,frame:0,category:"production",description:"Drag a 2×2 to 10×10 pasture. Starts with two cows; farmers and grain grow the herd. Collect milk and send surplus livestock to the butcher.",recipe:{input:"grain",amount:1,output:"milk",count:1,seconds:32}},
   chickens:{name:"Chicken coop",...penPrice('chickens'),jobs:1,frame:0,category:"production",description:"Drag a 2×2 to 10×10 chicken run. Starts with two birds; farmers and grain grow the flock. Collect eggs and send surplus poultry to the butcher.",recipe:{input:"grain",amount:1,output:"eggs",count:1,seconds:24}},
   pigs:{name:"Pigsty",...penPrice('pigs'),jobs:1,frame:0,category:"production",description:"Drag a 2×2 to 10×10 pen. Starts with two pigs; farmers and grain grow the herd. Surplus animals supply meat while a breeding pair stays behind.",recipe:{input:"grain",amount:1,output:"meat",count:4,seconds:44}},
-  butcher:{name:"Butcher & smokehouse",cost:260,jobs:2,frame:0,materials:{wood:12,stone:10,metal:4},category:"production",description:"Choose sausages, steaks or roasts in the building details. Hunters, livestock pens and warehouse trucks supply meat; prepared food goes to markets and households.",recipe:{input:"meat",amount:2,output:"sausages",count:4,seconds:12}},
+  butcher:{name:"Butcher & smokehouse",cost:260,jobs:2,frame:0,materials:{wood:12,stone:10,metal:4},category:"production",description:"Turns raw meat into sausages, steaks and roasts together. Hunters, livestock pens and warehouses supply meat; prepared food goes to markets and households.",recipe:{input:"meat",amount:7,output:"sausages",count:4,seconds:44,outputs:{sausages:4,steaks:3,roasts:4}}},
   hunter:{name:"Hunter’s lodge",cost:200,jobs:2,frame:0,materials:{wood:12,stone:8,metal:2},category:"production",description:"Two hunters follow wildlife within 12 tiles. They carry meat back to the lodge for food deliveries. Keep nearby woodland open.",recipe:{output:"meat",count:6,seconds:20}},
   market:{name:"Marketplace",cost:260,jobs:2,frame:0,materials:{wood:12,stone:12,planks:4},category:"town",description:"Choose a 1×1 to 5×5 plot. Vendors sell delivered food and tools to nearby residents. Open 07:00–19:00."},
   church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{"planks":16,"stone":30,"metal":4},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors within 32 road tiles from 06:00 to 23:00; religion improves after a visit."},
@@ -494,6 +495,11 @@ export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;
 
 export const buildingJobs=(b:{kind:BuildingKind;crop?:Crop|null;rotation:number;plot?:readonly[number,number]})=>isLivestock(b.kind)?livestockJobs(b.kind,b.plot):b.kind==="market"?marketStalls({x:0,y:0,...b}):b.kind==='farm'?(b.crop===null?0:farmJobs(b.plot)):BUILDINGS[b.kind].jobs;
 export const buildingPrice=(kind:BuildingKind,plot?:readonly[number,number])=>isLivestock(kind)?penPrice(kind,plot):kind==="market"?marketPrice(plot):kind==='farm'?farmPrice(plot):{cost:BUILDINGS[kind].cost,materials:BUILDINGS[kind].materials??{}};
-export const buildingRecipe=(b:{kind:BuildingKind;crop?:Crop|null;cut?:ButcherCut}):Definition['recipe']=>b.kind==='butcher'?BUTCHER_CUTS[b.cut??'sausages']:b.kind==='farm'?(b.crop===null?undefined:{output:CROPS[b.crop??'wheat'].output,count:CROPS[b.crop??'wheat'].yield,seconds:CROPS[b.crop??'wheat'].grow}):BUILDINGS[b.kind].recipe;
+export const buildingRecipe=(b:{kind:BuildingKind;crop?:Crop|null;cut?:ButcherCut}):Definition['recipe']=>b.kind==='farm'?(b.crop===null?undefined:{output:CROPS[b.crop??'wheat'].output,count:CROPS[b.crop??'wheat'].yield,seconds:CROPS[b.crop??'wheat'].grow}):BUILDINGS[b.kind].recipe;
+export const recipeProducts=(r:NonNullable<Definition['recipe']>)=>Object.entries(r.outputs??{[r.output]:r.count}) as [Resource,number][];
+export function fullProductionOutput(b:{kind:BuildingKind;crop?:Crop|null;inventory:Partial<Record<Resource,number>>},capacity:number){
+ const recipe=buildingRecipe(b);
+ return recipe&&recipeProducts(recipe).find(([resource,count])=>recipe.outputs?(b.inventory[resource]??0)+count>capacity:(b.inventory[resource]??0)>=capacity)?.[0];
+}
 export const buildingOutputs=(b:{kind:BuildingKind;crop?:Crop|null;cut?:ButcherCut}):Resource[]=>b.kind==='butcher'?['sausages','steaks','roasts']:isLivestock(b.kind)?[...new Set<Resource>([BUILDINGS[b.kind].recipe!.output,'meat'])]:buildingRecipe(b)?[buildingRecipe(b)!.output]:[];
 export const FOOD_RESOURCES:Resource[]=['bread','fish','sausages','steaks','roasts','meat','potatoes','carrots','milk','eggs'];

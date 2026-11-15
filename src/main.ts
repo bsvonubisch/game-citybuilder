@@ -5,8 +5,8 @@ import {TownAudio} from './audio.js';
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 import {farmSummary} from './farming.js';
-import {isLivestock,penPrice,livestockJobs,livestockCapacity,LIVESTOCK,ensureHerd,BUTCHER_CUTS,type ButcherCut} from './livestock.js';
-import {buildingRecipe,FOOD_RESOURCES} from './catalog.js';
+import {isLivestock,penPrice,livestockJobs,livestockCapacity,LIVESTOCK,ensureHerd} from './livestock.js';
+import {buildingRecipe,buildingOutputs,recipeProducts,FOOD_RESOURCES} from './catalog.js';
 import {marketPrice,marketStalls} from "./market-layout.js";
 import {marketVendors,MARKET_GOODS,marketOpen} from "./market.js";
 import {buildingJobs} from "./catalog.js";
@@ -762,12 +762,8 @@ function renderInspector() {
   const d = {...BUILDINGS[b.kind],recipe:buildingRecipe(b)};
   panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${isHome(b.kind) ? `HOME · TIER ${b.houseTier ?? b.level ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier,b.crop)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "farm" ? '<section id="farm-growth" aria-label="Crop growth stages"></section>' : ""}${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) || b.kind === "market" ? '<button id="toggle-production" class="primary"></button>' : ""}`;
   if(b.kind==='farm'){
-    $('#building-status').insertAdjacentHTML('afterend','<section id="farm-crop" aria-label="Choose farm crop"><h4>Crop</h4><div class="crop-choices" role="group" aria-label="Farm crop">'+Object.entries(CROPS).map(([id,c])=>'<button data-farm-crop="'+id+'" aria-pressed="'+((b.nextCrop??b.crop)===id)+'">'+c.name+'<small>'+Math.floor(c.grow/60)+'m '+c.grow%60+'s</small></button>').join('')+'</div><p class="muted">'+(b.nextCrop?'Growing '+CROPS[b.crop??'wheat'].name.toLowerCase()+' now. '+CROPS[b.nextCrop].name+' next, after this harvest is collected.':b.crop?'Plant the whole field, then harvest. Changing crops applies after the current harvest.':'Choose what to grow. Farmers will start once the land is clear and connected.')+'</p></section>');
+    $('#building-status').insertAdjacentHTML('afterend','<section id="farm-crop" aria-label="Choose farm crop"><h4>Crop</h4><div class="crop-choices" role="group" aria-label="Farm crop">'+Object.entries(CROPS).map(([id,c])=>'<button data-farm-crop="'+id+'" aria-pressed="'+((b.nextCrop??b.crop)===id)+'">'+(id==='wheat'?'Wheat → Grain':c.name)+'<small>'+Math.floor(c.grow/60)+'m '+c.grow%60+'s</small></button>').join('')+'</div><p class="muted">'+(b.nextCrop?'Growing '+CROPS[b.crop??'wheat'].name.toLowerCase()+' now. '+CROPS[b.nextCrop].name+' next, after this harvest is collected.':b.crop?'Plant the whole field, then harvest. Changing crops applies after the current harvest.':'Choose what to grow. Farmers will start once the land is clear and connected.')+'</p></section>');
     $('#farm-crop').onclick=async event=>{const choice=(event.target as Element).closest<HTMLButtonElement>('[data-farm-crop]');if(!choice)return;const result=await gateway.command({type:'crop',id:b.id,crop:choice.dataset.farmCrop as Crop});toast(result.message);if(result.ok){scene.redraw();save(false);renderInspector();updateUI();}};
-  }
-  if(b.kind==='butcher'){
-    $('#building-status').insertAdjacentHTML('afterend',`<section><h4>Make</h4><div id="butcher-cuts" class="crop-choices">${Object.entries(BUTCHER_CUTS).map(([cut,d])=>`<button data-cut="${cut}" aria-pressed="${(b.cut??'sausages')===cut}">${d.name}<small>${d.amount} meat → ${d.count}</small></button>`).join('')}</div></section>`);
-    $('#butcher-cuts').onclick=async event=>{const button=(event.target as Element).closest<HTMLButtonElement>('[data-cut]');if(!button)return;const result=await gateway.command({type:'butcherCut',id:b.id,cut:button.dataset.cut as ButcherCut});toast(result.message);if(result.ok){scene.redraw();save(false);renderInspector();updateUI();}};
   }
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
@@ -1214,7 +1210,7 @@ function updateInspector() {
   $("#building-detail").innerHTML =
     `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${buildingJobs(b)}</b></div>` : ""}${
       d.recipe
-        ? `<div class="recipe">${d.recipe.input ? `${d.recipe.amount} ${d.recipe.input}` : "Gather"} <span>→</span> ${d.recipe.count} ${d.recipe.output}</div><div class="goal-progress"><span style="width:${(b.progress / d.recipe.seconds) * 100}%"></span></div><div class="detail-row"><span>Cycle</span><b>${b.progress.toFixed(1)} / ${d.recipe.seconds}s</b></div>${Object.entries(
+        ? `<div class="recipe">${d.recipe.input ? `${d.recipe.amount} ${d.recipe.input}` : "Gather"} <span>→</span> ${recipeProducts(d.recipe).map(([resource,count])=>`${count} ${RESOURCE_NAMES[resource]}`).join(" + ")}</div><div class="goal-progress"><span style="width:${(b.progress / d.recipe.seconds) * 100}%"></span></div><div class="detail-row"><span>Cycle</span><b>${b.progress.toFixed(1)} / ${d.recipe.seconds}s</b></div>${Object.entries(
             b.inventory,
           )
             .map(
@@ -1245,7 +1241,7 @@ function updateInspector() {
     const counts=farmSummary(b,simulation.state.tick),crop=CROPS[b.crop??'wheat'];
     $('#building-needs').before($('#farm-growth'));
     $('#farm-growth').innerHTML='<div class="field-stages">'+Object.entries(counts).map(([stage,n])=>'<div class="field-stage '+stage+'"><b>'+n+'</b><span>'+({soil:'Soil',seeded:'Seeded',growing:'Growing',ripe:'Ready'}[stage])+'</span></div>').join('')+'</div>';
-    $('#building-detail').innerHTML='<div class="detail-row"><span>Field size</span><b>'+(b.plot??[2,2]).join('×')+'</b></div><div class="detail-row"><span>Farmers on site</span><b>'+simulation.state.agents.filter(a=>a.onsite===b.id).length+' / '+buildingJobs(b)+'</b></div><div class="detail-row"><span>Harvest in storage</span><b>'+(b.inventory[crop.output]??0)+' '+RESOURCE_NAMES[crop.output]+'</b></div><p class="muted">'+crop.grow+' seconds to grow after planting. Farmers sow the whole field before harvesting. '+(b.crop==='wheat'?'Grain goes to flour mills.':'Vegetables go to warehouses and markets for food.')+'</p>';
+    $('#building-detail').innerHTML='<div class="detail-row"><span>Field size</span><b>'+(b.plot??[2,2]).join('×')+'</b></div><div class="detail-row"><span>Farmers on site</span><b>'+simulation.state.agents.filter(a=>a.onsite===b.id).length+' / '+buildingJobs(b)+'</b></div><div class="detail-row"><span>Harvest in storage</span><b>'+(b.inventory[crop.output]??0)+' '+RESOURCE_NAMES[crop.output]+'</b></div><p class="muted">'+crop.grow+' seconds to grow after planting. Farmers sow the whole field before harvesting. '+(b.crop==='wheat'?'Wheat is harvested as grain, used by flour mills and livestock.':'Vegetables go to warehouses and markets for food.')+'</p>';
   }
   if(isLivestock(b.kind)&&!b.construction){
     const herd=ensureHerd(b),capacity=livestockCapacity(b.kind,b.plot);
@@ -1482,7 +1478,7 @@ function updateLogistics(b: Building) {
   const visibleWorkers = activity.workers.filter(
     (a) => a.active !== false,
   ).length;
-  const html = `<h4>Goods routes</h4><div class="goods-legend"><span class="input">Inputs</span><span class="output">Outputs</span><span class="worker">Workers</span></div><p class="logistics-hint">Arrows follow delivery direction. Rings mark related deliveries and travelling workers.</p><h5>Inputs${recipe.input ? ` · ${RESOURCE_NAMES[recipe.input]}` : ""}</h5>${links(view.inputs, "input") || `<p class="logistics-empty">${recipe.input ? "No supplier built yet." : "Gathered here; no delivered inputs."}</p>`}<h5>Outputs · ${RESOURCE_NAMES[recipe.output]}</h5>${links(view.outputs, "output") || '<p class="logistics-empty">No destination built yet.</p>'}<div class="goods-activity"><span class="input">${activity.incoming.length} incoming ${activity.incoming.length === 1 ? "delivery" : "deliveries"}</span><span class="output">${activity.outgoing.length} outgoing ${activity.outgoing.length === 1 ? "delivery" : "deliveries"}</span></div><p class="goods-workers"><b>${workers.length} assigned · ${visibleWorkers} travelling</b><span>${workers.length ? workers.map((r) => escapeHtml(r.name)).join(", ") : "No assigned workers"}</span></p>`;
+  const html = `<h4>Goods routes</h4><div class="goods-legend"><span class="input">Inputs</span><span class="output">Outputs</span><span class="worker">Workers</span></div><p class="logistics-hint">Arrows follow delivery direction. Rings mark related deliveries and travelling workers.</p><h5>Inputs${recipe.input ? ` · ${RESOURCE_NAMES[recipe.input]}` : ""}</h5>${links(view.inputs, "input") || `<p class="logistics-empty">${recipe.input ? "No supplier built yet." : "Gathered here; no delivered inputs."}</p>`}<h5>Outputs · ${buildingOutputs(b).map(r=>RESOURCE_NAMES[r]).join(" · ")}</h5>${links(view.outputs, "output") || '<p class="logistics-empty">No destination built yet.</p>'}<div class="goods-activity"><span class="input">${activity.incoming.length} incoming ${activity.incoming.length === 1 ? "delivery" : "deliveries"}</span><span class="output">${activity.outgoing.length} outgoing ${activity.outgoing.length === 1 ? "delivery" : "deliveries"}</span></div><p class="goods-workers"><b>${workers.length} assigned · ${visibleWorkers} travelling</b><span>${workers.length ? workers.map((r) => escapeHtml(r.name)).join(", ") : "No assigned workers"}</span></p>`;
   const panel = $("#production-logistics");
   if (panel.innerHTML !== html) panel.innerHTML = html;
 }

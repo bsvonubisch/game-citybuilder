@@ -6,7 +6,7 @@ import {seedStarterTown,landscapeStarterTown} from './starter-town.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
 import {ensureField,prepareField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
-import {buildingRecipe,buildingOutputs,FOOD_RESOURCES} from './catalog.js';
+import {buildingRecipe,buildingOutputs,recipeProducts,fullProductionOutput,FOOD_RESOURCES} from './catalog.js';
 import {marketDestination,marketOpen,buyAtMarket,marketStock,marketVendors,MARKET_GOODS} from "./market.js";
 import {validMarketPlot,marketStalls} from "./market-layout.js";
 import {buildingJobs,buildingPrice} from "./catalog.js";
@@ -1266,8 +1266,9 @@ export class Simulation {
     } else if(c.type==='butcherCut'){
       const b=this.building(c.id);
       if(!b||b.kind!=='butcher'||!isButcherCut(c.cut))return{ok:false,message:'Choose a cut at a butcher.',revision:this.state.revision};
-      if(b.cut!==c.cut){b.cut=c.cut;b.progress=0;}
-      message=`${BUTCHER_CUTS[c.cut].name} selected. Stored food is kept and delivered.`;
+      // Older clients may still send a selection. All butchers now make the full batch.
+      delete b.cut;
+      message='The butcher makes sausages, steaks and roasts automatically.';
     } else if (c.type === 'crop') {
       const b=this.building(c.id);
       if(!b||b.kind!=='farm'||!isCrop(c.crop))return{ok:false,message:'Choose a farm and a valid crop.',revision:this.state.revision};
@@ -1417,7 +1418,7 @@ export class Simulation {
         b.workers < buildingJobs(b)
       )
         continue;
-      if ((b.inventory[recipe.output] ?? 0) >= outputCapacity(b)) continue;
+      if (fullProductionOutput(b,outputCapacity(b))) continue;
       if (
         recipe.input &&
         (b.inventory[recipe.input] ?? 0) < (recipe.amount ?? 0)
@@ -1427,9 +1428,10 @@ export class Simulation {
       if (b.progress >= recipe.seconds) {
         b.progress -= recipe.seconds;
         if (recipe.input) b.inventory[recipe.input]! -= recipe.amount!;
-        b.inventory[recipe.output] =
-          (b.inventory[recipe.output] ?? 0) + recipe.count;
-        b.produced += recipe.count;
+        for(const [resource,count] of recipeProducts(recipe)){
+          b.inventory[resource]=(b.inventory[resource]??0)+count;
+          b.produced+=count;
+        }
       }
     }
     stepRoadWorks(this);
@@ -1793,11 +1795,12 @@ export class Simulation {
           "This layer is exhausted. Dig deeper here to unlock another large reserve without moving the building.",
       };
     if(d.recipe&&!this.state.buildings.some(w=>w.kind==="warehouse"&&!!this.route(b,w,"truck")))return{kind:"road",title:"No delivery road",message:"People can use pavements, but goods need a dirt, stone or brick road from this entrance to a warehouse."};
-    if (d.recipe && (b.inventory[d.recipe.output] ?? 0) >= outputCapacity(b))
+    const fullOutput=fullProductionOutput(b,outputCapacity(b));
+    if (fullOutput)
       return {
         kind: "output",
         title: "Output storage full",
-        message: `Waiting for a delivery to collect ${d.recipe.output}. Check road access and downstream demand.`,
+        message: `Waiting for a delivery to collect ${fullOutput}. Check road access and downstream demand.`,
       };
     if (buildingJobs(b) > b.workers)
       return {
