@@ -3,7 +3,9 @@ import {daylight} from './daylight.js';
 import {outputCapacity,productionRate} from './upgrades.js';
 import type {Building,Simulation} from './simulation.js';
 
-import {LIVESTOCK,isLivestock,livestockCapacity,livestockSpots} from './livestock-layout.js';
+import {LIVESTOCK,isLivestock,livestockCapacity} from './livestock-layout.js';
+import {LivestockRoaming} from './livestock-roaming.js';
+import {sourceObject} from './view-space.js';
 export * from './livestock-layout.js';
 export const ensureHerd=(b:Building)=>b.herd??={count:2,growth:0,fed:0};
 export function livestockCrew(sim:Simulation,b:Building){return sim.state.agents.filter(a=>a.onsite===b.id&&sim.state.residents.some(r=>r.id===a.resident&&r.job===b.id));}
@@ -35,13 +37,15 @@ export function penPoint(b:Pick<Building,'kind'|'rotation'|'plot'|'x'|'y'>,x:num
  const p=r===0?{x,y}:r===1?{x:y,y:h-1-x}:r===2?{x:w-1-x,y:h-1-y}:{x:w-1-y,y:x};
  return{x:b.x+p.x,y:b.y+p.y};
 }
-export function livestockPose(b:Pick<Building,'id'|'kind'|'rotation'|'plot'|'x'|'y'>,index:number,time:number){
- const [worldW,worldH]=dimensions(b.kind,b.rotation,b.plot),[w,h]=b.rotation%2?[worldH,worldW]:[worldW,worldH],phase=time+index*4.73+b.id*.19,cycle=Math.floor(phase/18),t=phase%18;
- // Each animal stays in its own small patch: no crowding, escapes or paths
- // through the shelter. Resting occupies most of the cycle.
- const spots=livestockSpots(b.kind as keyof typeof LIVESTOCK,[w,h]);
- const spot=spots[index%spots.length],offset=(n:number)=>Math.sin((n+1)*97.17+index*17.43)*.12;
- const start={x:spot[0]+offset(cycle-1),y:spot[1]+offset(cycle+2)},end={x:spot[0]+offset(cycle),y:spot[1]+offset(cycle+3)},f=Math.min(1,t/3);
- const p=penPoint(b,start.x+(end.x-start.x)*f,start.y+(end.y-start.y)*f),a=penPoint(b,start.x,start.y),z=penPoint(b,end.x,end.y);
- return{...p,dx:z.x-a.x,dy:z.y-a.y,walking:t<3,grazing:t>=6&&t<14,phase:t};
+type Pen=Pick<Building,'id'|'kind'|'rotation'|'plot'|'x'|'y'>&Partial<Pick<Building,'herd'>>;
+const roaming=new WeakMap<object,{key:string;herd:LivestockRoaming}>();
+export function livestockPose(b:Pen,index:number,time:number){
+ const [worldW,worldH]=dimensions(b.kind,b.rotation,b.plot),[w,h]=b.rotation%2?[worldH,worldW]:[worldW,worldH],original=sourceObject(b),key=`${b.kind}:${w}:${h}`;
+ let cache=roaming.get(original);
+ if(!cache||cache.key!==key){cache={key,herd:new LivestockRoaming(b.kind as keyof typeof LIVESTOCK,w,h,b.id)};roaming.set(original,cache);}
+ cache.herd.update(time,b.herd?.count??livestockCapacity(b.kind as keyof typeof LIVESTOCK,[w,h]));
+ const local=cache.herd.pose(index);
+ if(!local)return null;
+ const p=penPoint(b,local.x,local.y),ahead=penPoint(b,local.x+local.dx,local.y+local.dy);
+ return{...local,...p,dx:ahead.x-p.x,dy:ahead.y-p.y};
 }

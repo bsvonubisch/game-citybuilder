@@ -81,7 +81,8 @@ export class LivestockArt{
      if(!isLivestock(b.kind)||b.construction)continue;
      const config=LIVESTOCK[b.kind],base=this.depths.get(b.id)??0,z=groundHeight(b.x,b.y,sim.state.terrain);
      for(let i=0;i<ensureHerd(b).count;i++){
-       const key=`${b.id}:${i}`,p=livestockPose(b,i,time),v=iso(p.x,p.y);let s=this.animals.get(key);
+       const key=`${b.id}:${i}`,p=livestockPose(b,i,time);if(!p)continue;
+       const v=iso(p.x,p.y);let s=this.animals.get(key);
        active.add(key);
        if(!s){s=this.scene.add.image(v.x,v.y,`livestock-${config.animal}`).setData('buildingId',b.id).setInteractive({pixelPerfect:true});this.animals.set(key,s);}
        if(v.x<view.left-40||v.x>view.right+40||v.y<view.top-40||v.y>view.bottom+40){s.setVisible(false);continue;}

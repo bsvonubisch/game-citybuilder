@@ -76,7 +76,7 @@ export function buildingPreview(
         const sheet=await artImage(`/livestock-${LIVESTOCK[kind].animal}.png`),cell=document.createElement('canvas');cell.width=sheet.width/4;cell.height=sheet.height/4;
         const c=cell.getContext('2d')!;c.drawImage(sheet,0,0,cell.width,cell.height,0,0,cell.width,cell.height);
         const box=opaqueBounds(c.getImageData(0,0,cell.width,cell.height).data,cell.width,cell.height),scale=LIVESTOCK[kind].height/box.height;
-        for(let i=0;i<2;i++){const p=livestockPose({id:0,kind,x:0,y:0,rotation:rotation as Building['rotation'],plot:[w,h]},i,0),v=iso(p.x,p.y);ctx.drawImage(cell,box.x,box.y,box.width,box.height,v.x-box.width*scale/2,v.y-box.height*scale,box.width*scale,box.height*scale);}
+        for(let i=0;i<2;i++){const p=livestockPose({id:0,kind,x:0,y:0,rotation:rotation as Building['rotation'],plot:[w,h]},i,0);if(!p)continue;const v=iso(p.x,p.y);ctx.drawImage(cell,box.x,box.y,box.width,box.height,v.x-box.width*scale/2,v.y-box.height*scale,box.width*scale,box.height*scale);}
       }
       if (!rotorView(rotation).rear) sail();
       return canvas.toDataURL();

@@ -4,6 +4,48 @@ import {Simulation,parseSave} from '../.test-dist/simulation.js';
 import {BUILDINGS,buildingRecipe,buildingJobs} from '../.test-dist/catalog.js';
 import {ensureHerd,stepLivestock,livestockCapacity,livestockJobs,livestockPose,penRectangle,LIVESTOCK} from '../.test-dist/livestock.js';
 import {canSupply,productionConnections} from '../.test-dist/logistics.js';
+import {LivestockRoaming} from '../.test-dist/livestock-roaming.js';
+import {ViewWorld} from '../.test-dist/view-world.js';
+import {turnPoint} from '../.test-dist/view-space.js';
+
+test('animals cross their pen, pause independently, and stay clear of the shelter',()=>{
+ for(const kind of Object.keys(LIVESTOCK)){
+  const herd=new LivestockRoaming(kind,6,6,17);herd.update(0,2);
+  const starts=[herd.pose(0),herd.pose(1)],range=[0,0],walking=[0,0],resting=[0,0];let different=0;
+  for(let t=.1;t<120;t+=.1){
+   herd.update(t,2);const poses=[herd.pose(0),herd.pose(1)];
+   poses.forEach((p,i)=>{assert.ok(p);assert.ok(p.x>=-.12&&p.y>=-.12&&p.x<=5.42&&p.y<=5.42);assert.ok(p.x>=.69||p.y>=.69);range[i]=Math.max(range[i],Math.hypot(p.x-starts[i].x,p.y-starts[i].y));if(p.walking)walking[i]++;else resting[i]++;});
+   if(poses[0].walking!==poses[1].walking)different++;
+  }
+  for(let i=0;i<2;i++){assert.ok(range[i]>3,kind+' explores more than one grazing patch');assert.ok(walking[i]>200);assert.ok(resting[i]>30);}
+  assert.ok(different>50,'Animals do not march and stop in unison');
+ }
+});
+
+test('full herds roam continuously without escaping or stacking, including narrow pens',()=>{
+ for(const kind of Object.keys(LIVESTOCK))for(const plot of [[2,2],[2,10],[10,2],[10,10]]){
+  const herd=new LivestockRoaming(kind,...plot,23),count=livestockCapacity(kind,plot),separation=kind==='chickens'?.22:kind==='pigs'?.4:.49;
+  herd.update(0,count);let previous=Array.from({length:count},(_,i)=>herd.pose(i));
+  for(let t=.1;t<=60;t+=.1){
+   herd.update(t,count);const current=Array.from({length:count},(_,i)=>herd.pose(i));
+   current.forEach((p,i)=>{assert.ok(p,`${kind} ${plot}: every animal appears`);assert.ok(Math.hypot(p.x-previous[i].x,p.y-previous[i].y)<.051,'No jumps');assert.ok(p.x>=-.12&&p.y>=-.12&&p.x<=plot[0]-.58&&p.y<=plot[1]-.58);assert.ok(p.x>=.69||p.y>=.69,'Shelter stays clear');});
+   if(Math.round(t*10)%10===0)for(let i=0;i<count;i++)for(let j=0;j<i;j++)assert.ok(Math.hypot(current[i].x-current[j].x,current[i].y-current[j].y)>separation,'Animals keep space');
+   previous=current;
+  }
+ }
+});
+
+test('roaming survives view turns, pauses and new births without moving existing animals',()=>{
+ const sim=new Simulation(),b=sim.state.buildings.find(b=>b.kind==='cattle');b.herd={count:2,growth:0,fed:0};const view=new ViewWorld(sim);
+ for(let t=0;t<25;t+=.1)livestockPose(b,0,t);
+ const before=[livestockPose(b,0,25),livestockPose(b,1,25)];
+ for(let turn=0;turn<4;turn++){
+  view.setTurn(turn);const v=view.simulation.building(b.id);
+  for(let i=0;i<2;i++){const p=livestockPose(v,i,25),expected=turnPoint(before[i],turn);assert.ok(Math.hypot(p.x-expected.x,p.y-expected.y)<1e-8);}
+ }
+ b.herd.count++;const after=livestockPose(b,0,25);assert.deepEqual(after,before[0]);assert.ok(livestockPose(b,2,25));
+ for(let i=0;i<20;i++)assert.deepEqual(livestockPose(b,0,25),after,'Paused time stays still');
+});
 
 function setup(kind='cattle',plot=[3,3]){
  const sim=new Simulation(),b=sim.state.buildings.find(b=>b.kind===kind);b.plot=plot;b.workers=buildingJobs(b);b.inventory={grain:500};
@@ -55,7 +97,7 @@ test('rectangular pens clamp 2–10 and animals remain inside every rotated foot
  assert.deepEqual(penRectangle({x:10,y:10},{x:-20,y:50}),{x:1,y:10,plot:[10,10]});
  for(const kind of Object.keys(LIVESTOCK))for(const plot of [[2,2],[2,10],[10,2],[10,10]])for(let rotation=0;rotation<4;rotation++){
   const b={id:1,kind,x:10,y:10,plot,rotation};
-  for(let i=0;i<livestockCapacity(kind,plot);i++)for(const t of [0,3,10,20,100]){const p=livestockPose(b,i,t);assert.ok(p.x>=9.5&&p.x<10+plot[0]-.5);assert.ok(p.y>=9.5&&p.y<10+plot[1]-.5);}
+  for(const t of [0,3,10,20,100])for(let i=0;i<livestockCapacity(kind,plot);i++){const p=livestockPose(b,i,t);assert.ok(p.x>=9.5&&p.x<10+plot[0]-.5);assert.ok(p.y>=9.5&&p.y<10+plot[1]-.5);}
  }
 });
 test('larger pens hold more animals with only one to three farmers and no shared grazing patches',()=>{
