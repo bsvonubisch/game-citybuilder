@@ -3,6 +3,7 @@ import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
 import { drawPlot, plotBounds } from "./plot-art.js";
 import { plotTransform } from "./rendering.js";
 import { drawRotor, rotorView } from "./windmill.js";
+import {drawPlanter,plantCrops} from "./planter-art.js";
 
 const images = new Map<string, Promise<HTMLImageElement>>();
 export function artImage(path: string) {
@@ -16,6 +17,15 @@ export function artImage(path: string) {
   return promise;
 }
 const previews = new Map<string, Promise<string>>();
+export function planterPreview() {
+  let promise=previews.get("planter");
+  if(!promise){promise=(async()=>{
+    const [plants,wood]=await Promise.all([artImage("/planter-plants.png"),artImage("/bridge-wood.png")]);
+    const c=document.createElement("canvas");c.width=288;c.height=216;
+    const ctx=c.getContext("2d")!;ctx.scale(4,4);ctx.translate(36,29);
+    drawPlanter(ctx,0,plants,plantCrops(plants),wood);return c.toDataURL();
+  })();previews.set("planter",promise);}return promise;
+}
 export function buildingPreview(
   kind: BuildingKind,
   rotation = 0,

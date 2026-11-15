@@ -271,6 +271,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("construction-workers", "/construction-workers.png");
     this.load.image("forestry", "/forestry-workers.png");
     this.load.image("mining", "/mining-workers.png");
+    this.load.image("planter-plants", "/planter-plants.png");
     this.load.image("fishing-boats", "/fishing-boats.png");
   }
   create() {
@@ -753,7 +754,7 @@ export class TownScene extends Phaser.Scene {
         .setData("decoration", d)
         .setInteractive({ pixelPerfect: true });
       sprite.setScale(def.height / sprite.frame.height);
-      if(d.kind==="planter")this.planterArt.place(sprite,d.x,d.y,planterMask(d,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain)));
+      if(d.kind==="planter")this.planterArt.place(sprite,d.x,d.y,planterMask(d,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction));
       if (d.kind === "fence")
         this.fenceArt.place(
           sprite,
@@ -809,7 +810,8 @@ export class TownScene extends Phaser.Scene {
       };
     });
     for(const rock of this.trees) {
-      const point=rock.getData("depositPoint") as Point|undefined;
+      const decoration=rock.getData("decoration");
+      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:undefined)) as Point|undefined;
       if(point)rock.setDepth(travellerDepth(point,{left:rock.x,right:rock.x+rock.displayWidth,top:rock.y,bottom:rock.y+rock.displayHeight},this.occludingPlots)-.1);
     }
     this.drawOverlay();
@@ -983,7 +985,7 @@ export class TownScene extends Phaser.Scene {
             this.hover.y,
             fenceMask(this.hover, this.simulation.state.decorations),
           );
-        if(this.tool==="planter")this.planterArt.place(this.decorationGhost,this.hover.x,this.hover.y,planterMask(this.hover,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain)));
+        if(this.tool==="planter")this.planterArt.place(this.decorationGhost,this.hover.x,this.hover.y,planterMask(this.hover,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction));
         this.decorationGhost.y -= groundHeight(
           this.hover.x,
           this.hover.y,

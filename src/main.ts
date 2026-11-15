@@ -61,7 +61,7 @@ import {
 } from "./artwork-scaling.js";
 import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
-import { buildingPreview } from "./previews.js";
+import { buildingPreview, planterPreview } from "./previews.js";
 import { alertIcon } from "./building-alerts.js";
 import { buildingGuidance, type GuidanceAction } from "./building-guidance.js";
 import { trafficQueues } from "./traffic-queues.js";
@@ -499,7 +499,7 @@ function renderPanel() {
       ? Object.entries(DECORATIONS)
           .map(
             ([kind, d]) =>
-              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
+              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
           )
           .join("")
       : (Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][])
@@ -539,6 +539,7 @@ function renderPanel() {
     .querySelectorAll<HTMLElement>("[data-building]")
     .forEach((el) => (el.onclick = () => setTool(el.dataset.building as Tool)));
   $("#production-guide").onclick = showChains;
+  if(category==="decorations")void planterPreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-planter-preview]").forEach(image=>image.src=src));
 }
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
