@@ -806,7 +806,7 @@ export class TownScene extends Phaser.Scene {
       if (b.construction) this.constructionArt.place(s, b, this.simulation);
       else
         this.placeSprite(s, b.kind, b.x, b.y, b.rotation, b.plot, b.houseTier);
-      s.setDepth((b.x + b.y + w + h - 2) * 32 + 12).setAlpha(
+      s.setDepth(b.construction?.clearance ? 4992 : (b.x + b.y + w + h - 2) * 32 + 12).setAlpha(
         b.enabled ? 1 : 0.55,
       );
     }

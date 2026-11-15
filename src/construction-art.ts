@@ -15,8 +15,9 @@ export class ConstructionArt {
     h: number,
     front: boolean,
     shoreRotation?: number,
+    clearing = false,
   ) {
-    const name = `construction-${w}-${h}-${front}-${shoreRotation ?? "land"}`;
+    const name = `construction-${w}-${h}-${front}-${shoreRotation ?? "land"}-${clearing}`;
     const left = -h * 32 - 3,
       top = -64,
       width = (w + h) * 32 + 6,
@@ -31,6 +32,19 @@ export class ConstructionArt {
       ctx.scale(4, 4);
       ctx.translate(-left, -top);
       ctx.imageSmoothingEnabled = false;
+      if(clearing){
+        for(let x=0;x<w;x++)for(let y=0;y<h;y++){
+          const p=iso(x,y),corners=plotOutline(1,1);
+          ctx.beginPath();corners.forEach((v,i)=>i?ctx.lineTo(p.x+v.x,p.y+v.y):ctx.moveTo(p.x+v.x,p.y+v.y));ctx.closePath();
+          ctx.fillStyle="#ffd1791c";ctx.fill();ctx.strokeStyle="#ffe2a1aa";ctx.lineWidth=.65;ctx.stroke();
+        }
+        const corners=plotOutline(w,h);
+        ctx.beginPath();corners.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();
+        ctx.strokeStyle="#483721";ctx.lineWidth=3;ctx.stroke();
+        ctx.strokeStyle="#ffdc89";ctx.lineWidth=1.6;ctx.setLineDash([5,2]);ctx.stroke();ctx.setLineDash([]);
+        texture.refresh();
+        return {name,left,top};
+      }
       if (!front) {
         const land =
           shoreRotation === undefined
@@ -108,8 +122,9 @@ export class ConstructionArt {
   }
   place(sprite: Phaser.GameObjects.Image, b: Building, sim: Simulation) {
     if(b.construction?.clearance) {
-      const p=iso(b.x,b.y);
-      sprite.setPosition(p.x,p.y-48-groundHeight(b.x,b.y,sim.state.terrain)).setVisible(false);
+      const p=iso(b.x,b.y),[w,h]=dimensions(b.kind,b.rotation,b.plot),t=this.texture(w,h,false,undefined,true);
+      sprite.setTexture(t.name).setOrigin(0,0).setScale(.25)
+        .setPosition(p.x+t.left,p.y+t.top-groundHeight(b.x,b.y,sim.state.terrain)).setVisible(true);
       this.fronts.get(b.id)?.setVisible(false);
       return;
     }
