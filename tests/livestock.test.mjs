@@ -25,12 +25,29 @@ test('new livestock pens start with a pair, then grow only with feed and farmers
   }
  }
 });
-test('full pens deliver meat without losing the breeding pair; milk and eggs grow with the herd',()=>{
+test('full pens produce meat only on the next birth and retain their full herd',()=>{
  for(const kind of Object.keys(LIVESTOCK)){
   const {sim,b}=setup(kind,[2,2]);b.herd={count:livestockCapacity(kind,b.plot),growth:0,fed:0};
-  for(let i=0;i<200;i++)stepLivestock(sim,b);
-  assert.ok(b.herd.count>=2);assert.ok(b.herd.count<=livestockCapacity(kind,b.plot));assert.ok(b.inventory.meat>=4);
+  const capacity=b.herd.count;
+  for(let i=0;i<LIVESTOCK[kind].birth*4-1;i++)stepLivestock(sim,b);
+  assert.equal(b.inventory.meat??0,0,'No animal is slaughtered before a new birth');
+  assert.equal(b.herd.count,capacity);stepLivestock(sim,b);
+  assert.equal(b.herd.count,capacity);assert.equal(b.inventory.meat,4);assert.equal(b.herd.growth,0);
   if(kind!=='pigs')assert.ok(b.inventory[BUILDINGS[kind].recipe.output]>0);
+ }
+});
+
+test('the birth that fills a pen grows the herd; a blocked surplus birth waits without losing animals',()=>{
+ for(const kind of Object.keys(LIVESTOCK)){
+  const {sim,b}=setup(kind,[2,2]),capacity=livestockCapacity(kind,b.plot);
+  b.herd={count:capacity-1,growth:LIVESTOCK[kind].birth-.25,fed:40};stepLivestock(sim,b);
+  assert.equal(b.herd.count,capacity);assert.equal(b.inventory.meat??0,0);assert.equal(b.herd.growth,0);
+  b.inventory.meat=100;b.herd.growth=LIVESTOCK[kind].birth;
+  for(let i=0;i<20;i++)stepLivestock(sim,b);
+  assert.equal(b.herd.count,capacity);assert.equal(b.inventory.meat,100);assert.equal(b.herd.growth,LIVESTOCK[kind].birth);
+  const restored=new Simulation(parseSave(JSON.stringify(sim.snapshot()))).building(b.id);
+  assert.equal(restored.herd.growth,LIVESTOCK[kind].birth);assert.equal(restored.herd.count,capacity);
+  b.inventory.meat=0;stepLivestock(sim,b);assert.equal(b.inventory.meat,4);assert.equal(b.herd.count,capacity);assert.equal(b.herd.growth,0);
  }
 });
 test('rectangular pens clamp 2–10 and animals remain inside every rotated footprint',()=>{

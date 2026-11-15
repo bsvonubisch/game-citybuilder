@@ -14,15 +14,19 @@ export function stepLivestock(sim:Simulation,b:Building){
  if(herd.fed<=0){const feed=Math.max(1,Math.ceil(herd.count/4));if((b.inventory.grain??0)<feed)return;b.inventory.grain!-=feed;herd.fed=40;}
  const dt=STEP*productionRate(b);herd.fed=Math.max(0,herd.fed-STEP);
  // Breeding advances steadily per pen, not exponentially with the number of pairs.
- herd.growth+=STEP;
- if(herd.count<capacity&&herd.growth>=LIVESTOCK[b.kind].birth){herd.count++;herd.growth=0;}
- herd.growth=Math.min(LIVESTOCK[b.kind].birth,herd.growth);
+ herd.growth=Math.min(LIVESTOCK[b.kind].birth,herd.growth+STEP);
+ if(herd.growth>=LIVESTOCK[b.kind].birth){
+   if(herd.count<capacity){herd.count++;herd.growth=0;}
+   // At capacity the new animal replaces one sent for meat. The visible herd
+   // stays full; no animal is removed early on a milk/egg production cycle.
+   else if((b.inventory.meat??0)<=outputCapacity(b)-4){
+     b.inventory.meat=(b.inventory.meat??0)+4;b.produced+=4;herd.growth=0;
+   }
+ }
  b.progress+=dt;
  if(b.progress>=recipe.seconds){
    b.progress=0;
    if(b.kind!=='pigs'){const count=Math.min(Math.max(1,Math.ceil(herd.count/2)),outputCapacity(b)-(b.inventory[recipe.output]??0));if(count>0){b.inventory[recipe.output]=(b.inventory[recipe.output]??0)+count;b.produced+=count;}}
-   // Keep a breeding pair. Only mature surplus at a full pen enters the meat chain.
-   if(herd.count>=capacity&&(b.inventory.meat??0)<=outputCapacity(b)-4){herd.count--;herd.growth=0;b.inventory.meat=(b.inventory.meat??0)+4;b.produced+=4;}
  }
 }
 /** Pen layout stays relative to the entrance when the building is moved/turned. */
