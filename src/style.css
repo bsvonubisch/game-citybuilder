@@ -3529,3 +3529,8 @@ dialog p.muted {
 .road-surfaces { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .road-swatch.road-pavement { background:#cdc5b4; border-color:#f5ecd9; }
 @media(max-width:600px){.road-surfaces{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+.weather-indicator {display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#65756d;border-left:1px solid #cdd4bd;padding-left:10px;white-space:nowrap;}
+.weather-indicator svg {width:17px;height:17px;}
+.weather-indicator[data-weather="rain"] {color:#52798c;}
+@media(max-width:1000px){.weather-indicator span{display:none;}}

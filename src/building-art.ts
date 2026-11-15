@@ -292,6 +292,7 @@ const grounds: Record<
   ],
 };
 const chimneys: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
+  cottage:[[341,88],[545,87],[539,90],[336,91]],
   house: [
     [221, 16],
     [391, 16],
@@ -330,6 +331,8 @@ const chimneys: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
   ],
 };
 const mechanisms: Partial<Record<BuildingKind, readonly GroundPoint[]>> = {
+  brickworks:[[319,540],[73,481],[0,0],[0,0]],
+  bakery:[[480,370],[0,0],[0,0],[0,0]],
   mill: [
     [270, 172],
     [362, 172],

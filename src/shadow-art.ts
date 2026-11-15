@@ -1,3 +1,4 @@
+import {weather} from "./weather.js";
 import {lampPlacement} from "./streetlights.js";
 import type Phaser from "phaser";
 import { dimensions } from "./catalog.js";
@@ -121,7 +122,7 @@ export class ShadowArt {
         .setTexture(texture.key)
         .setPosition(p.x + texture.left, p.y + texture.top)
         .setDepth(z === 0 ? -990 : (gx + gy) * 32 - 9)
-        .setAlpha(sun.alpha * (1 - dark) + lamp.alpha * dark)
+        .setAlpha(sun.alpha * (1 - dark) * (1-weather(time*4).cloud*.7) + lamp.alpha * dark)
         .setVisible(true);
     }
   }

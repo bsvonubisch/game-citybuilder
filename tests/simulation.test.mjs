@@ -2623,3 +2623,19 @@ test("mixed-size buildings sort cottages in front of the entire near edge, indep
  const unrelated=[plot(1,0,0,2,2),plot(2,6,0,1,1)];unrelated[1].left=600;unrelated[1].right=900;
  assert.deepEqual([...buildingDepths(unrelated).values()],unrelated.map(p=>p.depth));
 });
+
+
+test('weather transitions are deterministic, continuous, and bounded across save ticks', async()=>{
+  const {weather,rainStrokes,smokePuffs}=await import('../.test-dist/weather.js');
+  const kinds=new Set();
+  for(let tick=0;tick<6000;tick++){
+    const w=weather(tick);kinds.add(w.kind);
+    for(const field of ['cloud','rain','mist']){assert.ok(w[field]>=0&&w[field]<=1);assert.ok(Math.abs(w[field]-weather(tick+.01)[field])<.001);}
+  }
+  assert.equal(kinds.size,4);
+  assert.deepEqual(weather(1240),weather(JSON.parse('1240')));
+  assert.equal(rainStrokes(10000,10000,2,1).length,180);
+  assert.equal(rainStrokes(1200,800,2,0).length,0);
+  assert.deepEqual(smokePuffs(20,3,true,1),smokePuffs(20,3,true,1));
+  assert.notDeepEqual(smokePuffs(20,3,true,1),smokePuffs(21,3,true,1));
+});

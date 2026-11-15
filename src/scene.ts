@@ -1,3 +1,5 @@
+import {WeatherArt} from "./weather-art.js";
+import {cameraViewport} from "./rendering.js";
 import {isPark} from "./catalog.js";
 import {PlazaArt} from "./plaza-art.js";
 import {parkVisitor} from "./park-visitors.js";
@@ -234,6 +236,7 @@ export class TownScene extends Phaser.Scene {
   private waterPoints: Point[] = [];
   private animation!: TownAnimation;
   private nightArt!: NightArt;
+  private weatherArt!: WeatherArt;
   private shadowArt!: ShadowArt;
   private lightSources: Phaser.GameObjects.Image[] = [];
   private travellerScales = new Map<string, number>();
@@ -291,6 +294,7 @@ export class TownScene extends Phaser.Scene {
     this.planterArt=new PlanterArt(this);
     this.events.once("shutdown",()=>this.forestryArt.clear());
     this.nightArt = new NightArt(this);
+    this.weatherArt = new WeatherArt(this);
     this.shadowArt = new ShadowArt(this);
     this.plotArt = new PlotArt(this);
     this.constructionArt = new ConstructionArt(this);
@@ -1554,6 +1558,7 @@ export class TownScene extends Phaser.Scene {
       },
     );
     this.waterArt.update(time);
+    this.weatherArt.update(time / STEP);
     this.nightArt.update(this.simulation, time, this.lightSources);
     this.shadowArt.update(
       this.simulation,
@@ -1566,7 +1571,7 @@ export class TownScene extends Phaser.Scene {
       this.simulation,
       time,
       (Math.min(delta, 100) * this.speed) / 1000,
-      (id) => this.buildings.has(id),
+      (id) => {const sprite=this.buildings.get(id),v=cameraViewport(this.cameras.main);return !!sprite && sprite.x+sprite.displayWidth>v.x && sprite.x<v.x+v.width && sprite.y+sprite.displayHeight>v.y-50 && sprite.y<v.y+v.height+50;},
     );
     this.waterEffects.clear();
     for (const p of this.waterPoints) {

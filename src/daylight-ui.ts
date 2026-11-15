@@ -1,4 +1,5 @@
 import { daylight, shiftChange } from "./daylight.js";
+import { weather } from "./weather.js";
 import { icon } from "./icons.js";
 
 export class DaylightUI {
@@ -8,7 +9,7 @@ export class DaylightUI {
   private notice: HTMLElement;
   constructor(private panel: HTMLElement) {
     panel.classList.add("daylight-clock");
-    panel.innerHTML = `<span id="daylight-icon" aria-hidden="true"></span><div class="daylight-labels"><b id="day"></b><strong id="shift-state"></strong></div><span class="daylight-season">Spring · Year 1</span>`;
+    panel.innerHTML = `<span id="daylight-icon" aria-hidden="true"></span><div class="daylight-labels"><b id="day"></b><strong id="shift-state"></strong></div><span class="daylight-season">Spring · Year 1</span><span class="weather-indicator"></span>`;
     this.notice = document.createElement("div");
     this.notice.id = "shift-notice";
     this.notice.hidden = true;
@@ -25,7 +26,10 @@ export class DaylightUI {
     this.dismiss();
   }
   update(tick: number) {
-    const light = daylight(tick);
+    const light = daylight(tick), sky = weather(tick);
+    const badge=this.panel.querySelector<HTMLElement>(".weather-indicator")!;
+    if(badge.dataset.weather!==sky.kind){badge.dataset.weather=sky.kind;badge.innerHTML=`${icon(sky.icon)}<span>${sky.label}</span>`;}
+    badge.title=`${sky.label}${sky.changing?" · weather is changing":""}. Weather changes through the day; rain and mist do not stop your town.`;
     const minutes = Math.round(light.hour * 60) % 1440;
     this.panel.querySelector("#day")!.textContent =
       `Day ${light.day} · ${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;

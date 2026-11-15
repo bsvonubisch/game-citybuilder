@@ -1,3 +1,4 @@
+import {smokePuffs,weather} from "./weather.js";
 import {isHome,isPark} from "./catalog.js";
 import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
@@ -222,13 +223,13 @@ export class TownAnimation {
           )
           .setAlpha(b.enabled ? 1 : 0.55);
       }
-      if (!visible(b.id)) continue;
+      if (!visible(b.id)) {this.effects.get(b.id)?.setVisible(false);this.rotors.get(b.id)?.setVisible(false);continue;}
       let g = this.effects.get(b.id);
       if (!g) {
         g = this.scene.add.graphics();
         this.effects.set(b.id, g);
       }
-      g.clear();
+      g.clear().setVisible(true);
       const root = this.point(b, 0, 0);
       g.setDepth(root.depth + 0.3);
       const dot = (
@@ -248,17 +249,23 @@ export class TownAnimation {
         );
       };
       const chimney = art.chimney;
-      if (chimney && b.enabled && (isHome(b.kind) || active))
-        for (let i = 0; i < 3; i++) {
-          const t = (time * 0.3 + i / 3 + b.id * 0.11) % 1;
-          dot(
-            chimney[0] + t * 24,
-            chimney[1] - t * 75,
-            10 + t * 12,
-            0xf0e8d2,
-            0.28 * (1 - t),
-          );
+      if (chimney && b.enabled && (isHome(b.kind) || active)) {
+        const p=this.point(b,...chimney), industrial=!isHome(b.kind);
+        for(const puff of smokePuffs(time,b.id,industrial,weather(sim.state.tick).wind)){
+          g.fillStyle(0x9ba7a1,puff.alpha*.42).fillEllipse(p.x+puff.x+.6,p.y+puff.y+1,puff.radius*2.5,puff.radius*1.85,16);
+          g.fillStyle(0xe2e2cd,puff.alpha).fillEllipse(p.x+puff.x,p.y+puff.y,puff.radius*1.9,puff.radius*1.6,16);
+          g.fillStyle(0xf1eadb,puff.alpha*.5).fillEllipse(p.x+puff.x-puff.radius*.3,p.y+puff.y-puff.radius*.2,puff.radius,puff.radius*.8,12);
         }
+      }
+      // Flame motion stays inside the visible oven opening, never through a rear wall.
+      if(active && art.mechanism && ((b.kind==="brickworks" && b.rotation<2)||(b.kind==="bakery" && b.rotation===0))){
+        const p=this.point(b,...art.mechanism), flicker=.75+.25*Math.sin(phase*11)+.12*Math.sin(phase*23);
+        g.fillStyle(0xffa32c,.38).fillEllipse(p.x,p.y,25*p.scale,25*p.scale,16);
+        for(let i=0;i<3;i++){
+          const h=(12+5*Math.sin(phase*12+i*2))*p.scale;
+          g.fillStyle(i===1?0xfff1ae:0xffbe49,.8).fillTriangle(p.x+(i-1)*5*p.scale-3*p.scale,p.y+5*p.scale,p.x+(i-1)*5*p.scale+3*p.scale,p.y+5*p.scale,p.x+(i-1)*5*p.scale+Math.sin(phase*8+i)*2*p.scale,p.y-h*flicker);
+        }
+      }
       if (isPark(b.kind) && b.enabled) {
         const center = art.mechanism!,ratio=b.kind==="garden"?.5:1;
         for (let i = 0; i < 8; i++) {
@@ -287,6 +294,10 @@ export class TownAnimation {
             p.y + Math.sin(angle) * r * 0.85,
           );
         }
+      }
+      if (b.kind === "sawmill" && active && b.rotation<2) {
+        const p=this.point(b,...art.mechanism!);
+        for(let i=0;i<6;i++){const age=(phase*1.4+i/6)%1,side=b.rotation===0?1:-1;g.fillStyle(0xd7ad67,(1-age)*.8).fillRect(p.x+side*age*13,p.y+2+age*age*9,1,.7);}
       }
       if (b.kind === "workshop" && active && b.rotation < 2) {
         const t = (phase * 0.25) % 1;
