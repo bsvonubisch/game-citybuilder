@@ -19,6 +19,7 @@ test('farm demolition survives reloading, duplicate removal and pausing without 
  command(loaded,{type:'toggle',id:b.id});for(let i=0;i<20;i++)loaded.step();assert.equal(restored.construction.completed,5);assert.match(loaded.alert(restored).title,/Demolishing/);
 });
 test('queued warehouse demolition cannot remove the last functioning depot',()=>{
- const s=new Simulation(),warehouses=s.state.buildings.filter(b=>b.kind==='warehouse');assert.ok(command(s,{type:'demolish',x:warehouses[0].x,y:warehouses[0].y}).ok);
- const result=command(s,{type:'demolish',x:warehouses[1].x,y:warehouses[1].y});assert.equal(result.ok,false);assert.match(result.message,/finished warehouse/);
+ const s=new Simulation(),warehouses=s.state.buildings.filter(b=>b.kind==='warehouse');
+ for(const w of warehouses.slice(0,-1))assert.ok(command(s,{type:'demolish',x:w.x,y:w.y}).ok);
+ const last=warehouses.at(-1),result=command(s,{type:'demolish',x:last.x,y:last.y});assert.equal(result.ok,false);assert.match(result.message,/finished warehouse/);
 });

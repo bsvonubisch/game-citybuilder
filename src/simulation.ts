@@ -2,7 +2,7 @@ import {queueRoadWork,roadWorkAt,stepRoadWorks,validateRoadWorks,type RoadWork} 
 import {TownStatusLog} from './town-status-log.js';
 import {isLivestock,stepLivestock,ensureHerd,validPenPlot,livestockCapacity,LIVESTOCK,isButcherCut,BUTCHER_CUTS,type Herd,type ButcherCut} from './livestock.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
-import {seedStarterTown,landscapeStarterTown} from './starter-town.js';
+import {seedStarterTown} from './starter-town.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
 import {ensureField,prepareField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
@@ -329,7 +329,7 @@ export class Simulation {
         };
     if(saved)restoreTownEvents(this.state);else this.state.events=[];
     if (!saved) seedStarterTown(this.state);
-    if (!saved || !saved.decorations)
+    if (saved && !saved.decorations)
       this.state.decorations = initialDecorations(
         new Set(this.state.roads),
         (x, y) =>
@@ -338,7 +338,6 @@ export class Simulation {
           !!depositAt({ x, y }),
         () => this.state.nextId++,
       );
-    if (!saved) landscapeStarterTown(this.state);
     expandValley(this.state);
     expandReserves(this.state);
     lengthenDays(this.state);

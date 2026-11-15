@@ -9,6 +9,7 @@ import {
 } from "../.test-dist/traffic.js";
 import { Simulation } from "./legacy-town.mjs";
 import { Simulation as StarterSimulation } from "../.test-dist/simulation.js";
+import {readFileSync} from 'node:fs';
 import { agentDistance } from "../.test-dist/rendering.js";
 import { STEP, AGENT_SPEED } from "../.test-dist/catalog.js";
 import { ROAD_TYPES, roadTravelTime, roadMovement } from "../.test-dist/roads.js";
@@ -304,8 +305,9 @@ test('distant traffic on a continuous two-tile-wide street does not reserve the 
   complete([a,b],roads,300);
 });
 
-test('the current starter town keeps flowing over twenty minutes with only occasional recovery',()=>{
-  const sim=new StarterSimulation();let recoveries=0,stoppedTicks=0;
+test('the fixed traffic regression town keeps flowing over twenty minutes with only occasional recovery',()=>{
+  // Keep the original traffic layout/load stable when the player's new-game town changes.
+  const sim=new StarterSimulation(JSON.parse(readFileSync(new URL('./fixtures/traffic-town.json',import.meta.url),'utf8')));let recoveries=0,stoppedTicks=0;
   const recover=sim.recoverVehicle.bind(sim);sim.recoverVehicle=a=>{recoveries++;recover(a);};
   for(let tick=0;tick<4800;tick++){
     noCollisions(sim.state.agents,`starter tick ${tick}`);sim.step();
