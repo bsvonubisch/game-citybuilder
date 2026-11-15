@@ -46,17 +46,20 @@ export class ShadowArt {
       if(b?.kind==='farm')continue;
       if (!b && (!d || d.kind === "fence" || d.kind === "planter")) continue;
       // The ground-shadow pass cannot clip to a narrow elevated deck.
-      if(d?.kind === "streetlight" && lampPlacement(sim,d).bridge)continue;
+      const pole = d?.kind === "streetlight" ? lampPlacement(sim, d) : undefined;
+      if(pole?.bridge)continue;
       const [w, h] = b
         ? dimensions(b.kind, b.rotation, b.plot)
-        : d.kind === "bench"
+        : pole
+          ? [0.055, 0.055]
+          : d.kind === "bench"
           ? [0.7, 0.4]
           : [0.45, 0.45];
-      const gx = b ? b.x + (w - 1) / 2 : d.x,
-        gy = b ? b.y + (h - 1) / 2 : d.y;
-      const p = iso(gx, gy),
-        z = groundHeight(b?.x ?? d.x, b?.y ?? d.y, sim.state.terrain);
-      p.y -= z;
+      const gx = b ? b.x + (w - 1) / 2 : pole?.point.x ?? d.x,
+        gy = b ? b.y + (h - 1) / 2 : pole?.point.y ?? d.y;
+      const z = pole?.elevation ?? groundHeight(b?.x ?? d.x, b?.y ?? d.y, sim.state.terrain);
+      const p = pole ? {...pole.screen} : iso(gx, gy);
+      if (!pole) p.y -= z;
       const visible =
         source.visible &&
         p.x > v.x - 160 &&
@@ -69,7 +72,9 @@ export class ShadowArt {
         continue;
       }
       const sun = castShadow(p.x, p.y, lamps, false),
-        lamp = castShadow(p.x, p.y, lamps, true);
+        // A building's own windows illuminate its doorstep. They must not
+        // project the entire foundation across the street as a solid block.
+        lamp = b ? {x: 0, y: 2, alpha: 0.1} : castShadow(p.x, p.y, lamps, true);
       const dx = Math.round((sun.x * (1 - dark) + lamp.x * dark) / 4) * 4;
       const dy = Math.round((sun.y * (1 - dark) + lamp.y * dark) / 4) * 4;
       const shape = `${w}-${h}-${dx}-${dy}`,
@@ -98,19 +103,25 @@ export class ShadowArt {
           iso(-w / 2, h / 2),
         ];
         c.fillStyle = "#0f1b24";
-        c.shadowColor = "#0f1b24";
-        c.shadowBlur = 5;
-        // Extrude the ground silhouette a short distance away from the light.
-        for (let t = 0; t <= 1; t += 0.2) {
-          c.beginPath();
-          corners.forEach((q, i) =>
-            i
-              ? c.lineTo(q.x + dx * t, q.y + dy * t)
-              : c.moveTo(q.x + dx * t, q.y + dy * t),
-          );
-          c.closePath();
-          c.fill();
-        }
+        // One continuous silhouette, blurred including its edge. Stamping
+        // opaque diamonds with shadowBlur leaves hard, overlapping steps.
+        const points = [...corners, ...corners.map(q => ({x:q.x + dx, y:q.y + dy}))]
+          .sort((a,b) => a.x-b.x || a.y-b.y);
+        const cross = (a:typeof p,b:typeof p,c:typeof p) => (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+        const half = (points:typeof corners) => {
+          const result:typeof corners = [];
+          for (const point of points) {
+            while (result.length > 1 && cross(result[result.length-2],result[result.length-1],point) <= 0) result.pop();
+            result.push(point);
+          }
+          return result.slice(0,-1);
+        };
+        const outline = [...half(points), ...half([...points].reverse())];
+        c.filter = `blur(${pole ? 1.5 : 5}px)`;
+        c.beginPath();
+        outline.forEach((q,i) => i ? c.lineTo(q.x,q.y) : c.moveTo(q.x,q.y));
+        c.closePath();
+        c.fill();
         tex.refresh();
         texture = { key, left, top };
         this.textures.set(shape, texture);
