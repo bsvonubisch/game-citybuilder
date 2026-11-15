@@ -260,6 +260,67 @@ export class Traffic {
         br = range(b, junction);
       return corridorsOverlap(a, ar[0], ar[1], b, br[0], br[1]);
     };
+    const approachDistance = (a: Agent, junction: string) => {
+      const at = a.segment + a.progress;
+      for (
+        let i = Math.max(0, a.segment);
+        i <= Math.min(a.path.length - 1, a.segment + 2);
+        i++
+      ) {
+        const distance = i - at;
+        if (
+          this.junctionGroups.get(key(a.path[i])) === junction &&
+          distance >= -RELEASE_DISTANCE &&
+          distance <= 1.8
+        )
+          return distance;
+      }
+      return Infinity;
+    };
+    const committed = (a: Agent, junction: string) =>
+      a.active && approachDistance(a, junction) < STOP_DISTANCE - 1e-8;
+    const readyDepartures = new Set(
+      cars
+        .filter(
+          (a) =>
+            !a.active &&
+            a.wait <= 0 &&
+            !cars.some(
+              (b) =>
+                b.active &&
+                overlaps(a, a.segment + a.progress, b, b.segment + b.progress),
+            ),
+        )
+        .map((a) => a.id),
+    );
+    // Queue ages are a single tick snapshot. Incrementing a rejected departure
+    // must not make it overtake a car assessed later in this same planning pass.
+    const waitingAge = new Map(cars.map((a) => [a.id, a.queuedTicks ?? 0]));
+    // A compatible convoy may share a crossing, but it cannot extend its turn
+    // forever. New reservations and building departures join the same queue.
+    // Cars already beyond the stop line must finish before priority changes.
+    const olderWaiting = (a: Agent, junction: string) =>
+      !committed(a, junction) &&
+      cars.some(
+        (b) =>
+          b !== a &&
+          b.wait <= 0 &&
+          (b.active || readyDepartures.has(b.id)) &&
+          !this.junctions.get(junction)?.has(b.id) &&
+          approachDistance(b, junction) !== Infinity &&
+          (committed(b, junction) ||
+            (waitingAge.get(b.id)! > 0 &&
+              (waitingAge.get(b.id)! > waitingAge.get(a.id)! ||
+                (waitingAge.get(b.id) === waitingAge.get(a.id) &&
+                  b.id < a.id)))) &&
+          conflicts(a, b, junction),
+      );
+    const yielding = new Map<string, Set<number>>();
+    const yieldToQueue = (a: Agent, junction: string) => {
+      let ids = yielding.get(junction);
+      if (!ids) yielding.set(junction, (ids = new Set()));
+      ids.add(a.id);
+    };
     const blockedByOwner = (a: Agent, junction: string) =>
       [...(this.junctions.get(junction) ?? [])].some((id) => {
         const b = cars.find((b) => b.id === id);
@@ -299,7 +360,7 @@ export class Traffic {
           ),
         ];
       const blocked = near.some((k) => {
-        if (blockedByOwner(a, k)) return true;
+        if (blockedByOwner(a, k) || olderWaiting(a, k)) return true;
         return cars.some(
           (b) =>
             b !== a &&
@@ -353,12 +414,15 @@ export class Traffic {
     for (const [junction, approaches] of candidates) {
       const ranked = [...approaches.values()].sort(
         (a, b) =>
+          Number(committed(b.a, junction)) - Number(committed(a.a, junction)) ||
           (b.a.queuedTicks ?? 0) - (a.a.queuedTicks ?? 0) ||
           a.distance - b.distance ||
           a.a.id - b.a.id,
       );
-      for (const { a } of ranked)
-        if (!blockedByOwner(a, junction)) reserve(junction, a.id);
+      for (const { a } of ranked) {
+        if (olderWaiting(a, junction)) yieldToQueue(a, junction);
+        else if (!blockedByOwner(a, junction)) reserve(junction, a.id);
+      }
     }
     const owners = new Set(
       [...this.junctions.values()].flatMap((ids) => [...ids]),
@@ -383,7 +447,11 @@ export class Traffic {
         i++
       ) {
         const group = this.junctionGroups.get(key(a.path[i]));
-        if (group !== undefined && blockedByOwner(a, group) && i >= at)
+        if (
+          group !== undefined &&
+          (blockedByOwner(a, group) || yielding.get(group)?.has(a.id)) &&
+          i >= at
+        )
           desired = Math.min(desired, Math.max(0, i - at - STOP_DISTANCE));
       }
       const clear = (move: number) =>

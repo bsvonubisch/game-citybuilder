@@ -271,6 +271,67 @@ test("same-lane convoys cross a junction without an artificial stop for each car
   );
 });
 
+test("a stream of deliveries leaving a building beside a junction yields to waiting cross traffic", () => {
+  const deliveries = line(1, 0, -1, 0, 8),
+    crossing = line(0, -4, 0, 1, 9);
+  const traffic = new Traffic();
+  traffic.configure(
+    new Set([...deliveries, ...crossing].map((p) => `${p.x},${p.y}`)),
+  );
+  let agents = [vehicle(10, deliveries, "truck")];
+  traffic.plan(agents);
+  const waiting = {
+    ...vehicle(1, crossing),
+    active: true,
+    segment: 2,
+    progress: 0.7,
+  };
+  agents.push(waiting);
+  let crossed = -1;
+  for (let tick = 0; tick < 120; tick++) {
+    if (tick % 3 === 0) agents.push(vehicle(20 + tick, deliveries, "truck"));
+    traffic.plan(agents);
+    noCollisions(agents, `continuous deliveries ${tick}`);
+    for (const a of agents) {
+      const d = a.segment + a.progress + a.move;
+      a.segment = Math.floor(d);
+      a.progress = d - a.segment;
+    }
+    if (crossed < 0 && waiting.segment + waiting.progress >= 4.6)
+      crossed = tick;
+    agents = agents.filter(
+      (a) => a.segment + a.progress < a.path.length - 1 - 1e-8,
+    );
+  }
+  assert.ok(
+    crossed >= 0 && crossed < 40,
+    `cross traffic must get a safe gap within 10 seconds; crossed at tick ${crossed}`,
+  );
+});
+
+test("a blocked building departure does not reserve priority over the car blocking its driveway", () => {
+  const incoming = line(4, 0, -1, 0, 5);
+  const frontPath = [...incoming, ...line(0, -1, 0, -1, 4)];
+  const departurePath = [
+    { x: 1, y: 0 },
+    { x: 0, y: 0 },
+    ...line(0, 1, 0, 1, 4),
+  ];
+  const front = {
+    ...vehicle(2, frontPath),
+    active: true,
+    segment: 2,
+    progress: 0.7,
+  };
+  const departure = { ...vehicle(1, departurePath, "truck"), queuedTicks: 100 };
+  const result = complete(
+    [front, departure],
+    [...frontPath, ...departurePath],
+    120,
+  );
+  assert.ok(result.ticks < 80);
+});
+
 test("traffic warning thresholds exclude ordinary stops and hidden departures", () => {
   const path = line(0, 0, 1, 0, 12);
   const waiting = {
