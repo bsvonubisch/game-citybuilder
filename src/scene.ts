@@ -1,4 +1,5 @@
 import {MarketArt,prepareVendorFrames} from "./market-art.js";
+import {marketRectangle} from "./market-layout.js";
 import {marketActor} from "./market.js";
 import {edgeDepth,type EdgeOccluder} from "./edge-occlusion.js";
 import {fenceEnds} from "./fences.js";
@@ -196,10 +197,13 @@ export class TownScene extends Phaser.Scene {
     this.onBuildingHover(id,x,y);
   }
   roadType: RoadType = "stone";
+  private marketDrag:{from:Point;to:Point;pointer:number}|null=null;
+  onMarketPreview:()=>void=()=>{};
   private roadDrag: { from: Point; to: Point; pointer: number; decoration?:number } | null = null;
   onRoadPreview: (plan: RoadPlan | null) => void = () => {};
   onRoadApply: (from: Point, to: Point) => void = () => {};
   cancelRoad() {
+    this.marketDrag=null;
     this.roadDrag = null;
     this.onRoadPreview(null);
   }
@@ -214,7 +218,7 @@ export class TownScene extends Phaser.Scene {
   private plotArt!: PlotArt;
   private plazaArt!:PlazaArt;
   private marketArt!:MarketArt;
-  marketPlot: [number,number]=[2,2];
+  marketPlot: [number,number]=[1,1];
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
   private planterArt!: PlanterArt;
@@ -407,6 +411,10 @@ export class TownScene extends Phaser.Scene {
         this.touches.start(p.id, { x: p.x, y: p.y });
         if (this.touches.count > 1) { this.cancelRoad(); this.drawOverlay(); return; }
       }
+      if(this.tool==="market"&&(p.wasTouch||p.button===0)&&!this.keys.SPACE.isDown){
+        const world=this.cameras.main.getWorldPoint(p.x,p.y),tile=this.pickTile(world.x,world.y);
+        if(inside(tile.x,tile.y)){this.marketDrag={from:tile,to:tile,pointer:p.id};this.marketPlot=[1,1];this.hover=tile;this.onMarketPreview();this.drawOverlay();}return;
+      }
       if ((this.tool === "road" || this.tool === "bulldoze") && (p.wasTouch || p.button === 0) && !this.keys.SPACE.isDown) {
         const world = this.cameras.main.getWorldPoint(p.x,p.y);
         const hit=this.tool==="bulldoze"?over.find(o=>o.getData("buildingId")||o.getData("decoration")):undefined;
@@ -448,6 +456,11 @@ export class TownScene extends Phaser.Scene {
       this.lastPointer = { x: p.x, y: p.y };
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer,over:Phaser.GameObjects.GameObject[]=[]) => {
+      if(p.isDown&&this.marketDrag?.pointer===p.id&&this.tool==="market"){
+        if(p.wasTouch)this.touches.move(p.id,{x:p.x,y:p.y});
+        const world=this.cameras.main.getWorldPoint(p.x,p.y),tile=this.pickTile(world.x,world.y),rect=marketRectangle(this.marketDrag.from,tile);
+        this.marketDrag.to=tile;this.marketPlot=rect.plot;this.hover={x:rect.x,y:rect.y};this.onMarketPreview();this.drawOverlay();return;
+      }
       if(!p.wasTouch&&!p.isDown)this.buildingHover(over.find(o=>o.getData("buildingId"))?.getData("buildingId")??null,p.x,p.y);
       if (p.isDown && this.roadDrag?.pointer === p.id && (this.tool === "road"||this.tool === "bulldoze")) {
         if (p.wasTouch) this.touches.move(p.id, {x:p.x,y:p.y});
@@ -521,6 +534,12 @@ export class TownScene extends Phaser.Scene {
           this.dragging = false;
           return;
         }
+        if(this.marketDrag?.pointer===p.id&&this.tool==="market"){
+          const rect=marketRectangle(this.marketDrag.from,this.marketDrag.to);this.marketDrag=null;
+          if(p.wasTouch)this.touches.end(p.id);
+          if(p.event.type!=="touchcancel"){this.marketPlot=rect.plot;this.onTile({x:rect.x,y:rect.y});}
+          this.drawOverlay();return;
+        }
         if (this.roadDrag?.pointer === p.id && (this.tool === "road"||this.tool === "bulldoze")) {
           const draft = this.roadDrag;
           this.roadDrag = null;
@@ -552,7 +571,7 @@ export class TownScene extends Phaser.Scene {
           : this.moved < 6 && p.button === 0 && !this.keys.SPACE.isDown;
         // Road releases are handled only by the live draft above. A cancelled
         // drag or a pinch must never fall through to single-tile placement.
-        if (tap && this.tool !== "road" && this.tool !== "bulldoze") {
+        if (tap && this.tool !== "road" && this.tool !== "bulldoze" && this.tool !== "market") {
           const boatHit =
             this.tool === "inspect"
               ? over.find((o) => o.getData("boatId"))

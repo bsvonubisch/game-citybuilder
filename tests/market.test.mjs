@@ -1,10 +1,16 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {Simulation,parseSave} from '../.test-dist/simulation.js';
-import {marketLayout,marketPrice,validMarketPlot} from '../.test-dist/market-layout.js';
+import {marketLayout,marketPrice,validMarketPlot,marketRectangle} from '../.test-dist/market-layout.js';
 import {marketVendors,buyAtMarket} from '../.test-dist/market.js';
 import {buildingJobs,footprint} from '../.test-dist/catalog.js';
 function fixture(){const sim=new Simulation();sim.state.money=100000;Object.assign(sim.state.buildings.find(b=>b.kind==='warehouse').inventory,{wood:1000,stone:1000,planks:1000,bread:100,fish:100});return sim;}
 const command=(sim,c)=>sim.execute({id:'market-'+sim.state.revision,actorId:'test',expectedRevision:sim.state.revision,command:c});
+test('market drag selects an inclusive rectangle in every direction and clamps each side to five tiles',()=>{
+ assert.deepEqual(marketRectangle({x:10,y:10},{x:10,y:10}),{x:10,y:10,plot:[1,1]});
+ assert.deepEqual(marketRectangle({x:10,y:10},{x:12,y:13}),{x:10,y:10,plot:[3,4]});
+ assert.deepEqual(marketRectangle({x:10,y:10},{x:8,y:7}),{x:8,y:7,plot:[3,4]});
+ assert.deepEqual(marketRectangle({x:10,y:10},{x:30,y:-10}),{x:10,y:6,plot:[5,5]});
+});
 test('all 1–5 market dimensions keep stalls, vendors and customers within their rotated footprint',()=>{
  for(let w=1;w<=5;w++)for(let h=1;h<=5;h++)for(let rotation=0;rotation<4;rotation++){
   const b={x:10,y:10,rotation,plot:[w,h]},layout=marketLayout(b);

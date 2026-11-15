@@ -325,8 +325,9 @@ function setTool(next: Tool) {
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
   if(next==="market"){
-    $("#placement-hint").insertAdjacentHTML("beforeend",'<div class="market-size"><label>Width <select id="market-width">'+[1,2,3,4,5].map(n=>'<option '+(scene.marketPlot[0]===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label><label>Length <select id="market-length">'+[1,2,3,4,5].map(n=>'<option '+(scene.marketPlot[1]===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label><b>'+marketStalls({x:0,y:0,rotation:scene.rotation,plot:scene.marketPlot})+' stalls · one vendor per stall</b></div>');
-    for(const id of ['market-width','market-length'])$("#"+id).onchange=()=>{scene.marketPlot=[Number($<HTMLSelectElement>('#market-width').value),Number($<HTMLSelectElement>('#market-length').value)];setTool('market');scene.drawOverlay();};
+    $("#placement-hint").innerHTML=`${icon("hammer")} <b>Drag a marketplace rectangle</b><span id="market-drag-size"></span><button id="rotate-placement" class="rotate-placement">${icon("reset")} Rotate</button><small>Release to build · 1×1 to 5×5 · Two fingers or Space-drag to pan · Esc cancels</small>`;
+    $("#rotate-placement").onclick=rotatePlacement;
+    updateMarketPreview();
   }
   if(next==="fence")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at a tile edge · Fences join at shared corners · The tile stays usable</span>');
   if(next==="streetlight")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at either road edge to choose the curb · One post per click · 20 gold</span>');
@@ -556,6 +557,13 @@ function renderPanel() {
   if(category==="decorations")void planterPreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-planter-preview]").forEach(image=>image.src=src));
 }
 const placementCost=document.createElement("div");placementCost.className="placement-cost";placementCost.hidden=true;$(".world").append(placementCost);
+function updateMarketPreview(){
+  const label=document.querySelector('#market-drag-size');if(!label)return;
+  const price=marketPrice(scene.marketPlot);
+  label.textContent=`${scene.marketPlot.join('×')} · ${marketStalls({x:0,y:0,rotation:scene.rotation,plot:scene.marketPlot})} stalls · ${price.cost} gold · ${Object.entries(price.materials).map(([r,n])=>`${n} ${r}`).join(' · ')}`;
+  updatePlacementCost();
+}
+scene.onMarketPreview=updateMarketPreview;
 let costPointer:{x:number;y:number}|null=null;
 function updatePlacementCost(){
   if(typeof placementCost==="undefined")return;

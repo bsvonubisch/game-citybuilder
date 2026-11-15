@@ -1,4 +1,8 @@
 export interface MarketPlot {x:number;y:number;rotation:number;plot?:readonly[number,number]}
+export function marketRectangle(from:{x:number;y:number},to:{x:number;y:number}) {
+ const x=from.x+Math.max(-4,Math.min(4,to.x-from.x)),y=from.y+Math.max(-4,Math.min(4,to.y-from.y));
+ return {x:Math.min(from.x,x),y:Math.min(from.y,y),plot:[Math.abs(x-from.x)+1,Math.abs(y-from.y)+1] as [number,number]};
+}
 export function validMarketPlot(plot:unknown):plot is [number,number] {
   return Array.isArray(plot)&&plot.length===2&&plot.every(n=>Number.isInteger(n)&&n>=1&&n<=5);
 }
