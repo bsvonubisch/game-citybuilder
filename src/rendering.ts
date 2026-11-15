@@ -17,6 +17,34 @@ export interface OccludingPlot {
   top: number;
   bottom: number;
 }
+/** Mixed plot sizes cannot be sorted by their frontmost corner alone: a 1×1
+ * home along the near edge of a 2×2/4×4 plot must appear above that plot.
+ * Resolve non-ambiguous footprint relations once after town edits. */
+export function buildingDepths(plots: readonly (OccludingPlot & {id:number})[]) {
+  const result=new Map(plots.map(p=>[p.id,p.depth]));
+  const after=new Map(plots.map(p=>[p.id,[] as number[]]));
+  const pending=new Map(plots.map(p=>[p.id,0]));
+  for(let i=0;i<plots.length;i++)for(let j=i+1;j<plots.length;j++){
+    const a=plots[i],b=plots[j];
+    if(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)continue;
+    const aBehind=a.x+a.width<=b.x||a.y+a.height<=b.y;
+    const bBehind=b.x+b.width<=a.x||b.y+b.height<=a.y;
+    // Diagonally separated plots have no unambiguous near/far relation.
+    if(aBehind===bBehind)continue;
+    const [back,front]=aBehind?[a,b]:[b,a];
+    after.get(back.id)!.push(front.id);pending.set(front.id,pending.get(front.id)!+1);
+  }
+  const queue=plots.filter(p=>pending.get(p.id)===0).sort((a,b)=>a.depth-b.depth||a.id-b.id).map(p=>p.id);
+  for(let i=0;i<queue.length;i++){
+    const id=queue[i];
+    for(const next of after.get(id)!){
+      result.set(next,Math.max(result.get(next)!,result.get(id)!+1));
+      pending.set(next,pending.get(next)!-1);
+      if(pending.get(next)===0)queue.push(next);
+    }
+  }
+  return result;
+}
 /** A multi-tile building has two front edges, not a single frontmost point.
  * Keep a traveller in front of either near edge, and behind both far edges.
  * Screen bounds limit comparisons to artwork that can actually overlap. */

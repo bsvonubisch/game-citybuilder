@@ -2612,3 +2612,14 @@ test("church rotation keeps a six-tile plot and the large park admits eight spac
  assert.equal(townNeeds(sim).find(n=>n.id==='parks').have,12);
  const saved=parseSave(JSON.stringify(sim.snapshot()));assert.deepEqual(saved.buildings.find(b=>b.kind==='garden').plot,[4,4]);
 });
+
+test("mixed-size buildings sort cottages in front of the entire near edge, independent of insertion order",async()=>{
+ const {buildingDepths}=await import('../.test-dist/rendering.js');
+ const plot=(id,x,y,width,height)=>({id,x,y,width,height,depth:(x+y+width+height-2)*32+12,left:-500,right:500,top:-500,bottom:500});
+ for(const size of [2,4])for(const axis of ['x','y']){
+  const back=plot(1,4,4,size,size),front=plot(2,axis==='x'?4+size:4,axis==='y'?4+size:4,1,1),further=plot(3,front.x+(axis==='x'?1:0),front.y+(axis==='y'?1:0),1,1);
+  for(const order of [[back,front,further],[further,front,back]]){const depths=buildingDepths(order);assert.ok(depths.get(2)>depths.get(1));assert.ok(depths.get(3)>depths.get(2));}
+ }
+ const unrelated=[plot(1,0,0,2,2),plot(2,6,0,1,1)];unrelated[1].left=600;unrelated[1].right=900;
+ assert.deepEqual([...buildingDepths(unrelated).values()],unrelated.map(p=>p.depth));
+});

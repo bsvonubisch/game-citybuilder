@@ -39,6 +39,7 @@ import {
 import {
   travelFacing,
   opaqueBounds,
+  buildingDepths,
   iso,
   fitGround,
   agentDistance,
@@ -815,9 +816,14 @@ export class TownScene extends Phaser.Scene {
         b.enabled ? 1 : 0.55,
       );
     }
+    const ordered=buildingDepths(this.simulation.state.buildings.filter(b=>!b.construction?.clearance).map(b=>{
+      const s=this.buildings.get(b.id)!,[width,height]=dimensions(b.kind,b.rotation,b.plot);
+      return {id:b.id,x:b.x,y:b.y,width,height,depth:s.depth,left:s.x,right:s.x+s.displayWidth,top:s.y,bottom:s.y+s.displayHeight};
+    }));
+    for(const [id,depth] of ordered)this.buildings.get(id)!.setDepth(depth);
     this.lightSources = [
       ...[...this.buildings.values()].filter(s=>!isPark(this.simulation.building(s.getData("buildingId"))?.kind??"")),
-      ...this.plazaArt.sync(this.simulation),
+      ...this.plazaArt.sync(this.simulation,ordered),
       ...this.trees.filter((t) => t.getData("streetlight")),
     ];
     this.occludingPlots = this.simulation.state.buildings.filter(b=>!b.construction?.clearance).map((b) => {
@@ -1499,14 +1505,14 @@ export class TownScene extends Phaser.Scene {
           )
           .setVisible(true)
           .setFlipX(false)
-          .setDepth((site.x + site.y + w + h - 2) * 32 + 12.25 + slot * 0.01);
+          .setDepth((this.buildings.get(site.id)?.depth??((site.x+site.y+w+h-2)*32+12))+.25+slot*.01);
       }
       const visiting=this.simulation.building(a.target),visit=parkVisitor(a,visiting,this.acc);
       if(visit&&visiting){
         const heading=travelFacing(visit.dx,visit.dy),turn=heading%2===1,texture=turn?'walkers-turns':'walkers',pose=walkFrame(Math.floor(heading/2),a.id%2,visit.elapsed*.45,!visit.walking,turn),v=iso(visit.x,visit.y);
         s.setTexture(texture,pose.frame).setScale(this.travellerScale({...a,kind:'person'},a.id%2,texture)).setOrigin(.5,1).setFlipX(pose.flip)
           .setPosition(v.x,v.y-groundHeight(visiting.x,visiting.y,this.simulation.state.terrain)-FOUNDATION_HEIGHT)
-          .setDepth((visiting.x+visiting.y+(visiting.kind==="garden"?6:2))*32+12.1+(visit.x-visiting.x+visit.y-visiting.y)*.08).setVisible(true).setData('sized',false);
+          .setDepth((this.buildings.get(visiting.id)?.depth??((visiting.x+visiting.y+(visiting.kind==="garden"?6:2))*32+12))+.1+(visit.x-visiting.x+visit.y-visiting.y)*.08).setVisible(true).setData('sized',false);
       }
       if (a.kind !== "person"&&!visit)
         this.animation.vehicle(
