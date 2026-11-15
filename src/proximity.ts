@@ -3,13 +3,17 @@ import { houseCapacity, type BuildingKind } from "./catalog.js";
 import { roadTravelTime } from "./roads.js";
 import type { Building, Simulation } from "./simulation.js";
 export const MAX_COMMUTE = 28;
+// A pleasant visit should last several days, not require a daily circuit of
+// every service. Rates are per simulation tick (960 ticks per day).
+export const LEISURE_DECAY = 12 / 960;
+export const FAITH_DECAY = 6 / 960;
 export const isLeisure = (kind: string) => kind === "park" || kind === "garden" || kind === "tavern";
 export const isService=(kind:string)=>isLeisure(kind)||kind==="church";
 export const serviceRange = (kind: string) => (kind === "market" ? 18 : kind === "church" ? 32 : kind === "tavern" ? 24 : kind === "garden" ? 28 : 16);
 export const serviceCapacity = (b: Building) =>
-  (b.kind === "market" ? 2400 : b.kind === "church" ? 40 : b.kind === "tavern" ? 18 : b.kind === "garden" ? 40 : 12) * (b.level ?? 1);
+  (b.kind === "market" ? 2400 : b.kind === "church" ? 120 : b.kind === "tavern" ? 64 : b.kind === "garden" ? 100 : 32) * (b.level ?? 1);
 export const serviceOpen = (kind: string, hour: number) =>
-  kind === "church" ? hour >= 8 && hour < 20 : kind === "tavern" ? hour >= 17 || hour < 2 : hour >= 6 && hour < 20;
+  kind === "church" ? hour >= 6 && hour < 23 : kind === "tavern" ? hour >= 17 || hour < 2 : hour >= 6 && hour < 20;
 export function serviceCoverage(sim: Simulation, b: Building) {
   const range = serviceRange(b.kind),
     capacity = serviceCapacity(b);

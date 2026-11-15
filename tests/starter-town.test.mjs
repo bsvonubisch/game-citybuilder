@@ -6,6 +6,9 @@ import {terrainCell} from '../.test-dist/terrain.js';
 import {fisherySiteError} from '../.test-dist/shoreline.js';
 import {miningTargets} from '../.test-dist/mining.js';
 import {forestTargets} from '../.test-dist/forestry.js';
+import {townNeeds} from '../.test-dist/needs.js';
+import {serviceOpen,LEISURE_DECAY,FAITH_DECAY} from '../.test-dist/proximity.js';
+import {DAY_TICKS} from '../.test-dist/daylight.js';
 test('starter town contains every building, connected front doors and clear footprints',()=>{
  const s=new Simulation(),occupied=new Set();
  assert.deepEqual([...new Set(s.state.buildings.map(b=>b.kind))].sort(),Object.keys(BUILDINGS).sort());
@@ -27,4 +30,15 @@ test('starter gathering workplaces can reach real resources and save without cha
  for(const b of s.state.buildings.filter(b=>b.kind==='quarry'||b.kind==='mine'))assert.ok(miningTargets(s,b).length,b.kind+' reachable deposits');
  const restored=new Simulation(parseSave(JSON.stringify(s.snapshot())));
  assert.deepEqual(restored.state.buildings.map(b=>[b.kind,b.x,b.y,b.plot]),s.state.buildings.map(b=>[b.kind,b.x,b.y,b.plot]));
+});
+
+test('an established starter town has sufficient leisure and religion without duplicating every service',()=>{
+ const s=new Simulation(),needs=townNeeds(s);
+ for(const id of ['parks','religion']){const n=needs.find(n=>n.id===id);assert.equal(n.have,n.need,id+' covers the whole starting community');}
+ assert.ok(!needs.some(n=>n.id==='nightlife'));
+ assert.ok(serviceOpen('church',21),'workers can visit after their shift');
+ assert.ok(100-FAITH_DECAY*DAY_TICKS*5>=60,'worship lasts several days');
+ assert.ok(100-LEISURE_DECAY*DAY_TICKS*3>=60,'leisure lasts several days');
+ const church=s.state.buildings.find(b=>b.kind==='church');church.enabled=false;s.reconnect();
+ assert.equal(townNeeds(s).find(n=>n.id==='religion').have,0,'a closed church is still an actual unmet need');
 });

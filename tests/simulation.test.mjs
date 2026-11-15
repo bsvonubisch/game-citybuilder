@@ -129,7 +129,7 @@ test("needs distinguish ready meals, staffed workplaces and reachable leisure fr
   const needs=townNeeds(sim),food=needs.find(n=>n.id==="food");
   assert.equal(food.have,0,"undelivered food is not ready for households");
   assert.equal(food.need,Math.ceil(sim.state.residents.length/3));
-  assert.equal(needs.find(n=>n.id==="nightlife").have,0);
+  assert.ok(!needs.some(n=>n.id==="nightlife"),'a tavern is an alternative leisure service, not a separate mandatory need');
   const jobs=sim.state.buildings.filter(b=>b.enabled&&!b.construction&&BUILDINGS[b.kind].jobs);
   assert.equal(needs.find(n=>n.id==="workers").need,jobs.reduce((n,b)=>n+BUILDINGS[b.kind].jobs,0));
   bakery.inventory.flour=0;
@@ -2260,7 +2260,7 @@ test("leisure coverage follows roads, capacity and reach rather than straight-li
   const sim = new Simulation(),
     park = sim.state.buildings.find((b) => b.kind === "park");
   const first = serviceCoverage(sim, park);
-  assert.ok(first.residents > 0 && first.residents <= 12);
+  assert.ok(first.residents > 0 && first.residents <= 32);
   assert.ok(
     first.homes.every(
       (h) => h.tiles <= 16 && Math.abs(h.seconds - h.tiles / AGENT_SPEED.person) < 1e-8,
@@ -2593,7 +2593,7 @@ test("religion requires a staffed nearby church and improves on actual arrival",
  for(const r of sim.state.residents){r.faith=10;r.leisure=95;}
  sim.step();assert.ok(sim.state.residents.every(r=>r.faith<=10),'coverage alone does not satisfy religion');
  advance(sim,32);assert.ok(sim.state.residents.some(r=>r.faith>50),'visitors reach the church');
- assert.equal(serviceOpen('church',7),false);assert.equal(serviceOpen('church',8),true);assert.equal(serviceOpen('church',20),false);
+ assert.equal(serviceOpen('church',5),false);assert.equal(serviceOpen('church',6),true);assert.equal(serviceOpen('church',22),true);assert.equal(serviceOpen('church',23),false);
  assert.equal(execute(sim,{type:'toggle',id:church.id}).ok,true);
  for(const r of sim.state.residents)r.faith=10;
  advance(sim,12);assert.ok(sim.state.residents.every(r=>r.faith<=10));
@@ -2607,7 +2607,7 @@ test("church rotation keeps a six-tile plot and the large park admits eight spac
  const {parkVisitor,parkVisitorLimit}=await import('../.test-dist/park-visitors.js');
  for(let r=0;r<4;r++){assert.equal(footprint('church',10,10,r).length,6);assert.deepEqual([...dimensions('church',r)].sort(),[2,3]);assert.equal(footprint('garden',10,10,r).length,16);assert.equal(frontage('garden',10,10,r).length,16);assert.equal(plazaLayout(r,4).filter(p=>p.kind==='bench').length,4);}
  const sim=serviceTown(),park=sim.state.buildings.find(b=>b.kind==='garden');
- assert.equal(parkVisitorLimit(park),8);assert.equal(serviceCoverage(sim,park).capacity,40);assert.equal(serviceCoverage(sim,park).range,28);
+ assert.equal(parkVisitorLimit(park),8);assert.equal(serviceCoverage(sim,park).capacity,100);assert.equal(serviceCoverage(sim,park).range,28);
  for(const a of sim.state.agents.filter(a=>a.resident!==null)){
   const path=sim.route(sim.building(a.source),park);if(!path)continue;
   Object.assign(a,{kind:'person',target:park.id,path,segment:path.length-1,progress:0,returning:false,wait:0,active:true,move:1});

@@ -53,6 +53,8 @@ import {
 } from "./upgrades.js";
 import {
   MAX_COMMUTE,
+  LEISURE_DECAY,
+  FAITH_DECAY,
   isLeisure,
   isService,
   serviceCoverage,
@@ -651,9 +653,9 @@ export class Simulation {
     if(job?.kind==="market"&&marketOpen(this.state.tick))return job;
     if(!job?.construction){const market=marketDestination(this,r);if(market)return market;}
     if(worship && (r.faith??70)<55 && !job?.construction) return worship;
-    if ((r.leisure ?? 60) < 90 && (!job || hour >= 17 || hour < 6))
+    if ((r.leisure ?? 60) < 65 && (!job || hour >= 17 || hour < 6))
       return leisure[0] ?? job;
-    return job ?? ((r.leisure ?? 60) < 90 ? leisure[0] : undefined);
+    return job ?? ((r.leisure ?? 60) < 65 ? leisure[0] : undefined);
   }
   earn(amount:number, source:import("./economy.js").IncomeSource) {
     if(!Number.isFinite(amount)||amount<=0)return;
@@ -1419,8 +1421,8 @@ export class Simulation {
     stepRoadWorks(this);
     stepWildlife(this);
     for (const r of this.state.residents){
-      r.leisure = Math.max(0, (r.leisure ?? 60) - 0.04);
-      r.faith=Math.max(0,(r.faith??70)-.025);
+      r.leisure = Math.max(0, (r.leisure ?? 60) - LEISURE_DECAY);
+      r.faith=Math.max(0,(r.faith??70)-FAITH_DECAY);
     }
     for (const a of [...this.state.agents]) {
       if(a.roadWork!==undefined)continue;
@@ -1518,7 +1520,7 @@ export class Simulation {
             if(arrival.kind==="church")resident.faith=Math.min(100,(resident.faith??70)+60);
             else resident.leisure = Math.min(
               100,
-              (resident.leisure ?? 60) + (arrival.kind === "tavern" ? 45 : 22),
+              (resident.leisure ?? 60) + (arrival.kind === "tavern" ? 45 : 35),
             );
           }
           const home = this.building(a.source),
@@ -1798,7 +1800,7 @@ export class Simulation {
     if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
     if (isHome(b.kind)) {
       const residents = this.state.residents.filter((r) => r.home === b.id);
-      if(residents.length&&residents.every(r=>(r.faith??70)<25))return{kind:"leisure",title:"Needs nearby religion",message:"Connect a staffed church within 20 road tiles. Residents visit between 08:00 and 20:00 to restore religion."};
+      if(residents.length&&residents.every(r=>(r.faith??70)<25))return{kind:"leisure",title:"Needs nearby religion",message:"Connect a staffed church within 32 road tiles. Residents visit between 06:00 and 23:00 to restore religion."};
       if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
         return {
           kind: "leisure",
@@ -1823,7 +1825,7 @@ export class Simulation {
         ? "Open for nearby visitors"
         : b.kind === "tavern"
           ? "Opens at 17:00"
-          : b.kind==="church" ? "Opens at 08:00" : "Opens at 06:00";
+          : "Opens at 06:00";
     const d = BUILDINGS[b.kind];
     return d.recipe
       ? "Producing"

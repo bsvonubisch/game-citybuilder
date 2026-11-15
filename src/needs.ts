@@ -34,9 +34,8 @@ export function townNeeds(sim:Simulation):Need[] {
     {id:"workers",label:"Workplaces staffed",have:jobs.reduce((n,b)=>n+b.workers,0),need:jobs.reduce((n,b)=>n+buildingJobs(b),0),unit:"workers",action:unfilled?{label:"Check unfilled workplace",building:unfilled.id}:suggest("house","Build homes")},
     {id:"builders",label:"Construction crew",have:sites.reduce((n,b)=>n+b.workers,0),need:sites.reduce((n,b)=>n+builderCapacity(b),0),unit:"builders",action:site?{label:"Check construction site",building:site.id}:undefined},
     {id:"homes",label:"Housing",have:buildings.filter(b=>isHome(b.kind)&&(!b.construction||b.construction.upgradeTo||b.construction.upgradeLevel)&&b.connected).reduce((n,b)=>n+houseCapacity(b),0),need:population,unit:"places",action:suggest("house","Build homes")},
-    {id:"parks",label:"Daytime leisure nearby",have:coverage("park","garden"),need:population,unit:"residents served",action:suggest("park","Add fountain square")},
+    {id:"parks",label:"Leisure nearby",have:coverage("park","garden","tavern"),need:population,unit:"residents served",action:suggest("park","Add fountain square")},
     {id:"religion",label:"Religion nearby",have:coverage("church"),need:population,unit:"residents served",action:suggest("church","Build church")},
-    {id:"nightlife",label:"Evening leisure nearby",have:coverage("tavern"),need:population,unit:"residents served",action:suggest("tavern","Add tavern")},
   ];
 }
 export interface BuildingNeed {label:string;have:string;need:string;ok:boolean}
