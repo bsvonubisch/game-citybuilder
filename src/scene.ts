@@ -1,5 +1,6 @@
 import {RoadWorkAlerts} from './roadwork-alerts.js';
 import {ViewWorld} from './view-world.js';
+import {deliveryVehicle} from './delivery-vehicles.js';
 import {quarter} from './view-space.js';
 import type {RoadWorkSite} from './roadwork-sites.js';
 import {roadWorkerPosition,roadVisualState} from './roadworks.js';
@@ -313,6 +314,8 @@ export class TownScene extends Phaser.Scene {
     this.load.image("garden", "/garden-sprites.png");
     this.load.image("props", "/town-props.png");
     this.load.image("vehicles", "/vehicles-directions.png");
+    this.load.image('delivery-industrial','/delivery-industrial-v1.png');
+    this.load.image('delivery-town','/delivery-town-v1.png');
     this.load.image("walkers", "/pedestrian-walk.png");
     this.load.image("vehicles-turns", "/vehicles-turns.png");
     this.load.image("walkers-turns", "/pedestrian-turns.png");
@@ -379,6 +382,8 @@ export class TownScene extends Phaser.Scene {
     this.events.once("shutdown", () => this.trafficAlerts.clear());
     this.events.once("shutdown", () => this.buildingAlerts.clear());
     this.trimAtlas("vehicles", 4, 4);
+    this.trimAtlas('delivery-industrial',8,4);
+    this.trimAtlas('delivery-town',8,4);
     this.trimAtlas("walkers", 8, 4);
     this.trimAtlas("vehicles-turns", 4, 4);
     this.trimAtlas("walkers-turns", 8, 4);
@@ -717,6 +722,17 @@ export class TownScene extends Phaser.Scene {
     sprite.y -= groundHeight(x, y, this.simulation.state.terrain);
   }
   private travellerScale(a: Agent, row: number, texture: string) {
+    if(texture.startsWith('delivery-')){
+      // Both sheets share one chassis scale; front views remain naturally
+      // narrower and changing cargo or turning never enlarges the vehicle.
+      let scale=this.travellerScales.get('delivery-common');
+      if(scale===undefined){
+        const atlas=this.textures.get('delivery-industrial');
+        const width=[0,2,4,6].reduce((n,frame)=>n+atlas.get(frame).width,0)/4;
+        scale=29/width;this.travellerScales.set('delivery-common',scale);
+      }
+      return scale;
+    }
     const cacheKey = `${a.kind}:${row}:${texture}`;
     const cached = this.travellerScales.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -1505,14 +1521,15 @@ export class TownScene extends Phaser.Scene {
         heading = travelFacing(p.dx, p.dy),
         direction = Math.floor(heading / 2),
         intermediate = heading % 2 === 1;
-      const texture =
+      const delivery=a.kind==='truck'?deliveryVehicle(a.cargo):undefined;
+      const texture = delivery?.texture ?? (
         (a.kind === "person" ? "walkers" : "vehicles") +
-        (intermediate ? "-turns" : "");
+        (intermediate ? "-turns" : ""));
       const row =
         a.kind === "person"
           ? a.id % 2
-          : a.kind === "truck"
-            ? 2 + (a.id % 2)
+          : delivery
+            ? delivery.row
             : a.id % 2;
       const walk = walkFrame(
         direction,
@@ -1521,7 +1538,7 @@ export class TownScene extends Phaser.Scene {
         a.wait > 0 || !a.active,
         intermediate,
       );
-      const frame = a.kind === "person" ? walk.frame : row * 4 + direction;
+      const frame = a.kind === "person" ? walk.frame : delivery ? row * 8 + heading : row * 4 + direction;
       if (!s) {
         s = this.add
           .image(0, 0, texture, frame)

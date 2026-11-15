@@ -2,6 +2,7 @@ import {roadWorkSites,roadWorkCrew,type RoadWorkSite} from './roadwork-sites.js'
 import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
+import {deliveryVehicle} from './delivery-vehicles.js';
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 import {farmSummary} from './farming.js';
@@ -1128,7 +1129,7 @@ function updateAgentInspector() {
       `<div class="detail-row"><span>Building</span><b>${site ? escapeHtml(buildingName(site)) : "Construction site"}</b></div><p class="muted">This resident is contributing labor to the construction progress.</p>`;
     return;
   }
-  $("#traveller-name").textContent = person?.name ?? "Delivery truck";
+  $("#traveller-name").textContent = person?.name ?? deliveryVehicle(a.cargo).name;
   const visit=parkVisitor(a,simulation.building(a.target));
   $("#traveller-kind").textContent = visit ? `Visiting ${buildingName(simulation.building(a.target)!).toLowerCase()}` :
     a.kind === "person"
