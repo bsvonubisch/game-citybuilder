@@ -61,7 +61,7 @@ export function deckHeight(
     if (landings[i])
       height = Math.min(
         height,
-        BRIDGE_HEIGHT * Math.max(0, 1 - 2 * (u * d.x + v * d.y)),
+        BRIDGE_HEIGHT * Math.max(0, 0.5 - (u * d.x + v * d.y)),
       );
   }
   return height;

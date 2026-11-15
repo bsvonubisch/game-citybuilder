@@ -135,7 +135,8 @@ export class BridgeArt {
           ),
       };
     };
-    if(kind==="stone"||kind==="brick")return this.masonry(id,open,point,kind);
+    const supportDepth=(u:number,v:number)=>8*Math.min(1,...land.flatMap((isLand,i)=>isLand?[Math.max(0,1-2*([u,v,-u,-v][i]))]:[]));
+    if(kind==="stone"||kind==="brick")return this.masonry(id,open,point,kind,supportDepth);
     const line = (
       ctx: CanvasRenderingContext2D,
       a: Vec,
@@ -185,14 +186,6 @@ export class BridgeArt {
       );
     };
     const deck = this.canvas(`bridge-deck-${id}`, (ctx) => {
-      ctx.fillStyle = "#173c3a44";
-      ctx.beginPath();
-      ctx.moveTo(0, -10);
-      ctx.lineTo(34, 8);
-      ctx.lineTo(0, 25);
-      ctx.lineTo(-34, 8);
-      ctx.closePath();
-      ctx.fill();
       const acrossX =
         Number(!open[0]) + Number(!open[2]) >=
         Number(!open[1]) + Number(!open[3]);
@@ -267,8 +260,8 @@ export class BridgeArt {
               [
                 { x: p.x - 1.8, y: p.y },
                 { x: p.x + 1, y: p.y + 0.7 },
-                { x: p.x + 1, y: ground.y + 8 },
-                { x: p.x - 1.8, y: ground.y + 7.3 },
+                { x: p.x + 1, y: ground.y + supportDepth(u,v) },
+                { x: p.x - 1.8, y: ground.y + supportDepth(u,v) - .7 },
               ],
               this.wood.width * 0.55,
               0,
@@ -276,7 +269,7 @@ export class BridgeArt {
               this.wood.height,
             );
             ctx.fillStyle = "#70482c";
-            ctx.fillRect(p.x + 1, p.y + 0.7, 1.3, ground.y + 7.3 - p.y);
+            ctx.fillRect(p.x + 1, p.y + 0.7, 1.3, Math.max(0,ground.y + supportDepth(u,v) - .7 - p.y));
           }
         }
     });
@@ -337,7 +330,7 @@ export class BridgeArt {
     this.variants.set(id, result);
     return result;
   }
-  private masonry(id:string,open:boolean[],point:(u:number,v:number)=>Vec,kind:'stone'|'brick') {
+  private masonry(id:string,open:boolean[],point:(u:number,v:number)=>Vec,kind:'stone'|'brick',supportDepth:(u:number,v:number)=>number) {
     const surface=roadSurface(this.scene,kind,0,0),wall=kind==='brick'?surface:this.scene.textures.get('foundation-stone').getSourceImage() as HTMLImageElement;
     const tint=kind==='brick'?{cap:'#e5af86',edge:'#734d3e'}:{cap:'#dfd7bf',edge:'#656864'};
     const deck=this.canvas('bridge-deck-'+id,ctx=>{
@@ -367,14 +360,22 @@ export class BridgeArt {
           const u=a.x+(b.x-a.x)*t,v=a.y+(b.y-a.y)*t;
           return point(u,v).y-iso(u,v).y;
         };
+        const bottom=(t:number)=>supportDepth(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t);
+        const outline=()=>{
+          ctx.beginPath();ctx.moveTo(0,upper(0));ctx.lineTo(.5,upper(.5));ctx.lineTo(1,upper(1));ctx.lineTo(1,bottom(1));ctx.lineTo(.5,bottom(.5));ctx.lineTo(0,bottom(0));ctx.closePath();
+        };
         ctx.save();ctx.transform(q.x-p.x,q.y-p.y,0,1,p.x,p.y);
         // Follow both halves of the ramp right up to the deck. A straight
         // chord between its endpoints exposed a triangular strip of water.
-        ctx.beginPath();ctx.moveTo(0,upper(0));ctx.lineTo(.5,upper(.5));ctx.lineTo(1,upper(1));ctx.lineTo(1,9);ctx.lineTo(0,9);ctx.closePath();
+        outline();ctx.clip();
+        ctx.save();outline();
         ctx.moveTo(.13,9);ctx.lineTo(.13,6);ctx.quadraticCurveTo(.5,-9,.87,6);ctx.lineTo(.87,9);ctx.closePath();ctx.clip('evenodd');
         ctx.drawImage(wall,0,0,wall.width,wall.height,0,-6,1,15);ctx.fillStyle='#20242224';ctx.fillRect(0,-6,1,15);ctx.restore();
         // Raised arch voussoirs follow the opening, rather than wooden pilings.
+        // Retain the outer support clip while stroking in screen coordinates.
+        ctx.transform(1/(q.x-p.x),-(q.y-p.y)/(q.x-p.x),0,1,-p.x/(q.x-p.x),(q.y-p.y)*p.x/(q.x-p.x)-p.y);
         ctx.strokeStyle=tint.cap;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(p.x+(q.x-p.x)*.13,p.y+(q.y-p.y)*.13+6);ctx.quadraticCurveTo((p.x+q.x)/2,(p.y+q.y)/2-9,p.x+(q.x-p.x)*.87,p.y+(q.y-p.y)*.87+6);ctx.stroke();
+        ctx.restore();
       }
     });
     const rails=open.map((closed,e)=>!closed?null:this.canvas('bridge-rail-'+id+'-'+e,ctx=>{

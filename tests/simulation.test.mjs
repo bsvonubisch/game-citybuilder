@@ -623,13 +623,13 @@ test("bridge ramps join land and neighboring spans continuously in both orientat
   const sim = new Simulation();
   const samples = [
     [21, 10.5, 0],
-    [21, 11, 6],
+    [21, 11, 3],
     [21, 11.5, 6],
     [21, 14.5, 6],
-    [21, 15, 6],
+    [21, 15, 3],
     [21, 15.5, 0],
     [22.5, 18, 0],
-    [23, 18, 6],
+    [23, 18, 3],
   ];
   for (const [x, y, z] of samples) assert.equal(roadHeight(sim.roads, x, y), z);
   for (const [x, y, dx, dy] of [
@@ -1068,7 +1068,7 @@ test("bridges leave front entrances open and ramp to the bank without opening si
   assert.ok(edge >= 0);
   assert.equal(bridgeRails(roads, tile, [house])[edge], false);
   assert.equal(deckHeight(roads, tile, d.x / 2, d.y / 2, [house]), 0);
-  assert.equal(deckHeight(roads, tile, 0, 0, [house]), BRIDGE_HEIGHT);
+  assert.equal(deckHeight(roads, tile, 0, 0, [house]), BRIDGE_HEIGHT/2);
   assert.equal(
     bridgeRails(roads, tile, [
       { ...house, rotation: (house.rotation + 2) % 4 },
