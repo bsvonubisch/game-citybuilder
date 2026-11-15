@@ -1,5 +1,6 @@
 import {marketPrice,marketStalls} from "./market-layout.js";
 export type Resource =
+  | "sausages"
   | "meat"
   | "bricks"
   | "grain"
@@ -12,6 +13,7 @@ export type Resource =
   | "planks"
   | "tools";
 export type BuildingKind =
+  | "butcher"
   | "hunter"
   | "market"
   | "church"
@@ -186,6 +188,7 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
+  butcher:{name:"Butcher & smokehouse",cost:260,jobs:2,frame:0,materials:{wood:12,stone:10,metal:4},category:"production",description:"Turns two meat into four sausages. Hunters and warehouse trucks supply meat; finished food goes to markets and warehouses.",recipe:{input:"meat",amount:2,output:"sausages",count:4,seconds:12}},
   hunter:{name:"Hunter’s lodge",cost:200,jobs:2,frame:0,materials:{wood:12,stone:8,metal:2},category:"production",description:"Two hunters follow wildlife within 12 tiles. They carry meat back to the lodge for food deliveries. Keep nearby woodland open.",recipe:{output:"meat",count:6,seconds:20}},
   market:{name:"Marketplace",cost:260,jobs:2,frame:0,materials:{wood:12,stone:12,planks:4},category:"town",description:"Choose a 1×1 to 5×5 plot. Vendors sell delivered food and tools to nearby residents. Open 07:00–19:00."},
   church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{"planks":16,"stone":30,"metal":4},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors from 08:00 to 20:00; religion improves after a visit."},
@@ -351,6 +354,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
   },
 };
 export const RESOURCES: Resource[] = [
+  "sausages",
   "meat",
   "bricks",
   "wood",
@@ -364,6 +368,7 @@ export const RESOURCES: Resource[] = [
   "tools",
 ];
 export const RESOURCE_NAMES: Record<Resource, string> = {
+  sausages:"Sausages",
   meat:"Meat",
   bricks:"Bricks",
   grain: "Grain",
@@ -377,6 +382,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   tools: "Tools",
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
+  butcher:[2,2],
   hunter:[2,2],
     market:[2,2],
   church:[2,3],

@@ -1503,10 +1503,10 @@ function updateUI() {
   $(".resource.gold").title=`Income over the last game day: ${income.total} gold · taxes ${income.tax} · exports ${income.exports} · market sales ${income.market}. Building refunds are excluded.`;
   updatePlacementCost();
   const bread = simulation.stored("bread"),
-    fish = simulation.stored("fish"),meat=simulation.stored("meat");
-  $("#food-stock").textContent = String(bread + fish + meat + (s.marketMeals??0));
+    fish = simulation.stored("fish"),meat=simulation.stored("meat"),sausages=simulation.stored("sausages");
+  $("#food-stock").textContent = String(bread + fish + meat + sausages + (s.marketMeals??0));
   $(".resource.food-stock").title =
-    `${bread} bread + ${fish} fish + ${meat} meat in warehouses · ${s.marketMeals??0} meals bought at markets · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
+    `${bread} bread + ${fish} fish + ${meat} meat + ${sausages} sausages in warehouses · ${s.marketMeals??0} meals bought at markets · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
   $(".resource.food-stock").setAttribute(
     "aria-label",
     $(".resource.food-stock").title,
@@ -1587,7 +1587,7 @@ function closeModal() {
 }
 function showChains() {
   openModal(
-    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat farm → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per three residents each day.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Warehouse · Metal mine → Workshop → Warehouse</span><small>Wood becomes construction planks. Two metal become one tool; exported tools earn 35 gold each.</small></div><div class="chain"><b>Brickmaking</b><span>Stone quarry → Brickworks → Warehouse → Brick roads and bridges</span><small>Two stone become four bricks. New brick road tiles use one brick; bridge tiles use four.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
+    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat farm → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per three residents each day.</small></div><div class="chain"><b>From woodland to table</b><span>Hunter → Butcher → Market / Warehouse</span><small>Hunters bring meat home. Butchers turn two meat into four sausages, feeding more citizens; markets sell sausages for 8 gold.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Warehouse · Metal mine → Workshop → Warehouse</span><small>Wood becomes construction planks. Two metal become one tool; exported tools earn 35 gold each.</small></div><div class="chain"><b>Brickmaking</b><span>Stone quarry → Brickworks → Warehouse → Brick roads and bridges</span><small>Two stone become four bricks. New brick road tiles use one brick; bridge tiles use four.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
   );
 }
 function showSettings() {

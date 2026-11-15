@@ -1572,7 +1572,7 @@ export class Simulation {
       for (const w of this.state.buildings.filter(
         (b) => b.kind === "warehouse",
       )) {
-        for (const food of ["bread", "fish", "meat"] as const) {
+        for (const food of ["bread", "fish", "sausages", "meat"] as const) {
           const n = Math.min(demand, w.inventory[food] ?? 0);
           w.inventory[food] = (w.inventory[food] ?? 0) - n;
           demand -= n;
@@ -1599,6 +1599,14 @@ export class Simulation {
         const path=this.route(warehouse,target,"truck");if(!path)continue;
         const amount=Math.min(6,warehouse.inventory.metal??0);warehouse.inventory.metal!-=amount;
         this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:warehouse.id,target:target.id,cargo:"metal",amount,returning:false,wait:0});break;
+      }
+    }
+    for(const source of this.state.buildings.filter(b=>warehouseReady(b)&&b.connected&&b.enabled&&(b.inventory.meat??0)>0)){
+      if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
+      for(const target of this.state.buildings.filter(b=>b.kind==="butcher"&&!b.construction&&b.enabled&&b.connected)){
+        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==="meat").reduce((n,a)=>n+a.amount,0),room=8-(target.inventory.meat??0)-incoming;
+        if(room<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;const amount=Math.min(6,room,source.inventory.meat??0);source.inventory.meat!-=amount;
+        this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo:"meat",amount,returning:false,wait:0});break;
       }
     }
     for(const source of this.state.buildings.filter(b=>b.kind==="warehouse"&&warehouseReady(b)&&b.connected&&b.enabled)){

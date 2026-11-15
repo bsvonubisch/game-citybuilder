@@ -2,7 +2,7 @@ import {STEP,type Resource} from './catalog.js';
 import {DAY_TICKS,daylight} from './daylight.js';
 import {marketLayout,marketStalls} from './market-layout.js';
 import type {Agent,Building,Resident,Simulation} from './simulation.js';
-export const MARKET_GOODS:Resource[]=['bread','fish','meat','tools'];
+export const MARKET_GOODS:Resource[]=['bread','fish','meat','sausages','tools'];
 export const marketOpen=(tick:number)=>{const hour=daylight(tick).hour;return hour>=7&&hour<19;};
 export const marketStock=(b:Building)=>MARKET_GOODS.reduce((n,r)=>n+(b.inventory[r]??0),0);
 export function marketVendors(sim:Simulation,b:Building){return sim.state.agents.filter(a=>a.onsite===b.id&&sim.state.residents.some(r=>r.id===a.resident&&r.job===b.id)).sort((a,c)=>a.resident!-c.resident!);}
@@ -22,7 +22,7 @@ export function buyAtMarket(sim:Simulation,a:Agent,b:Building,r:Resident) {
  const item=goods[(r.id+Math.floor(sim.state.tick/DAY_TICKS))%goods.length];if(!item)return false;
  b.inventory[item]!--;b.produced++;r.lastShopping=sim.state.tick;r.leisure=Math.min(100,(r.leisure??60)+8);
  if(item!=='tools')sim.state.marketMeals=(sim.state.marketMeals??0)+1;
- sim.earn(Math.round((item==='tools'?38:5)*(1+((b.level??1)-1)*.1)),'market');a.marketSlot=slot;a.wait=10+(r.id%5);a.active=false;return true;
+ sim.earn(Math.round((item==='tools'?38:item==='sausages'?8:5)*(1+((b.level??1)-1)*.1)),'market');a.marketSlot=slot;a.wait=10+(r.id%5);a.active=false;return true;
 }
 export function marketActor(sim:Simulation,a:Agent,elapsed:number) {
  const b=sim.building(a.onsite??a.target);if(b?.kind!=='market'||b.construction)return;

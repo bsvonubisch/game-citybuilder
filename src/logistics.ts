@@ -28,7 +28,7 @@ export interface ProductionConnections {
 
 /** Shared by dispatch and inspection: warehouses receive only these exports. */
 export function canSupply(source: Building, target: Building) {
-  const output = source.kind === "warehouse" && target.kind === "workshop" ? "metal" : BUILDINGS[source.kind].recipe?.output;
+  const output = source.kind === "warehouse" && ["workshop","butcher"].includes(target.kind) ? BUILDINGS[target.kind].recipe?.input : BUILDINGS[source.kind].recipe?.output;
   return (
     !source.construction &&
     !target.construction &&
@@ -36,7 +36,7 @@ export function canSupply(source: Building, target: Building) {
     source.id !== target.id &&
     (BUILDINGS[target.kind].recipe?.input === output || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||
       (target.kind === "warehouse" &&
-        ["meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
+        ["sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
           output,
         )))
   );

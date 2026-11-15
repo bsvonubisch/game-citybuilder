@@ -23,6 +23,7 @@ const grounds: Record<
   Exclude<BuildingKind, "fishery"|"garden"|"market">,
   readonly PlotCorners[]
 > = {
+  butcher:[[[70,462],[332,593],[594,462]],[[38,462],[300,593],[562,462]],[[48,460],[310,591],[572,460]],[[39,460],[301,591],[563,460]]],
   hunter:[[[30,445],[312,586],[594,445]],[[25,445],[307,586],[589,445]],[[25,449],[307,590],[589,449]],[[28,449],[310,590],[592,449]]],
   church:[[[28,450],[346,609],[558,503]],[[38,504],[250,610],[568,451]],[[47,472],[263,580],[587,418]],[[45,414],[369,576],[585,468]]],
   cottage:[[[236,331],[450,438],[664,331]],[[219,331],[433,438],[647,331]],[[236,339],[450,446],[664,339]],[[217,339],[431,446],[645,339]]],
@@ -496,13 +497,13 @@ export function buildingArt(
     columns: kind === "mine" || kind === "quarry" ? 4 : 2,
     rows: 2,
     size:
-      kind === "cottage" ? [887,443] : kind === "sawmill"
+      kind === "butcher" ? [639,615] : kind === "cottage" ? [887,443] : kind === "sawmill"
         ? [768, 512]
         : kind === "mine" || kind === "quarry"
           ? [443, 443]
           : [627, 627],
     ground: grounds[kind][rotation],
-    chimney: kind==="hunter"?([[215,83],[427,80],[210,115],[435,116]] as const)[rotation]:kind==="brickworks"?([[458,50],[450,55],[208,52],[173,48]] as const)[rotation]:chimneys[kind]?.[rotation],
+    chimney: kind==="butcher"?([[414,25],[237,24],[250,30],[292,31]] as const)[rotation]:kind==="hunter"?([[215,83],[427,80],[210,115],[435,116]] as const)[rotation]:kind==="brickworks"?([[458,50],[450,55],[208,52],[173,48]] as const)[rotation]:chimneys[kind]?.[rotation],
     mechanism: mechanisms[kind]?.[rotation],
   };
 }
