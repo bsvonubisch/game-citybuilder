@@ -34,13 +34,14 @@ export function drawPlot(
   benches?: HTMLImageElement,
   stone?: HTMLImageElement,
   wood?: HTMLImageElement,
+  plaza=true,
 ) {
   if (art.land && wood) {
     const rotation = [1, 0, 3, 2].indexOf(art.frame);
     drawFisheryPlatform(ctx, rotation, stone, wood);
   } else drawFoundation(ctx, w, h, stone);
   if (art.texture === "park-parts") {
-    if (benches) drawPlaza(ctx, source, benches, art.frame);
+    if (benches && plaza) drawPlaza(ctx, source, benches, art.frame);
     return;
   }
   const t = artTransform(art, w, h),
@@ -131,6 +132,7 @@ export class PlotArt {
         this.scene.textures
           .get("bridge-wood")
           .getSourceImage() as HTMLImageElement,
+        false,
       );
       texture.refresh();
       fit = { texture: key, x: left, y: top };

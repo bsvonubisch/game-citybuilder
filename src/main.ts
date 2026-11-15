@@ -1,3 +1,4 @@
+import {parkVisitor} from "./park-visitors.js";
 import Phaser from "phaser";
 import {townNeeds,buildingNeeds} from "./needs.js";
 import "./style.css";
@@ -1007,7 +1008,8 @@ function updateAgentInspector() {
     return;
   }
   $("#traveller-name").textContent = person?.name ?? "Delivery truck";
-  $("#traveller-kind").textContent =
+  const visit=parkVisitor(a,simulation.building(a.target));
+  $("#traveller-kind").textContent = visit ? "Visiting the fountain square" :
     a.kind === "person"
       ? "Walking around Pinehaven"
       : a.kind === "car"
@@ -1017,7 +1019,7 @@ function updateAgentInspector() {
     to = simulation.building(a.returning ? a.source : a.target);
   const label = (b: typeof from) =>
     b ? `${buildingName(b)} · ${b.x}, ${b.y}` : "No destination";
-  $("#traveller-status").textContent =
+  $("#traveller-status").textContent = visit ? visit.walking?"Strolling around the fountain":"Watching the water" :
     a.wait > 0
       ? "At the building"
       : a.trafficWait

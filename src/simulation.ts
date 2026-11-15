@@ -1,3 +1,4 @@
+import {parkVisitDuration} from "./park-visitors.js";
 import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
 import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
@@ -1469,7 +1470,7 @@ export class Simulation {
           a.segment = 0;
           a.progress = 0;
           a.returning = !a.returning;
-          a.wait = 4 + (a.id % 8);
+          a.wait = a.returning&&arrival?.kind==="park"?parkVisitDuration(a.id):4+(a.id%8);
           a.active = false;
           if (
             a.returning &&

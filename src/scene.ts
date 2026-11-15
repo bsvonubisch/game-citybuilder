@@ -1,3 +1,6 @@
+import {PlazaArt} from "./plaza-art.js";
+import {parkVisitor} from "./park-visitors.js";
+import {FOUNDATION_HEIGHT} from "./foundation.js";
 import Phaser from "phaser";
 import {planRemoval} from "./removal.js";
 import {nearestFenceSide,fenceCenter} from "./fences.js";
@@ -201,6 +204,7 @@ export class TownScene extends Phaser.Scene {
     this.moved = 0;
   }
   private plotArt!: PlotArt;
+  private plazaArt!:PlazaArt;
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
   private planterArt!: PlanterArt;
@@ -291,6 +295,7 @@ export class TownScene extends Phaser.Scene {
     this.shadowArt = new ShadowArt(this);
     this.plotArt = new PlotArt(this);
     this.constructionArt = new ConstructionArt(this);
+    this.plazaArt=new PlazaArt(this);
     const builderTexture = this.textures.get("construction-workers"),
       builderSource = builderTexture.getSourceImage() as HTMLImageElement;
     for (let frame = 0; frame < 16; frame++)
@@ -813,7 +818,8 @@ export class TownScene extends Phaser.Scene {
       );
     }
     this.lightSources = [
-      ...this.buildings.values(),
+      ...[...this.buildings.values()].filter(s=>this.simulation.building(s.getData("buildingId"))?.kind!=="park"),
+      ...this.plazaArt.sync(this.simulation),
       ...this.trees.filter((t) => t.getData("streetlight")),
     ];
     this.occludingPlots = this.simulation.state.buildings.filter(b=>!b.construction?.clearance).map((b) => {
@@ -1165,6 +1171,8 @@ export class TownScene extends Phaser.Scene {
       this.highlightWorker(a, 0xffdf88);
       return;
     }
+    const visit=parkVisitor(a,this.simulation.building(a.target),this.acc);
+    if(visit){const s=this.people.get(a.id);if(s)this.routeOverlay.lineStyle(1.5,0xffdf88,.9).strokeEllipse(s.x,s.y,12,6);return;}
     const points = laneCuts(a, agentDistance(a, this.acc), a.path.length - 1)
       .map((distance) => lanePose(a, distance))
       .map((p) => {
@@ -1499,7 +1507,14 @@ export class TownScene extends Phaser.Scene {
           .setFlipX(false)
           .setDepth((site.x + site.y + w + h - 2) * 32 + 12.25 + slot * 0.01);
       }
-      if (a.kind !== "person")
+      const visiting=this.simulation.building(a.target),visit=parkVisitor(a,visiting,this.acc);
+      if(visit&&visiting){
+        const heading=travelFacing(visit.dx,visit.dy),turn=heading%2===1,texture=turn?'walkers-turns':'walkers',pose=walkFrame(Math.floor(heading/2),a.id%2,visit.elapsed*.45,!visit.walking,turn),v=iso(visit.x,visit.y);
+        s.setTexture(texture,pose.frame).setScale(this.travellerScale({...a,kind:'person'},a.id%2,texture)).setOrigin(.5,1).setFlipX(pose.flip)
+          .setPosition(v.x,v.y-groundHeight(visiting.x,visiting.y,this.simulation.state.terrain)-FOUNDATION_HEIGHT)
+          .setDepth((visiting.x+visiting.y+2)*32+12.1+(visit.x-visiting.x+visit.y-visiting.y)*.08).setVisible(true).setData('sized',false);
+      }
+      if (a.kind !== "person"&&!visit)
         this.animation.vehicle(
           a,
           s,

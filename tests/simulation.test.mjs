@@ -2492,3 +2492,13 @@ test("both sides of the same fence edge have identical artwork anchors and front
  assert.ok(travellerDepth(fenceCenter({x:1,y:0,side:0}),bounds,[plot])>plot.depth);
  assert.ok(travellerDepth(fenceCenter({x:0,y:0,side:2}),bounds,[plot])<plot.depth);
 });
+
+
+test("park visitors remain visible only during actual visits and alternate strolling with fountain watching",async()=>{
+ const {parkVisitor,parkVisitDuration}=await import('../.test-dist/park-visitors.js');
+ const sim=new Simulation(),park=sim.state.buildings.find(b=>b.kind==='park'),a={id:2,resident:1,returning:true,active:false,wait:parkVisitDuration(2)};
+ const walking=parkVisitor(a,park);assert.ok(walking.walking);assert.ok(walking.x>=park.x-.5&&walking.x<=park.x+1.5);
+ const watching=parkVisitor({...a,wait:a.wait-7},park);assert.equal(watching.walking,false);
+ assert.equal(parkVisitor({...a,wait:0},park),null);assert.equal(parkVisitor({...a,returning:false},park),null);
+ assert.equal(parkVisitor(a,{...park,construction:{required:10,completed:1}}),null);
+});

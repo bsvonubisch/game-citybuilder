@@ -38,7 +38,7 @@ const metrics: Record<Part, { frame: number; width: number; foot: number }> = {
   flowers: { frame: 1, width: 24, foot: 6 },
   tree: { frame: 2, width: 34, foot: 4 },
   lamp: { frame: 3, width: 12, foot: 3 },
-  bench: { frame: 0, width: 27, foot: 4 },
+  bench: { frame: 0, width: 20, foot: 3 },
 };
 const cells = new WeakMap<
   HTMLImageElement,
@@ -78,9 +78,11 @@ export function drawPlaza(
   parts: HTMLImageElement,
   benches: HTMLImageElement,
   rotation: number,
+  only?:string,
 ) {
   ctx.imageSmoothingEnabled = false;
   for (const item of plazaLayout(rotation)) {
+    if(only&&item.id!==only)continue;
     const image = item.kind === "bench" ? benches : parts;
     const m = metrics[item.kind],
       frame = item.kind === "bench" ? facing(item.dx, item.dy) : m.frame;

@@ -138,7 +138,7 @@ export class NightArt {
     let prepared = 0;
     for (const sprite of sources) {
       const buildingId = sprite.getData("buildingId"),
-        b = buildingId ? sim.building(buildingId) : undefined;
+        b = buildingId&&!sprite.getData("plazaPart") ? sim.building(buildingId) : undefined;
       if (b?.construction) {
         this.lights.get(sprite)?.setVisible(false);
         continue;
@@ -174,7 +174,7 @@ export class NightArt {
             (point.y - sprite.originY * sprite.frame.height) * sprite.scaleY;
           const ground = b
             ? windowGround(b, x, groundHeight(b.x, b.y, sim.state.terrain))
-            : { x: sprite.x, y: sprite.y - 3 };
+            : sprite.getData("lampGround") ?? { x: sprite.x, y: sprite.y - 3 };
           lamps.push({
             x,
             y,
@@ -197,7 +197,7 @@ export class NightArt {
         .setOrigin(sprite.originX, sprite.originY)
         .setScale(sprite.scaleX, sprite.scaleY)
         .setPosition(sprite.x, sprite.y)
-        .setDepth(sprite.depth + 0.15)
+        .setDepth(sprite.depth + 0.001)
         .setVisible(sprite.visible && dark > 0.01)
         .setAlpha(dark * power);
     }
