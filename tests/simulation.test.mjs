@@ -2639,3 +2639,17 @@ test('weather transitions are deterministic, continuous, and bounded across save
   assert.deepEqual(smokePuffs(20,3,true,1),smokePuffs(20,3,true,1));
   assert.notDeepEqual(smokePuffs(20,3,true,1),smokePuffs(21,3,true,1));
 });
+
+test('income records real earnings separately from refunds and expires after a game day', async()=>{
+ const {incomeSummary}=await import('../.test-dist/economy.js');const sim=new Simulation(),start=sim.state.money;
+ sim.earn(30,'tax');sim.earn(70,'exports');sim.state.money+=20;
+ assert.equal(sim.state.money,start+120);assert.deepEqual(incomeSummary(sim.state.tick,sim.state.income),{tax:30,exports:70,market:0,total:100});
+ assert.deepEqual(incomeSummary(sim.state.tick,parseSave(JSON.stringify(sim.state)).income),incomeSummary(sim.state.tick,sim.state.income));
+ assert.equal(incomeSummary(sim.state.tick+960,sim.state.income).total,0);
+});
+test('rain and mist retain their world coordinates when the camera pans',async()=>{
+ const {worldRain,mistPatch}=await import('../.test-dist/weather.js');const a=worldRain({x:-100,y:200,width:400,height:300},20,1),b=worldRain({x:0,y:200,width:400,height:300},20,1);
+ const shared=a.filter(p=>p.x>60&&p.x<240);assert.ok(shared.length>0);
+ for(const p of shared)assert.ok(b.some(q=>q.x===p.x&&q.y===p.y));
+ assert.deepEqual(mistPatch(5,20),mistPatch(5,20));
+});

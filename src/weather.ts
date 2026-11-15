@@ -42,3 +42,27 @@ export function smokePuffs(time:number, id:number, industrial:boolean, wind:numb
       alpha:Math.sin(Math.min(1,age*6)*Math.PI/2)*(1-age)*.64};
   });
 }
+
+const weatherHash=(x:number,y:number)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
+export function worldRain(view:{x:number;y:number;width:number;height:number},time:number,strength:number,zoom=1){
+  const drops:ReturnType<typeof rainStrokes>=[],spacing=32;
+  const thinning=Math.max(1,Math.ceil(view.width*view.height/(spacing*spacing*350)));
+  for(let gy=Math.floor((view.y-50)/spacing);gy<=Math.ceil((view.y+view.height+50)/spacing);gy++)for(let gx=Math.floor((view.x-50)/spacing);gx<=Math.ceil((view.x+view.width+50)/spacing);gx++){
+    const seed=weatherHash(gx,gy);if(seed>strength/thinning)continue;
+    const age=(time*(1.5+seed)+seed*7)%1,x=gx*spacing+seed*spacing+age*8,y=gy*spacing+weatherHash(gy,gx)*spacing+age*42;
+    const tx=x/64+y/32,ty=y/32-x/64;if(tx<0||ty<0||tx>64||ty>64)continue;
+    drops.push({x,y,length:6+seed*5,alpha:.3+seed*.2});
+  }
+  return drops;
+}
+export function mistPatch(index:number,time:number){
+  const tx=4+(index%8)*8,ty=4+Math.floor(index/8)*8;
+  return {x:(tx-ty)*32+Math.sin(time*.018+index)*55,y:(tx+ty)*16+Math.cos(time*.012+index)*16,
+    width:260+weatherHash(index,7)*150,height:110+weatherHash(7,index)*65};
+}
+export function paintMist(ctx:CanvasRenderingContext2D){
+  ctx.clearRect(0,0,128,128);
+  const glow=ctx.createRadialGradient(64,64,4,64,64,58);
+  glow.addColorStop(0,"rgba(210,225,220,.65)");glow.addColorStop(.55,"rgba(210,225,220,.24)");glow.addColorStop(1,"rgba(210,225,220,0)");
+  ctx.fillStyle=glow;ctx.fillRect(0,0,128,128);
+}

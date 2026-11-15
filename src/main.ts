@@ -1,3 +1,4 @@
+import {incomeSummary} from "./economy.js";
 import {isHome,isPark} from "./catalog.js";
 import {parkVisitor} from "./park-visitors.js";
 import Phaser from "phaser";
@@ -107,7 +108,9 @@ try {
 const gateway = new LocalGateway(simulation);
 const scene = new TownScene(simulation);
 const cloud = new CloudSaves();
-let category: "homes" | "production" | "town" | "decorations" = "homes",
+const catalogGroups={homes:"Homes",food:"Food & farms",gather:"Gathering",industry:"Workshops",town:"Services",parks:"Parks",trees:"Trees",decorations:"Street furniture"};
+const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom"],decorations:["bench","streetlight","planter","fence"]};
+let category: keyof typeof catalogGroups = "homes",
   tab: "build" | "town" = "build",
   selected: number | null = null,
   selectedAgent: number | null = null,
@@ -213,7 +216,8 @@ $("#panel-content").addEventListener("wheel",(event)=>{
   const scroller=target.closest<HTMLElement>(".building-grid,.category-tabs")??(tab==="build"&&tool!=="terrain"?document.querySelector<HTMLElement>(".building-grid"):null);
   if(!scroller||event.ctrlKey)return;
   event.preventDefault();event.stopPropagation();
-  scroller.scrollLeft+=(Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY)*(event.deltaMode===1?20:event.deltaMode===2?scroller.clientWidth:1);
+  if(scroller.scrollHeight>scroller.clientHeight+1)scroller.scrollTop+=event.deltaY*(event.deltaMode===1?20:1);
+  else scroller.scrollLeft+=(Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY)*(event.deltaMode===1?20:event.deltaMode===2?scroller.clientWidth:1);
 },{passive:false});
 const daylightUI = new DaylightUI($(".town-season"));
 const game = new Phaser.Game({
@@ -285,6 +289,7 @@ function setTool(next: Tool) {
   if (next !== "inspect") closeInspection();
   tool = next;
   scene.tool = next;
+  updatePlacementCost();
   $("#placement-hint").hidden = next === "inspect";
   document
     .querySelectorAll<HTMLElement>("[data-tool]")
@@ -305,7 +310,7 @@ function setTool(next: Tool) {
         .map(([r, n]) => `· ${n} ${r}`)
         .join(
           " ",
-        )} · ${dimensions(next as BuildingKind, scene.rotation).join("×")} tiles · ${constructionWork(next as BuildingKind)} worker-seconds ${isBuilding(next) ? `<button id="rotate-placement" class="rotate-placement" title="Rotate building (R)">${icon("reset")} Rotate <kbd>R</kbd></button><span id="front-access"></span>` : ""} <kbd>Esc</kbd>`
+        )} · ${dimensions(next as BuildingKind, scene.rotation).join("×")} tiles · ${constructionWork(next as BuildingKind)} worker-seconds ${isBuilding(next) ? `<button id="rotate-placement" class="rotate-placement" title="Rotate building">${icon("reset")} Rotate</button><span id="front-access"></span>` : ""} <kbd>Esc</kbd>`
     : decoration
       ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
       : next === "road"
@@ -502,25 +507,20 @@ function renderPanel() {
     };
     return;
   }
-  const names = {
-    homes: "Neighbourhood",
-    production: "Make & gather",
-    town: "Town essentials",
-    decorations: "Gardens & streets",
-  };
+  const names=catalogGroups;
   const cards =
-    category === "decorations"
-      ? Object.entries(DECORATIONS)
+    (category === "decorations" || category === "trees")
+      ? Object.entries(DECORATIONS).filter(([kind])=>catalogKinds[category].includes(kind))
           .map(
             ([kind, d]) =>
               `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "fence" ? '<img class="building-icon" data-fence-preview alt="">' : kind === "streetlight" ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' : kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
           )
           .join("")
       : (Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][])
-          .filter(([, d]) => d.category === category)
+          .filter(([kind]) => catalogKinds[category].includes(kind))
           .map(
             ([kind, d]) =>
-              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="${d.description}">${frame(kind)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}${d.materials ? "<small>+ materials</small>" : ""}</span></button>`,
+              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="${d.description}">${frame(kind)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span><span class="card-materials">${Object.entries(d.materials??{}).map(([r,n])=>`<span title="${RESOURCE_NAMES[r as Resource]}">${icon(r==="bricks"?"box":r)}${n} ${RESOURCE_NAMES[r as Resource]}</span>`).join("")}</span></button>`,
           )
           .join("");
   $("#panel-content").innerHTML = `<div class="category-tabs">${Object.entries(
@@ -532,7 +532,7 @@ function renderPanel() {
     )
     .join(
       "",
-    )}</div><div class="catalog-heading"><h3>${names[category]}</h3></div><div class="building-grid">${cards}</div><div class="build-note">${icon("leaf")}<div><b>${category === "decorations" ? "Make the streets your own." : "Connect the front entrance."}</b><p>${category === "decorations" ? "Plant trees, add benches and lights. Use Remove (X) to clear decorations." : "Rotate with R. The entrance arrow turns green when a road reaches the front."}</p></div></div><button class="chain-button" id="production-guide">See production chains ${icon("arrow")}</button>`;
+    )}</div><div class="catalog-heading"><h3>${names[category]}</h3></div><div class="building-grid">${cards}</div><div class="build-note">${icon("leaf")}<div><b>${category === "decorations" ? "Make the streets your own." : "Connect the front entrance."}</b><p>${category === "decorations" ? "Place along streets and garden edges." : "The green entrance arrow shows road access."}</p></div></div><button class="chain-button" id="production-guide">See production chains ${icon("arrow")}</button>`;
   document.querySelectorAll<HTMLElement>("[data-category]").forEach(
     (el) =>
       (el.onclick = () => {
@@ -540,15 +540,6 @@ function renderPanel() {
         renderPanel();
       }),
   );
-  if (category === "homes") {
-    $("#panel-content .building-grid").insertAdjacentHTML(
-      "beforeend",
-      `<section class="housing-ladder" aria-label="House upgrades"><h4>Grow your homes</h4><p>Build a cottage, then select it to upgrade.</p><div>${([1, 2, 3] as HouseTier[]).map((tier) => `<figure>${frame("house", "", 0, tier)}<figcaption><small>Tier ${tier}</small><b>${HOUSE_TIERS[tier].name}</b><span>${HOUSE_TIERS[tier].capacity} residents</span></figcaption></figure>`).join("")}</div></section>`,
-    );
-  } else if (category === "decorations") {
-    $("#panel-content .build-note p").textContent =
-      "Place picket fences along tile edges. Shared corners join automatically, leaving the tiles free for gardens and buildings.";
-  }
   document
     .querySelectorAll<HTMLElement>("[data-building]")
     .forEach((el) => (el.onclick = () => setTool(el.dataset.building as Tool)));
@@ -556,6 +547,20 @@ function renderPanel() {
   if(category==="decorations")void fencePreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-fence-preview]").forEach(image=>image.src=src));
   if(category==="decorations")void planterPreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-planter-preview]").forEach(image=>image.src=src));
 }
+const placementCost=document.createElement("div");placementCost.className="placement-cost";placementCost.hidden=true;$(".world").append(placementCost);
+let costPointer:{x:number;y:number}|null=null;
+function updatePlacementCost(){
+  if(typeof placementCost==="undefined")return;
+  const d=isBuilding(tool)?BUILDINGS[tool]:isDecoration(tool)?DECORATIONS[tool]:null;
+  placementCost.hidden=!d||!costPointer;
+  if(!d||!costPointer)return;
+  const rows=[{name:"Gold",icon:"coin",need:d.cost,have:simulation.state.money},...Object.entries("materials" in d?d.materials??{}:{}).map(([r,n])=>({name:RESOURCE_NAMES[r as Resource],icon:r==="bricks"?"box":r,need:n,have:simulation.stored(r as Resource)}))];
+  placementCost.innerHTML='<b>'+d.name+'</b><div>'+rows.map(r=>'<span class="'+(r.have<r.need?'shortage':'')+'">'+icon(r.icon)+r.need+' '+r.name+(r.have<r.need?' · have '+Math.floor(r.have):'')+'</span>').join('')+'</div>';
+  placementCost.style.left=Math.max(8,Math.min(costPointer.x+20,$(".world").clientWidth-placementCost.offsetWidth-8))+"px";
+  placementCost.style.top=Math.max(8,Math.min(costPointer.y+22,$(".world").clientHeight-placementCost.offsetHeight-90))+"px";
+}
+$(".world").addEventListener("pointermove",event=>{if(!(event.target instanceof HTMLCanvasElement)){costPointer=null;placementCost.hidden=true;return;}const bounds=$(".world").getBoundingClientRect();costPointer={x:event.clientX-bounds.left,y:event.clientY-bounds.top};updatePlacementCost();});
+$(".world").addEventListener("pointerleave",()=>{costPointer=null;placementCost.hidden=true;});
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
 scene.onEyedropper=(kind,rotation)=>{scene.rotation=rotation;setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
@@ -1458,6 +1463,10 @@ function updateUI() {
     buildersAssigned < buildersNeeded,
   );
   $("#gold").textContent = Math.floor(s.money).toLocaleString();
+  const income=incomeSummary(s.tick,s.income);
+  $(".resource.gold small").textContent=`+${income.total.toLocaleString()} / day`;
+  $(".resource.gold").title=`Income over the last game day: ${income.total} gold · taxes ${income.tax} · exports ${income.exports} · market sales ${income.market}. Building refunds are excluded.`;
+  updatePlacementCost();
   const bread = simulation.stored("bread"),
     fish = simulation.stored("fish");
   $("#food-stock").textContent = String(bread + fish);

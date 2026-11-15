@@ -131,6 +131,7 @@ export interface Agent {
   parkSlot?:number;
 }
 export interface World {
+  income?: import("./economy.js").IncomeEntry[];
   bridgeVersion?:1;
   version: 3;
   tick: number;
@@ -662,6 +663,13 @@ export class Simulation {
     if ((r.leisure ?? 60) < 90 && (!job || hour >= 17 || hour < 6))
       return leisure[0] ?? job;
     return job ?? ((r.leisure ?? 60) < 90 ? leisure[0] : undefined);
+  }
+  earn(amount:number, source:import("./economy.js").IncomeSource) {
+    if(!Number.isFinite(amount)||amount<=0)return;
+    this.state.money+=amount;
+    this.state.income=(this.state.income??[]).filter(e=>e.tick>this.state.tick-DAY_TICKS);
+    const last=this.state.income.find(e=>e.tick===this.state.tick&&e.source===source);
+    if(last)last.amount+=amount;else this.state.income.push({tick:this.state.tick,amount,source});
   }
   faith(){return this.state.residents.length?Math.round(this.state.residents.reduce((n,r)=>n+(r.faith??70),0)/this.state.residents.length):100;}
   leisure() {
@@ -1453,8 +1461,7 @@ export class Simulation {
             this.state.delivered += a.amount;
             if (b.kind === "warehouse" && a.cargo === "tools") {
               b.inventory.tools! -= a.amount;
-              this.state.money +=
-                a.amount * Math.round(35 * (1 + ((b.level ?? 1) - 1) * 0.1));
+              this.earn(a.amount * Math.round(35 * (1 + ((b.level ?? 1) - 1) * 0.1)), "exports");
               this.state.exported += a.amount;
             }
           }
@@ -1514,7 +1521,7 @@ export class Simulation {
     if (this.state.tick % (day.night ? 48 : 12) === 0) this.dispatch();
     this.traffic.plan(this.state.agents);
     if (this.state.tick % DAY_TICKS === 0) {
-      this.state.money += this.state.residents.length * 6;
+      this.earn(this.state.residents.length * 6,"tax");
       let demand = Math.ceil(this.state.residents.length / 3);
       const needed = demand;
       for (const w of this.state.buildings.filter(
@@ -1775,6 +1782,7 @@ export function parseSave(raw: string): World {
     !finite(s.exported)
   )
     throw new Error("This save is not compatible with this version.");
+  if(s.income!==undefined&&(!Array.isArray(s.income)||s.income.length>3000||s.income.some(e=>!e||!Number.isSafeInteger(e.tick)||e.tick<0||e.tick>s.tick||!finite(e.amount)||!["tax","exports","market"].includes(e.source))))throw new Error("Invalid income history.");
   const legacy = s.version === 1;
   validateTerrain(s.terrain);
   const occupied = new Set<string>();
