@@ -21,10 +21,11 @@ need no migration.
 Both source sheets are 1774 by 887 RGBA pixels, eight columns by four rows.
 Columns are SE, S, SW, W, NW, N, NE, E, matching `travelFacing` directly. Cells
 are measured using the production `trimAtlas` alpha bounds. All 64 frames share
-one uniform scale: 29 world pixels divided by the mean width of the timber
+one uniform scale: 33.64 world pixels divided by the mean width of the timber
 truck's four diagonal frames. Front and rear silhouettes remain naturally
 narrower. Image origin is (0.5, 0.8), consistent with the previous vehicles.
 The artwork is never stretched, skewed, flipped, or screen-rotated.
+This includes the same 16% size increase applied to all civilian cars.
 
 References: existing `vehicles-directions.png` and `vehicles-turns.png` provide
 the established compact vehicle scale and all eight yaw directions. The second

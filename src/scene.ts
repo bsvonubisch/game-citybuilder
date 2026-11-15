@@ -732,7 +732,7 @@ export class TownScene extends Phaser.Scene {
       let scale=this.travellerScales.get('civilian-common');
       if(scale===undefined){
         const atlas=this.textures.get(texture),width=[8,10,12,14].reduce((n,frame)=>n+atlas.get(frame).width,0)/4;
-        scale=25/width;this.travellerScales.set('civilian-common',scale);
+        scale=29/width;this.travellerScales.set('civilian-common',scale);
       }
       return scale;
     }
@@ -743,7 +743,7 @@ export class TownScene extends Phaser.Scene {
       if(scale===undefined){
         const atlas=this.textures.get('delivery-industrial');
         const width=[0,2,4,6].reduce((n,frame)=>n+atlas.get(frame).width,0)/4;
-        scale=29/width;this.travellerScales.set('delivery-common',scale);
+        scale=33.64/width;this.travellerScales.set('delivery-common',scale);
       }
       return scale;
     }
@@ -766,7 +766,7 @@ export class TownScene extends Phaser.Scene {
       : Array.from({ length: 4 }, (_, i) => original.get(row * 4 + i).width);
     const size = frames.reduce((sum, n) => sum + n, 0) / frames.length;
     const scale =
-      (((person ? 22 : a.kind === "truck" ? 29 : 25) / size) * source.height) /
+      (((person ? 22 : a.kind === "truck" ? 33.64 : 29) / size) * source.height) /
       target.height;
     this.travellerScales.set(cacheKey, scale);
     return scale;

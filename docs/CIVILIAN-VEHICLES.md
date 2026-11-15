@@ -7,10 +7,14 @@ The user rejected the first burgundy coupe; it is not shipped.
 Accepted asset: `public/civilian-cars-v1.png`, generated with the built-in image
 tool. Four rows, eight headings per row: SE, S, SW, W, NW, N, NE, E. Row order is
 fastback, saloon, roadster, estate. Production alpha trimming measures each cell;
-one common scale is 25 world pixels divided by the mean diagonal width of the
+one common scale is 29 world pixels divided by the mean diagonal width of the
 saloon. Upright images use no screen rotation, skew, or per-frame resizing.
 Origin is (0.5, 0.8), matching existing vehicle ground contacts. Collision bodies
 and speeds retain their existing dimensions.
+
+Civilian models (including the original green/gold compacts) and cargo vehicles
+are uniformly 16% larger at the user's request; passenger and delivery vehicle
+proportions stay consistent in all directions.
 
 The narrow S-facing cells exclude their outer 15% gutters before alpha trimming,
 to prevent stray pixels from neighboring cars appearing beside the front view.
