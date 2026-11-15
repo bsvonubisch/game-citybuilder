@@ -274,6 +274,7 @@ function toast(message: string) {
 }
 function setTool(next: Tool) {
   scene.cancelRoad();
+  scene.clearBuildingHover();
   scene.guidanceBuilding = null;
   if (next !== "move") scene.movingBuilding = null;
   const wasTerrain = tool === "terrain";
@@ -309,7 +310,7 @@ function setTool(next: Tool) {
         : next === "bridge"
           ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
           : next === "bulldoze"
-            ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
+            ? `${icon("hammer")} Click or drag to remove a stretch · Release to apply · Half the gold returned <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
@@ -539,6 +540,10 @@ function renderPanel() {
     .forEach((el) => (el.onclick = () => setTool(el.dataset.building as Tool)));
   $("#production-guide").onclick = showChains;
 }
+const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
+scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
+scene.onEyedropper=(kind,rotation)=>{scene.rotation=rotation;setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
+scene.onRemoveApply=async(from,to)=>{const result=await gateway.command({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onTile = async (p: Point) => {
   if (tool === "terrain") {
     scene.previewTerrain(p);

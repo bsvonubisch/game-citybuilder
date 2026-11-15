@@ -44,6 +44,7 @@ import {
 import { baseTerrain } from "../.test-dist/terrain.js";
 import { daylight, warmEmission, shiftChange, DAY_TICKS, lengthenDays } from "../.test-dist/daylight.js";
 import {townNeeds,buildingNeeds} from "../.test-dist/needs.js";
+import {planRemoval} from "../.test-dist/removal.js";
 import {
   NIGHT_AMBIENT,
   windowGround,
@@ -99,6 +100,21 @@ test("the displayed day advances at midnight while keeping the 08:00 start", () 
   assert.equal(daylight(160 * 4).day, 2);
   assert.equal(daylight(160 * 4).hour, 0);
   assert.equal(daylight(240 * 4).day, 2);
+});
+
+test("drag removal protects the last warehouse atomically and recovers building stock once",()=>{
+  const sim=new Simulation(),warehouse=sim.state.buildings.find(b=>b.kind==="warehouse");
+  const before=sim.snapshot();
+  assert.equal(execute(sim,{type:"removeStroke",from:warehouse,to:{x:warehouse.x+3,y:warehouse.y}}).ok,false);
+  assert.deepEqual(sim.snapshot(),before);
+  const farm=sim.state.buildings.find(b=>b.kind==="farm");farm.inventory.grain=17;
+  const plan=planRemoval(sim,farm,{x:farm.x+1,y:farm.y+1});
+  assert.equal(plan.buildings.size,1);
+  const stock=sim.stored("grain"),gold=sim.state.money;
+  assert.equal(execute(sim,{type:"removeStroke",from:farm,to:{x:farm.x+1,y:farm.y+1}}).ok,true);
+  assert.equal(sim.building(farm.id),undefined);
+  assert.equal(sim.stored("grain"),stock+17);
+  assert.equal(sim.state.money,gold+Math.floor(BUILDINGS.farm.cost/2));
 });
 
 test("needs distinguish ready meals, staffed workplaces and reachable leisure from stored totals",()=>{

@@ -3,6 +3,7 @@ import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, 
 import { stepMining, miningTargets, landOre, validMiningTrip, type MiningTrip } from "./mining.js";
 import { depositAt, exposedDeposit, nearbyDeposit, buildingDeposit, expandReserves } from "./deposits.js";
 import { ROCK_CLEARING_WORK } from "./construction.js";
+import {planRemoval} from "./removal.js";
 import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType, type RoadTypes } from "./roads.js";
 import {
   BUILDINGS,
@@ -147,6 +148,7 @@ export interface World {
   clearedDeposits?: string[];
 }
 export type Command =
+  | {type:"removeStroke";from:Point;to:Point}
   | { type: "roadStroke"; from: Point; to: Point; roadType?: RoadType }
   | TerrainCommand
   | { type: "undoTerrain" }
@@ -889,6 +891,7 @@ export class Simulation {
       ![
         "place",
         "roadStroke",
+        "removeStroke",
         "demolish",
         "toggle",
         "rotate",
@@ -906,7 +909,29 @@ export class Simulation {
       };
     let message = "",
       networkChanged = true;
-    if (c.type === "roadStroke") {
+    if(c.type==="removeStroke") {
+      const plan=planRemoval(this,c.from,c.to);
+      if(plan.error)return {ok:false,message:plan.error,revision:this.state.revision};
+      networkChanged=plan.buildings.size>0||plan.roads.size>0;
+      const warehouse=this.state.buildings.find(b=>b.kind==="warehouse"&&!plan.buildings.has(b.id))!;
+      for(const b of this.state.buildings.filter(b=>plan.buildings.has(b.id))) {
+        landCatch(b);landTimber(b);landOre(b);
+        for(const r of RESOURCES)warehouse.inventory[r]=(warehouse.inventory[r]??0)+(b.inventory[r]??0);
+        this.state.money+=Math.floor(buildingInvestment(b)/2);
+      }
+      this.state.buildings=this.state.buildings.filter(b=>!plan.buildings.has(b.id));
+      for(const k of plan.roads) {
+        const [x,y]=k.split(",").map(Number);
+        this.state.money+=terrain(x,y,this.state.terrain)==="water"?17:Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2);
+        if(this.state.roadTypes)delete this.state.roadTypes[k];
+      }
+      this.state.roads=this.state.roads.filter(k=>!plan.roads.has(k));
+      this.state.decorations=this.state.decorations.filter(d=>{
+        if(!plan.decorations.has(d.id))return true;
+        this.state.money+=d.natural?0:Math.floor(DECORATIONS[d.kind].cost/2);return false;
+      });
+      message=`Removed ${plan.buildings.size} buildings, ${plan.roads.size} road tiles and ${plan.decorations.size} decorations. Stock recovered; half the build cost returned.`;
+    } else if (c.type === "roadStroke") {
       const roadType = c.roadType ?? "stone";
       const plan = planRoad(this, c.from, c.to, roadType);
       if (plan.error) return { ok: false, message: plan.error, revision: this.state.revision };

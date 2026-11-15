@@ -3523,3 +3523,5 @@ dialog p.muted {
   .build-drawer .town-overview { display: block; }
   .build-drawer .town-overview > section + section { margin-top: 20px; }
 }
+
+.building-hover-name { position:absolute; z-index:26; pointer-events:none; background:#faf7e9ee; color:#304e3c; padding:7px 11px; border:1px solid #cdd4bd; border-radius:6px; box-shadow:0 2px 8px #26392c25; font-size:12px; font-weight:600; max-width:240px; }
