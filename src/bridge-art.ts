@@ -71,6 +71,16 @@ export class BridgeArt {
     material:CanvasImageSource=this.wood,
   ) {
     const [a, b, c, d] = points;
+    // Flat deck patches and wall panels need one affine draw. Clipping them
+    // into two triangles leaves an antialiased crack through the material.
+    if (Math.abs(a.x + c.x - b.x - d.x) < .001 &&
+        Math.abs(a.y + c.y - b.y - d.y) < .001) {
+      ctx.save();
+      ctx.transform(b.x - a.x, b.y - a.y, d.x - a.x, d.y - a.y, a.x, a.y);
+      ctx.drawImage(material, sx, sy, sw, sh, 0, 0, 1, 1);
+      ctx.restore();
+      return;
+    }
     for (const [end, side, triangle] of [
       [b, { x: c.x - b.x, y: c.y - b.y }, [a, b, c]],
       [
@@ -219,8 +229,10 @@ export class BridgeArt {
             this.wood.height / 4,
           );
         }
-      // Front fascia gives the deck thickness even where a rail is open.
+      // Deck thickness belongs only on exposed sides, never across a joined
+      // road span: a fascia there looks like a step across the carriageway.
       for (let edge = 0; edge < 2; edge++) {
+        if (!open[edge]) continue;
         const [a, b] = CORNERS[edge];
         for (let i = 0; i < 2; i++) {
           const start = point(
@@ -328,21 +340,40 @@ export class BridgeArt {
     const surface=roadSurface(this.scene,kind,0,0),wall=kind==='brick'?surface:this.scene.textures.get('foundation-stone').getSourceImage() as HTMLImageElement;
     const tint=kind==='brick'?{cap:'#e5af86',edge:'#734d3e'}:{cap:'#dfd7bf',edge:'#656864'};
     const deck=this.canvas('bridge-deck-'+id,ctx=>{
+      // Opaque underpaint seals shared raster edges between ramp patches.
+      ctx.fillStyle=kind==='brick'?'#aa7759':'#8d8d82';ctx.beginPath();
+      for(const [edge,[a,b]] of CORNERS.entries())for(let i=0;i<2;i++){
+        const p=point(a.x+(b.x-a.x)*i/2,a.y+(b.y-a.y)*i/2);
+        if(edge===0&&i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);
+      }
+      ctx.closePath();ctx.fill();
       for(let y=0;y<4;y++)for(let x=0;x<4;x++){
         const u=x/4-.5,v=y/4-.5;
         this.quad(ctx,[point(u,v),point(u+.25,v),point(u+.25,v+.25),point(u,v+.25)],x*surface.width/4,y*surface.height/4,surface.width/4,surface.height/4,surface);
       }
-      for(let e=0;e<2;e++){const[a,b]=CORNERS[e],p=point(a.x,a.y),q=point(b.x,b.y);this.quad(ctx,[p,q,{x:q.x,y:q.y+3},{x:p.x,y:p.y+3}],0,0,wall.width,wall.height*.18,wall);}
+      for(let e=0;e<2;e++)if(open[e]){
+        const[a,b]=CORNERS[e];
+        for(let i=0;i<2;i++){
+          const p=point(a.x+(b.x-a.x)*i/2,a.y+(b.y-a.y)*i/2),q=point(a.x+(b.x-a.x)*(i+1)/2,a.y+(b.y-a.y)*(i+1)/2);
+          this.quad(ctx,[p,q,{x:q.x,y:q.y+3},{x:p.x,y:p.y+3}],i*wall.width/2,0,wall.width/2,wall.height*.18,wall);
+        }
+      }
     });
     const supports=this.canvas('bridge-supports-'+id,ctx=>{
       for(let e=0;e<4;e++)if(open[e]){
-        const[a,b]=CORNERS[e],p=point(a.x,a.y),q=point(b.x,b.y);
+        const[a,b]=CORNERS[e],p=iso(a.x,a.y),q=iso(b.x,b.y);
+        const upper=(t:number)=>{
+          const u=a.x+(b.x-a.x)*t,v=a.y+(b.y-a.y)*t;
+          return point(u,v).y-iso(u,v).y;
+        };
         ctx.save();ctx.transform(q.x-p.x,q.y-p.y,0,1,p.x,p.y);
-        ctx.beginPath();ctx.rect(0,2,1,13);
-        ctx.moveTo(.13,15);ctx.lineTo(.13,12);ctx.quadraticCurveTo(.5,-1,.87,12);ctx.lineTo(.87,15);ctx.closePath();ctx.clip('evenodd');
-        ctx.drawImage(wall,0,0,wall.width,wall.height,0,2,1,13);ctx.fillStyle='#20242224';ctx.fillRect(0,2,1,13);ctx.restore();
+        // Follow both halves of the ramp right up to the deck. A straight
+        // chord between its endpoints exposed a triangular strip of water.
+        ctx.beginPath();ctx.moveTo(0,upper(0));ctx.lineTo(.5,upper(.5));ctx.lineTo(1,upper(1));ctx.lineTo(1,9);ctx.lineTo(0,9);ctx.closePath();
+        ctx.moveTo(.13,9);ctx.lineTo(.13,6);ctx.quadraticCurveTo(.5,-9,.87,6);ctx.lineTo(.87,9);ctx.closePath();ctx.clip('evenodd');
+        ctx.drawImage(wall,0,0,wall.width,wall.height,0,-6,1,15);ctx.fillStyle='#20242224';ctx.fillRect(0,-6,1,15);ctx.restore();
         // Raised arch voussoirs follow the opening, rather than wooden pilings.
-        ctx.strokeStyle=tint.cap;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(p.x+(q.x-p.x)*.13,p.y+(q.y-p.y)*.13+12);ctx.quadraticCurveTo((p.x+q.x)/2,(p.y+q.y)/2-1,p.x+(q.x-p.x)*.87,p.y+(q.y-p.y)*.87+12);ctx.stroke();
+        ctx.strokeStyle=tint.cap;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(p.x+(q.x-p.x)*.13,p.y+(q.y-p.y)*.13+6);ctx.quadraticCurveTo((p.x+q.x)/2,(p.y+q.y)/2-9,p.x+(q.x-p.x)*.87,p.y+(q.y-p.y)*.87+6);ctx.stroke();
       }
     });
     const rails=open.map((closed,e)=>!closed?null:this.canvas('bridge-rail-'+id+'-'+e,ctx=>{
