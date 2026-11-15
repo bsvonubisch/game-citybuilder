@@ -1,5 +1,37 @@
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
 import { fisheryLayout } from "./shoreline.js";
+import { daylight } from "./daylight.js";
+import type { Building, Simulation } from "./simulation.js";
+
+/** The roster follows actual job assignments, including builders still on a journey. */
+export function constructionCrew(sim: Simulation, site: Building) {
+  if (!site.construction) return [];
+  const night = daylight(sim.state.tick).night;
+  return sim.state.residents
+    .filter((r) => r.job === site.id)
+    .map((resident) => {
+      const agent = sim.state.agents.find((a) => a.resident === resident.id);
+      const onsite = agent?.onsite === site.id;
+      const status = !site.enabled
+        ? "Construction paused"
+        : !site.connected
+          ? "Waiting for road access"
+          : onsite
+            ? night
+              ? "Working on site · night pace"
+              : "Working on site"
+            : agent?.active !== false && agent
+              ? agent.target === site.id && !agent.returning
+                ? "Travelling to site"
+                : "Finishing current journey"
+              : night && resident.id % 4 !== 0
+                ? "Resting until morning"
+                : agent?.target !== site.id && agent
+                  ? "Finishing current visit"
+                  : "Preparing to leave";
+      return { resident, agent, onsite, status };
+    });
+}
 
 export interface Construction {
   /** Labour in worker-seconds; only builders who reached the site contribute. */

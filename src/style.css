@@ -1143,6 +1143,76 @@ kbd {
   color: #a28a58;
   background: #f1ead6;
 }
+.construction-crew {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 14px;
+}
+.inspector:has(#construction-crew) > .inspector-art {
+  width: 84px;
+  height: 70px;
+  margin: 8px auto;
+}
+.construction-crew h4 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 10px;
+}
+.construction-crew h4 > span {
+  color: #647d71;
+  font-size: 12px;
+}
+.builder-roster {
+  display: grid;
+  gap: 7px;
+}
+.builder-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 52px;
+  padding: 9px;
+  text-align: left;
+  background: #eef3e9;
+  border: 1px solid #d3ddce;
+  border-radius: 8px;
+  color: #365b4e;
+}
+.builder-row:hover,
+.builder-row:focus-visible {
+  background: #e0eee2;
+  border-color: #60927c;
+}
+.builder-row > .icon {
+  width: 19px;
+  flex: none;
+}
+.builder-row > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.builder-row b {
+  display: block;
+  font-size: 12px;
+}
+.builder-row small {
+  display: block;
+  font-size: 10px;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+.builder-row.on-site {
+  border-left: 3px solid #629c81;
+}
+.builder-locate {
+  display: flex;
+  align-items: center;
+  font-size: 9px;
+}
+.builder-locate .icon {
+  width: 12px;
+}
 .production-logistics {
   margin: 16px 0;
   padding-bottom: 12px;

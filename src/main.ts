@@ -37,7 +37,11 @@ import {
   serviceOpen,
 } from "./proximity.js";
 import { deeperLayer, isExtractor } from "./deposits.js";
-import { builderCapacity, constructionWork } from "./construction.js";
+import {
+  builderCapacity,
+  constructionWork,
+  constructionCrew,
+} from "./construction.js";
 import { fishingStatus } from "./fishing.js";
 import { TownScene } from "./scene.js";
 import {
@@ -544,6 +548,10 @@ scene.onTile = async (p: Point) => {
       scene.onSelect(id);
     }
     scene.redraw();
+    if (isBuilding(tool)) {
+      const site = simulation.buildingAt(p.x, p.y);
+      if (site?.construction) scene.onSelect(site.id);
+    }
     save(false);
     updateUI();
   }
@@ -629,6 +637,30 @@ function renderInspector() {
     "afterend",
     '<div class="building-actions"><p id="building-next-step" class="next-step" hidden></p><div id="building-primary"></div><button id="resolve-issue" hidden></button><details id="building-more"><summary>More actions</summary><div id="building-menu-items"></div></details></div>',
   );
+  if (b.construction) {
+    $(".building-actions").insertAdjacentHTML(
+      "beforebegin",
+      '<section id="construction-crew" class="construction-crew" aria-label="Assigned builders"></section>',
+    );
+    $("#construction-crew").onclick = (event) => {
+      const button = (event.target as Element).closest<HTMLButtonElement>(
+        "[data-builder]",
+      );
+      if (!button) return;
+      const member = constructionCrew(simulation, b).find(
+        (c) => c.resident.id === Number(button.dataset.builder),
+      );
+      if (!member) return;
+      setTool("inspect");
+      if (member.agent) {
+        scene.onSelectAgent(member.agent.id);
+        scene.focusAgent(member.agent.id);
+      } else {
+        scene.onSelect(member.resident.home);
+        scene.focusBuilding(member.resident.home);
+      }
+    };
+  }
   if (b.construction && !d.recipe && !isLeisure(b.kind))
     panel.insertAdjacentHTML(
       "beforeend",
@@ -694,7 +726,7 @@ function renderInspector() {
       } else updateInspector();
     };
   }
-  if (isLeisure(b.kind) || b.kind === "house")
+  if (!b.construction && (isLeisure(b.kind) || b.kind === "house"))
     $(".building-actions").insertAdjacentHTML(
       "afterend",
       '<section id="service-detail"></section>',
@@ -853,7 +885,16 @@ function renderAgentInspector() {
   $("#close-inspector").onclick = closeInspection;
   $("#show-destination").onclick = () => {
     const a = simulation.state.agents.find((a) => a.id === selectedAgent);
-    if (a) scene.focusBuilding(a.onsite ?? (a.returning ? a.source : a.target));
+    if (a) {
+      const site = simulation.building(
+        simulation.state.residents.find((r) => r.id === a.resident)?.job ?? 0,
+      );
+      const id = site?.construction
+        ? site.id
+        : (a.onsite ?? (a.returning ? a.source : a.target));
+      if (site?.construction) scene.onSelect(id);
+      scene.focusBuilding(id);
+    }
   };
   updateAgentInspector();
 }
@@ -865,6 +906,10 @@ function updateAgentInspector() {
     return;
   }
   const person = simulation.state.residents.find((r) => r.id === a.resident);
+  const job = person?.job ? simulation.building(person.job) : null;
+  $("#show-destination").textContent = job?.construction
+    ? "Back to construction site"
+    : "Show destination";
   if (a.onsite) {
     const site = simulation.building(a.onsite);
     $("#traveller-name").textContent = person?.name ?? "Builder";
@@ -1002,7 +1047,7 @@ function updateInspector() {
     $("#industry-upgrade-reason").textContent =
       reason ?? `${next.labour} worker-seconds · inventory stays here.`;
   }
-  if (isLeisure(b.kind)) {
+  if (isLeisure(b.kind) && !b.construction) {
     const coverage = serviceCoverage(simulation, b);
     const open =
       !b.construction &&
@@ -1020,7 +1065,7 @@ function updateInspector() {
         scene.focusBuilding(Number(el.dataset.serviceHome));
       }
     };
-  } else if (b.kind === "house") {
+  } else if (b.kind === "house" && !b.construction) {
     const people = simulation.state.residents.filter((r) => r.home === b.id);
     const need = people.length
       ? Math.round(
@@ -1069,11 +1114,15 @@ function updateInspector() {
     const onsite = simulation.state.agents.filter(
       (a) => a.onsite === b.id,
     ).length;
-    const names = simulation.state.residents
-      .filter((r) => r.job === b.id)
-      .map((r) => escapeHtml(r.name));
+    const crew = constructionCrew(simulation, b);
+    const roster = `<h4>Assigned builders <span>${crew.length} / ${builderCapacity(b)}</span></h4>${crew.length ? `<div class="builder-roster">${crew.map((c) => `<button class="builder-row ${c.onsite ? "on-site" : ""}" data-builder="${c.resident.id}" aria-label="Locate ${escapeHtml(c.resident.name)}, ${escapeHtml(c.status)}">${icon(c.onsite ? "hammer" : "people")}<span><b>${escapeHtml(c.resident.name)}</b><small>${escapeHtml(c.status)}</small></span><span class="builder-locate">Locate ${icon("arrow")}</span></button>`).join("")}</div><p class="muted">Teal markers show this crew on the map. Select a name to locate them.</p>` : `<p class="muted">${!b.enabled ? "Resume construction to assign builders." : !b.connected ? "Connect the entrance to the road network to assign builders." : "Waiting for unassigned residents. Add nearby homes or free workers from another building."}</p>`}`;
+    const rosterElement = $("#construction-crew");
+    if (rosterElement.dataset.roster !== roster) {
+      rosterElement.innerHTML = roster;
+      rosterElement.dataset.roster = roster;
+    }
     $("#building-detail").innerHTML =
-      `<h4>${b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : b.construction.upgradeLevel ? "Building upgrade" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Builders assigned</span><b>${b.workers} / ${builderCapacity(b)}</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div><p class="muted">${names.join(", ") || "Waiting for available residents."}</p>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
+      `<h4>${b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : b.construction.upgradeLevel ? "Building upgrade" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
     if (d.recipe) $("#production-logistics").hidden = true;
     $("#toggle-production").textContent = b.enabled
       ? "Pause construction"

@@ -1005,10 +1005,26 @@ export class TownScene extends Phaser.Scene {
   private drawAgentRoute() {
     this.routeOverlay.clear();
     this.drawProductionLogistics();
+    const site = this.selected ? this.simulation.building(this.selected) : null;
+    if (site?.construction) {
+      const crew = new Set(
+        this.simulation.state.residents
+          .filter((r) => r.job === site.id)
+          .map((r) => r.id),
+      );
+      for (const member of this.simulation.state.agents) {
+        if (member.resident !== null && crew.has(member.resident))
+          this.highlightWorker(member, 0x7ee0c7);
+      }
+    }
     const a = this.simulation.state.agents.find(
       (a) => a.id === this.selectedAgent,
     );
     if (!a) return;
+    if (a.onsite) {
+      this.highlightWorker(a, 0xffdf88);
+      return;
+    }
     const points = laneCuts(a, agentDistance(a, this.acc), a.path.length - 1)
       .map((distance) => lanePose(a, distance))
       .map((p) => {
@@ -1120,7 +1136,7 @@ export class TownScene extends Phaser.Scene {
   }
   private highlightWorker(a: Agent, color: number) {
     const s = this.people.get(a.id);
-    if (!s?.visible || a.active === false) return;
+    if (!s?.visible || (a.active === false && !a.onsite)) return;
     const zoom = this.cameras.main.zoom,
       width = a.kind === "person" ? 15 : 32;
     this.routeOverlay

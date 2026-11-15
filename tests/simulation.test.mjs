@@ -57,6 +57,7 @@ import {
   builderFrame,
   builderPosition,
   builderCapacity,
+  constructionCrew,
 } from "../.test-dist/construction.js";
 import {
   bridgeRails,
@@ -88,6 +89,23 @@ test("the displayed day advances at midnight while keeping the 08:00 start", () 
   assert.equal(daylight(160).day, 2);
   assert.equal(daylight(160).hour, 0);
   assert.equal(daylight(240).day, 2);
+});
+test("construction roster follows assigned residents through travel and work, and clears on completion", () => {
+  const sim = new Simulation();
+  const house = sim.state.buildings.find((b) => b.kind === "house" && b.connected);
+  sim.state.money = 10000;
+  Object.assign(sim.state.buildings.find((b) => b.kind === "warehouse").inventory, { planks: 100, stone: 100 });
+  assert.equal(execute(sim, { type: "upgrade", id: house.id }).ok, true);
+  const crew = constructionCrew(sim, house);
+  assert.equal(crew.length, house.workers);
+  assert.equal(crew.length, builderCapacity(house));
+  assert.ok(crew.every((c) => c.agent?.resident === c.resident.id && !c.onsite));
+  for (let tick = 0; tick < 400 && !constructionCrew(sim, house).some((c) => c.onsite); tick++) sim.step();
+  const working = constructionCrew(sim, house).find((c) => c.onsite);
+  assert.ok(working, "a real assigned builder reaches the plot");
+  assert.match(working.status, /Working on site/);
+  finishConstruction(sim, house);
+  assert.deepEqual(constructionCrew(sim, house), []);
 });
 const finishConstruction = (sim, b) => {
   for (let i = 0; i < 5000 && b.construction; i++) sim.step();
