@@ -11,15 +11,38 @@ export { lanePoint, lanePose, LANE_OFFSET, WALK_OFFSET } from "./lanes.js";
 const key = (p: Point) => `${p.x},${p.y}`;
 const STOP_DISTANCE = 1.3,
   RELEASE_DISTANCE = 0.6;
+const bodyLength=(a:Agent)=>a.kind==='truck'?.38:.33;
+/** Support of an oriented body on a separating axis. Axis vectors are unit length. */
+function bodyRadius(a:Agent,distance:number,axis:Point){
+  const p=lanePose(a,distance),n=Math.hypot(p.dx,p.dy)||1;
+  return bodyLength(a)*Math.abs((p.dx*axis.x+p.dy*axis.y)/n)+.15*Math.abs((p.dx*axis.y-p.dy*axis.x)/n);
+}
+function bodyAxes(a:Agent,distance:number){
+  const p=lanePose(a,distance),n=Math.hypot(p.dx,p.dy)||1;
+  return [{x:p.dx/n,y:p.dy/n},{x:-p.dy/n,y:p.dx/n}];
+}
+/** Maximum body support while the heading rotates along one lane slice. */
+function bodySweepRadius(a:Agent,from:number,to:number,axis:Point){
+  const p=lanePose(a,from),q=lanePose(a,to),base=Math.atan2(axis.y,axis.x);
+  const angle=Math.atan2(p.dy,p.dx)-base,end=Math.atan2(q.dy,q.dx)-base;
+  const delta=Math.atan2(Math.sin(end-angle),Math.cos(end-angle));
+  const lo=Math.min(angle,angle+delta),hi=Math.max(angle,angle+delta),length=bodyLength(a);
+  const value=(t:number)=>length*Math.abs(Math.cos(t))+.15*Math.abs(Math.sin(t));
+  let max=Math.max(value(lo),value(hi));const critical=Math.atan2(.15,length);
+  for(let k=-3;k<=3;k++)for(const sign of [-1,1]){const t=k*Math.PI+sign*critical;if(t>lo&&t<hi)max=Math.max(max,value(t));}
+  return max;
+}
 function overlaps(a: Agent, da: number, b: Agent, db: number) {
   const p = lanePose(a, da),
     q = lanePose(b, db);
   const ea = extents(a, da),
     eb = extents(b, db);
-  return (
+  if(!(
     Math.abs(p.x - q.x) < ea.x + eb.x + 0.08 &&
     Math.abs(p.y - q.y) < ea.y + eb.y + 0.08
-  );
+  ))return false;
+  return [...bodyAxes(a,da),...bodyAxes(b,db)].every(axis=>
+    Math.abs((p.x-q.x)*axis.x+(p.y-q.y)*axis.y)<bodyRadius(a,da,axis)+bodyRadius(b,db,axis)+.08);
 }
 export function vehiclesOverlap(a: Agent, b: Agent) {
   return overlaps(a, a.segment + a.progress, b, b.segment + b.progress);
@@ -69,6 +92,17 @@ function sweptOverlap(a: Agent, ma: number, b: Agent, mb: number) {
     }
     if (enter >= leave - 1e-10) return false;
     const mid = (start + end) / 2;
+    // AABBs are only a broad phase. A turning car's empty bounding-box corner
+    // used to block an oncoming car reaching a driveway, freezing both forever.
+    // Prove separation on the real body axes, including curvature and rotation.
+    const am=da+ma*mid,bm=db+mb*mid,pm=lanePose(a,am),qm=lanePose(b,bm);
+    for(const axis of [...bodyAxes(a,am),...bodyAxes(b,bm)]){
+      const first=(p.x-q.x)*axis.x+(p.y-q.y)*axis.y,last=(p1.x-q1.x)*axis.x+(p1.y-q1.y)*axis.y;
+      const middle=(pm.x-qm.x)*axis.x+(pm.y-qm.y)*axis.y;
+      const bend=Math.abs(middle-(first+last)/2);
+      const radius=bodySweepRadius(a,da+ma*start,da+ma*end,axis)+bodySweepRadius(b,db+mb*start,db+mb*end,axis)+.08+bend;
+      if(Math.min(first,last)>=radius||Math.max(first,last)<=-radius)return false;
+    }
     if (overlaps(a, da + ma * mid, b, db + mb * mid)) return true;
     // A rotated body's maximum bounds must not be applied at the start of
     // an entire curve: that makes its rear grow backwards into its follower.
@@ -197,6 +231,20 @@ export class Traffic {
       }
     }
     const cars = agents.filter((a) => a.kind !== "person");
+    const visitsByCar=new Map<Agent,{junction:string;index:number;approach:string}[]>();
+    const visits=(a:Agent)=>{
+      const known=visitsByCar.get(a);if(known)return known;
+      const out=a.path.flatMap((p,index)=>{const junction=this.junctionGroups.get(key(p));return junction?[{junction,index,approach:key(a.path[Math.max(0,index-1)])}]:[];});
+      const end=a.path.at(-1),before=a.path.at(-2);
+      if(end&&before&&!this.junctionGroups.has(key(end))){
+        // A driveway one tile before a crossing still occupies its approach.
+        // Reserve the crossing until arrival; otherwise it can nose into the
+        // swept body of a turning truck without ever appearing in the queue.
+        const junction=this.junctionGroups.get(key({x:end.x+end.x-before.x,y:end.y+end.y-before.y}));
+        if(junction)out.push({junction,index:a.path.length,approach:key(end)});
+      }
+      visitsByCar.set(a,out);return out;
+    };
     for (const a of cars) {
       a.active ??= false;
       if (a.wait > 0) {
@@ -212,11 +260,11 @@ export class Traffic {
         // approaches leave space for the full body of a turning truck.
         if (
           !a?.active ||
-          !a.path.some(
-            (p, i) =>
-              this.junctionGroups.get(key(p)) === junction &&
-              i >= a.segment + a.progress - RELEASE_DISTANCE &&
-              i <= a.segment + a.progress + 1.8,
+          !visits(a).some(
+            v =>
+              v.junction === junction &&
+              v.index >= a.segment + a.progress - RELEASE_DISTANCE &&
+              v.index <= a.segment + a.progress + 1.8,
           )
         )
           ids.delete(id);
@@ -225,10 +273,10 @@ export class Traffic {
     }
     const range = (a: Agent, junction: string) => {
       const at = a.segment + a.progress;
-      const nodes = a.path.flatMap((p, i) =>
-        this.junctionGroups.get(key(p)) === junction &&
-        i >= at - RELEASE_DISTANCE
-          ? [i]
+      const nodes = visits(a).flatMap(v =>
+        v.junction === junction &&
+        v.index >= at - RELEASE_DISTANCE
+          ? [v.index]
           : [],
       );
       if (!nodes.length) return [at, Math.min(a.path.length - 1, at + 0.8)];
@@ -242,8 +290,8 @@ export class Traffic {
       const cacheKey = `${vehicle.id}:${junction}`;
       const cached = maneuvers.get(cacheKey);
       if (cached !== undefined) return cached;
-      const indices = vehicle.path.flatMap((p, i) =>
-        this.junctionGroups.get(key(p)) === junction ? [i] : [],
+      const indices = visits(vehicle).flatMap(v =>
+        v.junction === junction ? [v.index] : [],
       );
       const lane = !indices.length
         ? ""
@@ -266,14 +314,10 @@ export class Traffic {
     };
     const approachDistance = (a: Agent, junction: string) => {
       const at = a.segment + a.progress;
-      for (
-        let i = Math.max(0, a.segment);
-        i <= Math.min(a.path.length - 1, a.segment + 2);
-        i++
-      ) {
-        const distance = i - at;
+      for (const v of visits(a)) {
+        const distance = v.index - at;
         if (
-          this.junctionGroups.get(key(a.path[i])) === junction &&
+          v.junction === junction &&
           distance >= -RELEASE_DISTANCE &&
           distance <= 1.8
         )
@@ -393,13 +437,9 @@ export class Traffic {
     >();
     for (const a of cars.filter((a) => a.active)) {
       const at = a.segment + a.progress;
-      for (
-        let i = Math.max(0, a.segment);
-        i <= Math.min(a.path.length - 1, a.segment + 2);
-        i++
-      ) {
-        const junction = this.junctionGroups.get(key(a.path[i])),
-          distance = i - at;
+      for (const v of visits(a)) {
+        const junction = v.junction,
+          distance = v.index - at;
         if (
           !junction ||
           distance < -RELEASE_DISTANCE ||
@@ -407,7 +447,7 @@ export class Traffic {
           this.junctions.get(junction)?.has(a.id)
         )
           continue;
-        const approach = key(a.path[Math.max(0, i - 1)]);
+        const approach = v.approach;
         let approaches = candidates.get(junction);
         if (!approaches) candidates.set(junction, (approaches = new Map()));
         const previous = approaches.get(approach);
@@ -443,12 +483,8 @@ export class Traffic {
       const at = a.segment + a.progress;
       const freeMove = roadMovement(a, STEP, this.roadTypes);
       let desired = freeMove;
-      for (
-        let i = a.segment;
-        i <= Math.min(a.path.length - 1, a.segment + 2);
-        i++
-      ) {
-        const group = this.junctionGroups.get(key(a.path[i]));
+      for (const v of visits(a)) {
+        const group = v.junction,i=v.index;
         if (
           group !== undefined &&
           (blockedByOwner(a, group) || yielding.get(group)?.has(a.id)) &&

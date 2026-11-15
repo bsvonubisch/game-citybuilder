@@ -259,6 +259,26 @@ test("opposing traffic passes a narrow road bend safely", () => {
     path,
   );
 });
+
+test('a turning car and an oncoming arrival beside the junction do not trap one another',()=>{
+  const turn=[...line(0,5,0,-1,6),...line(1,0,1,0,3)];
+  const arrival=line(5,0,-1,0,5);
+  const a={...vehicle(1,turn),active:true,segment:5,progress:.1175};
+  const b={...vehicle(2,arrival),active:true,segment:3,progress:.8688671875};
+  const result=complete([a,b],[...turn,...arrival,...line(-3,0,1,0,4),...line(0,-3,0,1,3)],120);
+  assert.ok(result.ticks<60,'both cars should clear in seconds, without teleporting');
+});
+
+test('deliveries ending just before a crossing join its queue before turning trucks enter',()=>{
+  const turn=[...line(0,5,0,-1,6),...line(1,0,1,0,3)],arrival=line(5,0,-1,0,5);
+  const roads=[...turn,...arrival,...line(-3,0,1,0,4),...line(0,-3,0,1,3)];
+  for(let rotation=0;rotation<4;rotation++)for(const offset of [0,.3,.6,.9]){
+    const rotate=p=>{let{x,y}=p;for(let r=0;r<rotation;r++)[x,y]=[-y,x];return{x,y};};
+    const a={...vehicle(1,turn.map(rotate),'truck'),active:true,segment:3,progress:offset};
+    const b={...vehicle(2,arrival.map(rotate),'truck'),active:true,segment:2,progress:0};
+    complete([a,b],roads.map(rotate),120);
+  }
+});
 test("opposing cars clear two nearby junctions instead of holding each other's crossing", () => {
   for (const spacing of [1, 2]) {
     const path = line(0, -4, 0, 1, 9 + spacing);

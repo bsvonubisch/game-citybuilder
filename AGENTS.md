@@ -19,4 +19,4 @@ Publish each completed, checked stage to GitHub and the existing Firebase site
 before starting the next stage. Keep the user's stable local preview running;
 do not expose incomplete source edits through it. Give concise progress updates
 about the current stage and the next queued work. Respect the user's latest
-priority (currently the building sprite redraw before traffic/mining fixes).
+priority order; do not let an older task note override newer user steering.
