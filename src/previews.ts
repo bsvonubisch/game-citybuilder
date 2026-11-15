@@ -1,3 +1,5 @@
+import {drawFarmPreview} from './farm-art.js';
+import type {Crop} from './farm-layout.js';
 import {drawPicketFence,fenceCrops} from "./fence-art.js";
 import { buildingArt } from "./building-art.js";
 import {resolvedBuildingArt} from './sprite-ground.js';
@@ -34,20 +36,22 @@ export function buildingPreview(
   kind: BuildingKind,
   rotation = 0,
   tier: HouseTier = 1,
+  crop:Crop='wheat',
 ) {
-  const key = `${kind}-${rotation}-${tier}`;
+  const key = `${kind}-${rotation}-${tier}-${crop}`;
   let promise = previews.get(key);
   if (!promise) {
     promise = (async () => {
       let art = buildingArt(kind, rotation, tier);
       const [w, h] = dimensions(kind, rotation);
-      const [image, benches, rotor, stone, wood, meadow] = await Promise.all([
+      const [image, benches, rotor, stone, wood, meadow, earth] = await Promise.all([
         artImage(`/${art.texture}.png`),
         (kind === "park" || kind === "garden") ? artImage("/park-benches.png") : undefined,
         kind === "mill" ? artImage("/windmill-parts.png") : undefined,
         artImage("/foundation-stone.png"),
         kind === "fishery" ? artImage("/bridge-wood.png") : undefined,
         kind === "garden" ? artImage("/meadow-hd.png") : undefined,
+        kind === "farm" ? artImage("/construction-earth.png") : undefined,
       ]);
       art=resolvedBuildingArt(kind,rotation,tier,image);
       const bounds = plotBounds(art, w, h),
@@ -64,7 +68,7 @@ export function buildingPreview(
           drawRotor(ctx, rotor, p.x, p.y, t.scale * 0.7, rotation, 0.5);
       };
       if (rotorView(rotation).rear) sail();
-      drawPlot(ctx, image, art, w, h, benches, stone, wood,true,meadow);
+      if(kind==='farm'&&earth)drawFarmPreview(ctx,image,earth,w,h,crop);else drawPlot(ctx, image, art, w, h, benches, stone, wood,true,meadow,earth);
       if (!rotorView(rotation).rear) sail();
       return canvas.toDataURL();
     })();

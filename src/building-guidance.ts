@@ -1,4 +1,5 @@
 import {isHome} from "./catalog.js";
+import {buildingRecipe} from './catalog.js';
 import { BUILDINGS, type BuildingKind } from "./catalog.js";
 import type { Building, Simulation } from "./simulation.js";
 import type { ProductionConnections } from "./logistics.js";
@@ -177,7 +178,7 @@ export function buildingGuidance(
     };
   if (alert.kind === "input" || alert.kind === "output") {
     const input = alert.kind === "input",
-      recipe = BUILDINGS[b.kind].recipe!;
+      recipe = buildingRecipe(b)!;
     const delivery = sim.state.agents.find(
       (a) =>
         a.amount > 0 &&

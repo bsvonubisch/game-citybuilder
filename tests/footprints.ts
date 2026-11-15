@@ -29,13 +29,14 @@ stone.src = "/foundation-stone.png";
 const wood = new Image();
 wood.src = "/bridge-wood.png";
 const meadow=new Image();meadow.src='/meadow-hd.png';
+const earth=new Image();earth.src='/construction-earth.png';
 const walker=new Image();walker.src='/pedestrian-walk.png';
 await Promise.all([
   benches.decode(),
   rotor.decode(),
   stone.decode(),
   wood.decode(),
-  meadow.decode(),walker.decode(),
+  meadow.decode(),walker.decode(),earth.decode(),
 ]);
 const walkerCell=document.createElement('canvas');
 walkerCell.width=Math.floor(walker.width/8);walkerCell.height=Math.floor(walker.height/4);
@@ -79,7 +80,7 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
         }
       };
       if (rotorView(rotation).rear) sail();
-      drawPlot(sc, image, art, w, h, benches, stone, wood,true,meadow);
+      drawPlot(sc, image, art, w, h, benches, stone, wood,true,meadow,earth);
       if (!rotorView(rotation).rear) sail();
       const draw = () => {
         ctx.setTransform(1, 0, 0, 1, 0, 0);

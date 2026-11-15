@@ -6,7 +6,7 @@ const families=new WeakMap<object,Map<string,BuildingArt[]>>();
 /** Measure actual ground contact, including steps, crates and barrels. Roofs
  * and upper foliage never define a building's ground footprint. No image warp. */
 export function groundedArt(art:BuildingArt,source:HTMLImageElement):BuildingArt{
- if(art.texture==='park-parts'||art.texture==='market-stalls'||art.land)return art;
+ if(art.texture==='farm-crops'||art.texture==='park-parts'||art.texture==='market-stalls'||art.land)return art;
  let entries=cache.get(source);if(!entries){entries=new Map();cache.set(source,entries);}
  const key=`${art.frame}:${art.columns}:${art.rows}:${art.sourceRect?.join(',')??''}`;const old=entries.get(key);if(old)return old;
  const [sx,sy,sw,sh]=art.sourceRect??[Math.floor(art.frame%art.columns*source.width/art.columns),Math.floor(Math.floor(art.frame/art.columns)*source.height/art.rows),Math.floor(source.width/art.columns),Math.floor(source.height/art.rows)];

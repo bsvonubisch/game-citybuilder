@@ -151,7 +151,7 @@ export class NightArt {
     for (const sprite of sources) {
       const buildingId = sprite.getData("buildingId"),
         b = buildingId&&!sprite.getData("plazaPart") ? sim.building(buildingId) : undefined;
-      if (b?.construction) {
+      if (b?.construction||b?.kind==='farm') {
         this.lights.get(sprite)?.setVisible(false);
         continue;
       }

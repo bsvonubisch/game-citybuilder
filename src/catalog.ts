@@ -1,5 +1,8 @@
 import {marketPrice,marketStalls} from "./market-layout.js";
+import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 export type Resource =
+  | "potatoes"
+  | "carrots"
   | "sausages"
   | "meat"
   | "bricks"
@@ -70,11 +73,12 @@ export const HOUSE_TIERS: Record<
 };
 export const buildingName = (b: {
   kind: BuildingKind;
+  crop?:Crop;
   houseTier?: HouseTier;
 }) =>
   b.kind === "house"
     ? HOUSE_TIERS[b.houseTier ?? 1].name
-    : BUILDINGS[b.kind].name;
+    : b.kind==='farm'?`${CROPS[b.crop??'wheat'].name} field`:BUILDINGS[b.kind].name;
 export const isPark = (kind: string) => kind === "park" || kind === "garden";
 export const isHome = (kind: string) => kind === "house" || kind === "cottage";
 export const houseCapacity = (b: {
@@ -92,7 +96,7 @@ export const buildingInvestment = (b: {
     ? ([1, 2, 3] as HouseTier[])
         .filter((t) => t <= (b.houseTier ?? 1))
         .reduce((sum, t) => sum + HOUSE_TIERS[t].cost, 0)
-    : (b.kind==="market"?marketPrice(b.plot).cost:BUILDINGS[b.kind].cost) *
+    : (b.kind==="market"?marketPrice(b.plot).cost:b.kind==='farm'?farmPrice(b.plot).cost:BUILDINGS[b.kind].cost) *
       ((b.level ?? 1) === 3 ? 6 : (b.level ?? 1) === 2 ? 3 : 1);
 export type DecorationKind =
   | "oak"
@@ -206,13 +210,13 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
       "A warm place for three residents. Connect to a warehouse by road.",
   },
   farm: {
-    name: "Wheat farm",
-    cost: 150,
-    jobs: 2,
+    name: "Crop field",
+    cost: 110,
+    jobs: 1,
     frame: 1,
-    materials:{"wood":10,"stone":6},
+    materials:{"wood":4},
     category: "production",
-    description: "Golden fields, busy hands. Grows grain for the flour mill.",
+    description: "Drag a field from 1×1 to 10×10. Farmers plant and harvest each patch. Wheat feeds flour mills; potatoes and carrots feed citizens.",
     recipe: { output: "grain", count: 3, seconds: 8 },
   },
   fishery: {
@@ -354,6 +358,8 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
   },
 };
 export const RESOURCES: Resource[] = [
+  "potatoes",
+  "carrots",
   "sausages",
   "meat",
   "bricks",
@@ -368,6 +374,8 @@ export const RESOURCES: Resource[] = [
   "tools",
 ];
 export const RESOURCE_NAMES: Record<Resource, string> = {
+  potatoes:"Potatoes",
+  carrots:"Carrots",
   sausages:"Sausages",
   meat:"Meat",
   bricks:"Bricks",
@@ -446,7 +454,7 @@ export function frontage(
 ) {
   const [w, h] = dimensions(kind, rotation, plot),
     d = FRONT_DIRECTIONS[rotation];
-  if (isPark(kind) || kind === "market")
+  if (isPark(kind) || kind === "market" || kind==='farm')
     return [
       ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y - 1 })),
       ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y + h })),
@@ -468,5 +476,7 @@ export const SIZE = 64;
 export const STEP = 0.25;
 export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;
 
-export const buildingJobs=(b:{kind:BuildingKind;rotation:number;plot?:readonly[number,number]})=>b.kind==="market"?marketStalls({x:0,y:0,...b}):BUILDINGS[b.kind].jobs;
-export const buildingPrice=(kind:BuildingKind,plot?:readonly[number,number])=>kind==="market"?marketPrice(plot):{cost:BUILDINGS[kind].cost,materials:BUILDINGS[kind].materials??{}};
+export const buildingJobs=(b:{kind:BuildingKind;rotation:number;plot?:readonly[number,number]})=>b.kind==="market"?marketStalls({x:0,y:0,...b}):b.kind==='farm'?farmJobs(b.plot):BUILDINGS[b.kind].jobs;
+export const buildingPrice=(kind:BuildingKind,plot?:readonly[number,number])=>kind==="market"?marketPrice(plot):kind==='farm'?farmPrice(plot):{cost:BUILDINGS[kind].cost,materials:BUILDINGS[kind].materials??{}};
+export const buildingRecipe=(b:{kind:BuildingKind;crop?:Crop}):Definition['recipe']=>b.kind==='farm'?{output:CROPS[b.crop??'wheat'].output,count:CROPS[b.crop??'wheat'].yield,seconds:CROPS[b.crop??'wheat'].grow}:BUILDINGS[b.kind].recipe;
+export const FOOD_RESOURCES:Resource[]=['bread','fish','sausages','meat','potatoes','carrots'];

@@ -2,6 +2,8 @@ import {retainSourceImages} from "./source-images.js";
 import {HuntingArt,prepareHuntingFrames} from "./hunting-art.js";
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {MarketArt,prepareVendorFrames} from "./market-art.js";
+import {FarmArt} from './farm-art.js';
+import {farmRectangle,type Crop} from './farm-layout.js';
 import {marketRectangle} from "./market-layout.js";
 import {marketActor} from "./market.js";
 import {edgeDepth,type EdgeOccluder} from "./edge-occlusion.js";
@@ -188,7 +190,7 @@ export class TownScene extends Phaser.Scene {
   onRemoveApply:(from:Point,to:Point)=>void=()=>{};
   onSelectDecoration:(id:number)=>void=()=>{};
   onDecorationRemove:(id:number)=>void=()=>{};
-  onEyedropper:(kind:Tool,rotation:0|1|2|3,plot?:readonly[number,number])=>void=()=>{};
+  onEyedropper:(kind:Tool,rotation:0|1|2|3,plot?:readonly[number,number],crop?:Crop)=>void=()=>{};
   onBuildingHover:(id:number|null,x:number,y:number)=>void=()=>{};
   private hoverArt?:Phaser.GameObjects.Image;
   clearBuildingHover(){this.hoverArt?.setVisible(false);this.onBuildingHover(null,0,0);}
@@ -221,6 +223,9 @@ export class TownScene extends Phaser.Scene {
   private plotArt!: PlotArt;
   private plazaArt!:PlazaArt;
   private marketArt!:MarketArt;
+  private farmArt!:FarmArt;
+  farmPlot:[number,number]=[1,1];
+  farmCrop:Crop='wheat';
   marketPlot: [number,number]=[1,1];
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
@@ -301,6 +306,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("hunter-walk","/hunter-walk.png");
     this.load.image("forestry", "/forestry-workers.png");
     this.load.image("mining", "/mining-workers.png");
+    this.load.image("farm-workers","/farm-workers.png");
     this.load.image("planter-plants", "/planter-plants.png");
     this.load.image("fence-pickets", "/fence-pickets.png");
     this.load.image("streetlamp", "/streetlight-copper.png");
@@ -321,7 +327,7 @@ export class TownScene extends Phaser.Scene {
     this.plotArt = new PlotArt(this);
     this.constructionArt = new ConstructionArt(this);
     this.plazaArt=new PlazaArt(this);
-    this.marketArt=new MarketArt(this);prepareVendorFrames(this);
+    this.marketArt=new MarketArt(this);prepareVendorFrames(this);this.farmArt=new FarmArt(this);
     const builderTexture = this.textures.get("construction-workers"),
       builderSource = builderTexture.getSourceImage() as HTMLImageElement;
     for (let frame = 0; frame < 16; frame++)
@@ -393,9 +399,9 @@ export class TownScene extends Phaser.Scene {
         this.touches.start(p.id, { x: p.x, y: p.y });
         if (this.touches.count > 1) { this.cancelRoad(); this.drawOverlay(); return; }
       }
-      if(this.tool==="market"&&(p.wasTouch||p.button===0)&&!this.keys.SPACE.isDown){
+      if((this.tool==="market"||this.tool==='farm')&&(p.wasTouch||p.button===0)&&!this.keys.SPACE.isDown){
         const world=this.cameras.main.getWorldPoint(p.x,p.y),tile=this.pickTile(world.x,world.y);
-        if(inside(tile.x,tile.y)){this.marketDrag={from:tile,to:tile,pointer:p.id};this.marketPlot=[1,1];this.hover=tile;this.onMarketPreview();this.drawOverlay();}return;
+        if(inside(tile.x,tile.y)){this.marketDrag={from:tile,to:tile,pointer:p.id};if(this.tool==='farm')this.farmPlot=[1,1];else this.marketPlot=[1,1];this.hover=tile;this.onMarketPreview();this.drawOverlay();}return;
       }
       if ((this.tool === "road" || this.tool === "bulldoze") && (p.wasTouch || p.button === 0) && !this.keys.SPACE.isDown) {
         const world = this.cameras.main.getWorldPoint(p.x,p.y);
@@ -438,10 +444,10 @@ export class TownScene extends Phaser.Scene {
       this.lastPointer = { x: p.x, y: p.y };
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer,over:Phaser.GameObjects.GameObject[]=[]) => {
-      if(p.isDown&&this.marketDrag?.pointer===p.id&&this.tool==="market"){
+      if(p.isDown&&this.marketDrag?.pointer===p.id&&(this.tool==="market"||this.tool==='farm')){
         if(p.wasTouch)this.touches.move(p.id,{x:p.x,y:p.y});
-        const world=this.cameras.main.getWorldPoint(p.x,p.y),tile=this.pickTile(world.x,world.y),rect=marketRectangle(this.marketDrag.from,tile);
-        this.marketDrag.to=tile;this.marketPlot=rect.plot;this.hover={x:rect.x,y:rect.y};this.onMarketPreview();this.drawOverlay();return;
+        const world=this.cameras.main.getWorldPoint(p.x,p.y),tile=this.pickTile(world.x,world.y),rect=(this.tool==='farm'?farmRectangle:marketRectangle)(this.marketDrag.from,tile);
+        this.marketDrag.to=tile;if(this.tool==='farm')this.farmPlot=rect.plot;else this.marketPlot=rect.plot;this.hover={x:rect.x,y:rect.y};this.onMarketPreview();this.drawOverlay();return;
       }
       if(!p.wasTouch&&!p.isDown)this.buildingHover(over.find(o=>o.getData("buildingId"))?.getData("buildingId")??null,p.x,p.y);
       if (p.isDown && this.roadDrag?.pointer === p.id && (this.tool === "road"||this.tool === "bulldoze")) {
@@ -509,17 +515,17 @@ export class TownScene extends Phaser.Scene {
       (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
         if(!p.wasTouch&&p.button===1&&this.moved<6){
           const hit=over.find(o=>o.getData("buildingId")),b=hit&&this.simulation.building(hit.getData("buildingId"));
-          if(b)this.onEyedropper(b.kind,b.rotation,b.plot);
+          if(b)this.onEyedropper(b.kind,b.rotation,b.plot,b.crop);
           else {const d=over.find(o=>o.getData("decoration"))?.getData("decoration");if(d)this.onEyedropper(d.kind,d.side??d.edge??0);}
         }
         if (!p.wasTouch && p.button !== 0) {
           this.dragging = false;
           return;
         }
-        if(this.marketDrag?.pointer===p.id&&this.tool==="market"){
-          const rect=marketRectangle(this.marketDrag.from,this.marketDrag.to);this.marketDrag=null;
+        if(this.marketDrag?.pointer===p.id&&(this.tool==="market"||this.tool==='farm')){
+          const rect=(this.tool==='farm'?farmRectangle:marketRectangle)(this.marketDrag.from,this.marketDrag.to);this.marketDrag=null;
           if(p.wasTouch)this.touches.end(p.id);
-          if(p.event.type!=="touchcancel"){this.marketPlot=rect.plot;this.onTile({x:rect.x,y:rect.y});}
+          if(p.event.type!=="touchcancel"){if(this.tool==='farm')this.farmPlot=rect.plot;else this.marketPlot=rect.plot;this.onTile({x:rect.x,y:rect.y});}
           this.drawOverlay();return;
         }
         if (this.roadDrag?.pointer === p.id && (this.tool === "road"||this.tool === "bulldoze")) {
@@ -677,7 +683,8 @@ export class TownScene extends Phaser.Scene {
     plot?: readonly [number, number],
     houseTier: Building["houseTier"] = 1,
   ) {
-    this.plotArt.place(sprite, kind, x, y, rotation, plot, houseTier);
+    if(kind==='farm'){if(sprite.getData('buildingId'))this.farmArt.place(sprite,{kind,x,y,rotation,plot});else this.farmArt.preview(sprite,x,y,plot??[2,2],this.tool==='move'?this.simulation.building(this.movingBuilding!)?.crop??'wheat':this.farmCrop);}
+    else this.plotArt.place(sprite, kind, x, y, rotation, plot, houseTier);
     sprite.y -= groundHeight(x, y, this.simulation.state.terrain);
   }
   private travellerScale(a: Agent, row: number, texture: string) {
@@ -824,25 +831,25 @@ export class TownScene extends Phaser.Scene {
           .setInteractive({ pixelPerfect: true });
         this.buildings.set(b.id, s);
       }
-      if (b.construction) this.constructionArt.place(s, b, this.simulation);
+      if (b.construction&&(b.kind!=='farm'||b.construction.clearance)) this.constructionArt.place(s, b, this.simulation);
       else
         this.placeSprite(s, b.kind, b.x, b.y, b.rotation, b.plot, b.houseTier);
       s.setDepth(b.construction?.clearance ? 4992 : (b.x + b.y + w + h - 2) * 32 + 12).setAlpha(
         b.enabled ? 1 : 0.55,
       );
     }
-    const ordered=buildingDepths(this.simulation.state.buildings.filter(b=>!b.construction?.clearance).map(b=>{
+    const ordered=buildingDepths(this.simulation.state.buildings.filter(b=>b.kind!=='farm'&&!b.construction?.clearance).map(b=>{
       const s=this.buildings.get(b.id)!,[width,height]=dimensions(b.kind,b.rotation,b.plot);
       return {id:b.id,x:b.x,y:b.y,width,height,depth:s.depth,left:s.x,right:s.x+s.displayWidth,top:s.y,bottom:s.y+s.displayHeight};
     }));
     for(const [id,depth] of ordered)this.buildings.get(id)!.setDepth(depth);
-    this.marketArt.sync(this.simulation,ordered);
+    this.marketArt.sync(this.simulation,ordered);this.farmArt.sync(this.simulation);
     this.lightSources = [
       ...[...this.buildings.values()].filter(s=>!isPark(this.simulation.building(s.getData("buildingId"))?.kind??"")),
       ...this.plazaArt.sync(this.simulation,ordered),
       ...this.trees.filter((t) => t.getData("streetlight")),
     ];
-    this.occludingPlots = this.simulation.state.buildings.filter(b=>!b.construction?.clearance).map((b) => {
+    this.occludingPlots = this.simulation.state.buildings.filter(b=>b.kind!=='farm'&&!b.construction?.clearance).map((b) => {
       const s = this.buildings.get(b.id)!,
         [width, height] = dimensions(b.kind, b.rotation, b.plot);
       return {
@@ -1000,7 +1007,7 @@ export class TownScene extends Phaser.Scene {
       if (!kind) return;
       const plot = moving
         ? this.simulation.relocationPlot(moving, this.rotation)
-        : kind==="market"?this.marketPlot:undefined;
+        : kind==='farm'?this.farmPlot:kind==="market"?this.marketPlot:undefined;
       const valid =
         this.tool === "bulldoze" ||
         !(this.tool === "move"
@@ -1138,7 +1145,7 @@ export class TownScene extends Phaser.Scene {
     plot?: readonly [number, number],
     oneEdge = false,
   ) {
-    if ((isPark(kind)||kind==="market") && !oneEdge) {
+    if ((isPark(kind)||kind==="market"||kind==='farm') && !oneEdge) {
       for (let edge = 0; edge < 4; edge++)
         this.drawFront(kind, x, y, edge, plot, true);
       return;
@@ -1147,7 +1154,7 @@ export class TownScene extends Phaser.Scene {
     const [w, h] = dimensions(kind, rotation, plot),
       d = FRONT_DIRECTIONS[rotation];
     const connected = frontage(
-      (isPark(kind)||kind==="market") ? "house" : kind,
+      (isPark(kind)||kind==="market"||kind==='farm') ? "house" : kind,
       x,
       y,
       rotation,
@@ -1586,6 +1593,7 @@ export class TownScene extends Phaser.Scene {
     const time = this.simulation.state.tick * STEP + this.acc;
     this.forestryArt.update(this.simulation,this.acc,this.people,this.trees,this.occludingPlots);
     this.huntingArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
+    this.farmArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
     this.fishingArt.update(this.simulation, this.acc, time, this.selected);
     this.trafficAlerts.update(
       this.simulation,

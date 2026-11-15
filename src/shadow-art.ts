@@ -43,6 +43,7 @@ export class ShadowArt {
     for (const source of casters) {
       const b = sim.building(source.getData("buildingId")),
         d = source.getData("decoration");
+      if(b?.kind==='farm')continue;
       if (!b && (!d || d.kind === "fence" || d.kind === "planter")) continue;
       // The ground-shadow pass cannot clip to a narrow elevated deck.
       if(d?.kind === "streetlight" && lampPlacement(sim,d).bridge)continue;

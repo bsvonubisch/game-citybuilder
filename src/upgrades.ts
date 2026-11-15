@@ -55,7 +55,7 @@ export function materialGuidance(
 export const buildingLevel = (b: Building) =>
   b.kind === "house" ? (b.houseTier ?? 1) : (b.level ?? 1);
 export const productionRate = (b: Building) => 1 + ((b.level ?? 1) - 1) * 0.35;
-export const outputCapacity = (b: Building) => 20 * (b.level ?? 1);
+export const outputCapacity = (b: Building) => (b.kind==='farm'?Math.max(20,(b.plot?.[0]??2)*(b.plot?.[1]??2)*5):20) * (b.level ?? 1);
 export function nextUpgrade(b: Building) {
   const level = buildingLevel(b);
   if (level >= 3) return null;
@@ -79,7 +79,7 @@ export function nextUpgrade(b: Building) {
     } as Partial<Record<Resource, number>>,
     labour: constructionWork(b.kind) * next,
     benefit:
-      b.kind === "market" ? `Sales earn ${Math.round((1+(next-1)*.1)*100)}% gold · same stalls, staff and plot.` : b.kind === "church" || b.kind === "tavern" || b.kind === "park" || b.kind === "garden"
+      b.kind === "farm" ? `Planting and harvesting ${Math.round((1+(next-1)*.35)*100)}% · harvest storage ${outputCapacity({...b,level:next})} · same field and farmers.` : b.kind === "market" ? `Sales earn ${Math.round((1+(next-1)*.1)*100)}% gold · same stalls, staff and plot.` : b.kind === "church" || b.kind === "tavern" || b.kind === "park" || b.kind === "garden"
         ? `Serves ${next * (b.kind === "church" || b.kind === "garden" ? 40 : b.kind === "tavern" ? 18 : 12)} nearby residents; walking range stays the same.`
         : b.kind === "warehouse"
           ? `Tool exports earn ${Math.round(35 * (1 + (next - 1) * 0.1))} gold each. Stock and road network stay here.`

@@ -1,5 +1,5 @@
 import {MARKET_GOODS} from "./market.js";
-import { BUILDINGS, type Resource } from "./catalog.js";
+import { BUILDINGS, buildingRecipe, type Resource } from "./catalog.js";
 import type {
   Agent,
   Building,
@@ -28,7 +28,7 @@ export interface ProductionConnections {
 
 /** Shared by dispatch and inspection: warehouses receive only these exports. */
 export function canSupply(source: Building, target: Building) {
-  const output = source.kind === "warehouse" && ["workshop","butcher"].includes(target.kind) ? BUILDINGS[target.kind].recipe?.input : BUILDINGS[source.kind].recipe?.output;
+  const output = source.kind === "warehouse" && ["workshop","butcher"].includes(target.kind) ? buildingRecipe(target)?.input : buildingRecipe(source)?.output;
   return (
     !source.construction &&
     !target.construction &&
@@ -36,7 +36,7 @@ export function canSupply(source: Building, target: Building) {
     source.id !== target.id &&
     (BUILDINGS[target.kind].recipe?.input === output || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||
       (target.kind === "warehouse" &&
-        ["sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
+        ["potatoes","carrots","sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
           output,
         )))
   );
@@ -52,7 +52,7 @@ export function productionConnections(
   const link = (source: Building, target: Building): GoodsConnection => ({
     source: source.id,
     target: target.id,
-    resource: source.kind==="warehouse"?"metal":BUILDINGS[source.kind].recipe!.output,
+    resource: source.kind==="warehouse"?buildingRecipe(target)!.input!:buildingRecipe(source)!.output,
     path: sim.route(source, target,"truck"),
   });
   return {

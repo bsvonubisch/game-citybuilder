@@ -1,0 +1,27 @@
+{
+  "generator": "Built-in image generation",
+  "assets": [
+    {
+      "file": "public/farm-crops.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "columns": 3,
+      "rows": 3,
+      "prompt": "Create a production-ready transparent PNG sprite atlas for a cozy detailed pixel-art 2:1 dimetric city builder. Exactly THREE COLUMNS and THREE ROWS, nine equal square cells, generous transparent gutters, no text or guides. Rows: top wheat, middle potatoes, bottom carrots. Columns: young seedling, half-grown, ripe harvest-ready. One small dense tuft/group of 4-6 plants in each cell, with the same small ground coverage and feet bottom-center aligned; plant age changes height naturally. Wheat: thin young green blades, green stalks, golden mature wheat ears. Potatoes: young broad leaves, larger leafy mound, mature lush leaves with tiny white flowers and a few tan potato shoulders just visible. Carrots: tiny feathery sprouts, green feathery leaves, lush leaves with small orange carrot shoulders at soil level. Match lush painterly pixel sprite detail, rich moss greens, golden wheat, warm sunlight upper-left, hand-painted crisp pixel texture with carefully shaded volumes. Orthographic game camera looking down at 2:1 dimetric angle, upright plants, no perspective. Absolutely no ground diamond, no soil tile, no base, no pot, no decorative border, no cast ground shadows, no scene. All nine assets fully isolated on real transparent alpha. Equal cell layout, each plant base stays at 85 percent height within its own cell. Keep the sprites below 80 percent of each cell's width. This is an atlas to be cut into nine separate crop growth sprites.",
+      "layout": "Rows wheat/potatoes/carrots; columns seeded/growing/ripe. Opaque crop bounds measured at alpha >=160. Uniform scale within each species; ripe heights 13/9/9 world pixels. Soil is the existing construction-earth projected at exact 2:1."
+    },
+    {
+      "file": "public/farm-workers.png",
+      "size": [
+        1235,
+        1274
+      ],
+      "columns": 4,
+      "rows": 4,
+      "prompt": "Create a transparent game sprite atlas, FOUR equally sized COLUMNS by FOUR equally sized ROWS. 16 separate full-body poses of the SAME cozy tiny farmer: big straw hat with brown band, short brown hair, green waistcoat, cream shirt, brown trousers and chunky brown boots, compact friendly chibi proportions matching the male walker shown in conversation. Fine hand-painted pixel-art texture, warm upper-left light, rich material shading, 2:1 dimetric game camera. Each row is a complete gentle planting/harvesting bend animation from one direction: row1 faces screen lower-right (southeast); row2 faces screen lower-left (southwest); row3 faces upper-left (northwest/back); row4 faces upper-right (northeast/back). Columns within every row: 1 standing relaxed slightly leaning; 2 kneeling/bending down with one hand reaching toward the earth; 3 crouched lowest, hand touching ground just ahead of boots; 4 rising half-way with hand drawn back. Keep boots planted at same bottom-center position in all cells, exact same physical body scale, bending naturally lowers head; no hopping, no dancing, no relocation. No tools, no basket, no produce, no plants or props in this sheet: only the farmer body performing the bend. Each figure isolated with generous transparent margin; each row's standing figure height about 70 percent of the cell. Truly transparent background with no glow, no scene, no shadows cast on ground, no ground, no labels, no grid. Maintain same outfit and hat through ALL16 frames.",
+      "layout": "Rows southeast/southwest/northwest/northeast. Columns standing/reaching/crouched/rising. prepareActorFrames trims and anchors feet; 22 world pixel standing height. Standard pedestrian walk atlas retained for travel."
+    }
+  ]
+}

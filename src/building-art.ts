@@ -262,6 +262,7 @@ export function buildingArt(
   rotation = 0,
   houseTier: HouseTier = 1,
 ): BuildingArt {
+  if(kind==='farm')return {texture:'farm-crops',frame:0,columns:3,rows:3,size:[512,342],ground:[[0,32],[32,48],[64,32]]};
   if(kind==="market")return {texture:"market-stalls",frame:rotation,columns:4,rows:3,size:[444,296],ground:[[0,148],[222,259],[444,148]]};
   const redraw=redrawn[kind];
   if(redraw)return {texture:`building-${kind}`,frame:rotation,columns:2,rows:2,size:redraw.size??[627,627],ground:redraw.ground[rotation],chimney:redraw.chimneys?.[rotation],mechanism:redraw.mechanisms?.[rotation]};

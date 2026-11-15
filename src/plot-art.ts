@@ -1,3 +1,4 @@
+import {drawFarmPreview} from './farm-art.js';
 import {sourceImage} from "./source-images.js";
 import {resolvedBuildingArt} from './sprite-ground.js';
 import {drawMarket} from "./market-art.js";
@@ -40,7 +41,9 @@ export function drawPlot(
   wood?: HTMLImageElement,
   plaza=true,
   meadow?: HTMLImageElement,
+  earth?:HTMLImageElement,
 ) {
+  if(art.texture==='farm-crops'){if(earth)drawFarmPreview(ctx,source,earth,w,h);return;}
   if (art.land && wood) {
     const rotation = [1, 0, 3, 2].indexOf(art.frame);
     drawFisheryPlatform(ctx, rotation, stone, wood);
@@ -81,6 +84,7 @@ export function drawPlot(
 }
 
 export function plotBounds(art: BuildingArt, w: number, h: number) {
+  if(art.texture==='farm-crops')return {left:-h*32,top:-32,right:w*32,bottom:(w+h)*16};
   if(art.texture==="market-stalls")return {left:-h*32-32,top:-78,right:w*32+32,bottom:(w+h)*16+8};
   const t = artTransform(art, w, h),
     [cw, ch] = art.size;

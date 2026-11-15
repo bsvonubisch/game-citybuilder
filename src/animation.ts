@@ -189,6 +189,7 @@ export class TownAnimation {
         this.rotors.delete(id);
       }
     for (const b of sim.state.buildings) {
+      if(b.kind==='farm')continue;
       if (b.construction) {
         this.effects.get(b.id)?.clear();
         this.rotors.get(b.id)?.setVisible(false);

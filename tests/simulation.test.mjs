@@ -1927,7 +1927,7 @@ test("all building views share exact raised plot bounds and stone density", () =
         ]);
         assert.ok(
           buildingArt(kind, rotation, tier).texture.startsWith(
-            kind === "market" ? "market-" : kind === "park" || kind === "garden" ? "park-" : "building-",
+            kind === "farm" ? "farm-" : kind === "market" ? "market-" : kind === "park" || kind === "garden" ? "park-" : "building-",
           ),
         );
         count++;
@@ -2218,16 +2218,16 @@ test("daylight is continuous, repeats daily and night production slows without c
       Math.abs(daylight(tick).light - daylight(tick + 0.25).light) < 0.03,
     );
   const sim = new Simulation(),
-    b = sim.state.buildings.find((b) => b.kind === "farm");
+    b = sim.state.buildings.find((b) => b.kind === "mill");
   b.progress = 0;
-  b.inventory.grain = 0;
+  b.inventory.grain = 3;
   sim.state.tick = 0;
   sim.step();
   assert.equal(b.progress, STEP);
   sim.state.tick = 600;
   sim.step();
   assert.equal(b.progress, STEP * 1.25);
-  assert.equal(b.inventory.grain, 0);
+  assert.equal(b.inventory.grain, 3);
   assert.equal(warmEmission(40, 85, 60, 255), 0, "green roof stays dark");
   assert.equal(warmEmission(180, 180, 170, 255), 0, "stone stays dark");
   assert.ok(warmEmission(255, 200, 50, 255) > 0.5, "warm window emits");
