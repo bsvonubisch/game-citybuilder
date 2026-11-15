@@ -1,5 +1,10 @@
 # Art direction and provenance
 
+Before generating new sprites, follow [Sprite acceptance standard](SPRITE-STANDARDS.md).
+It defines the required 2:1 geometry, physical scale, four-view consistency and
+in-game acceptance checks. Older prompts below are provenance, not replacements
+for that standard.
+
 Selected: **Pine & Copper** architecture and **Garden Streets (C)** environment treatment.
 
 Terrain update selected: **Alpine Slate (C)** roads, meadow grass and deposits; **Clear Brook (A)** water and shoreline palette.
