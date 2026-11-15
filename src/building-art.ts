@@ -21,6 +21,7 @@ const grounds: Record<
   Exclude<BuildingKind, "fishery">,
   readonly PlotCorners[]
 > = {
+  cottage:[[[234,320],[447,426],[660,320]],[[224,320],[437,426],[650,320]],[[237,346],[450,453],[663,346]],[[227,346],[440,453],[653,346]]],
   brickworks:[[[40,475],[320,615],[600,475]],[[25,480],[305,620],[585,480]],[[35,472],[315,612],[595,472]],[[35,472],[315,612],[595,472]]],
   tavern: [
     [
@@ -482,7 +483,7 @@ export function buildingArt(
     columns: kind === "mine" || kind === "quarry" ? 4 : 2,
     rows: 2,
     size:
-      kind === "sawmill"
+      kind === "cottage" ? [887,443] : kind === "sawmill"
         ? [768, 512]
         : kind === "mine" || kind === "quarry"
           ? [443, 443]

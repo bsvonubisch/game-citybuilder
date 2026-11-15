@@ -67,6 +67,7 @@ export function nextUpgrade(b: Building) {
       labour: constructionWork("house", next),
       benefit: "Three more residents · same plot.",
     };
+  if (b.kind === "cottage") return {level:next, name:`Little cottage · level ${next}`, cost:55 * next, materials:{wood:next*3,stone:next*2}, labour:constructionWork("cottage")*next, benefit:`Room for ${next+1} residents · same 1×1 plot.`};
   return {
     level: next,
     name: `${BUILDINGS[b.kind].name} · level ${next}`,

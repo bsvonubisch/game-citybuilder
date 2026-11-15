@@ -1,3 +1,4 @@
+import {isHome} from "./catalog.js";
 import {parkVisitor} from "./park-visitors.js";
 import Phaser from "phaser";
 import {townNeeds,buildingNeeds} from "./needs.js";
@@ -683,7 +684,7 @@ function renderInspector() {
   panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}`;
   panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${isHome(b.kind) ? `HOME · TIER ${b.houseTier ?? b.level ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) ? '<button id="toggle-production" class="primary"></button>' : ""}`;
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
       const link = (event.target as Element).closest<HTMLButtonElement>(
@@ -788,7 +789,7 @@ function renderInspector() {
       } else updateInspector();
     };
   }
-  if (!b.construction && (isLeisure(b.kind) || b.kind === "house"))
+  if (!b.construction && (isLeisure(b.kind) || isHome(b.kind)))
     $(".building-actions").insertAdjacentHTML(
       "afterend",
       '<section id="service-detail"></section>',
@@ -869,6 +870,8 @@ function updateBuildingActions(b: Building) {
       button.id ===
       (b.kind === "house" && !b.construction && (b.houseTier ?? 1) < 3
         ? "upgrade-house"
+        : b.kind === "cottage" && !b.construction && nextUpgrade(b)
+          ? "upgrade-building"
         : guide
           ? "resolve-issue"
           : b.construction
@@ -1075,7 +1078,7 @@ function updateInspector() {
             .join(
               "",
             )}${isExtractor(b.kind) ? `<div class="detail-row"><span>Deposit remaining</span><b>${(simulation.state.deposits[buildingDeposit(b)!]??0).toLocaleString()}</b></div>` : ""}`
-        : b.kind === "house"
+        : isHome(b.kind)
           ? `<div class="detail-row"><span>Residents</span><b>${simulation.state.residents.filter((r) => r.home === b.id).length} / ${houseCapacity(b)}</b></div><div class="residents">${simulation.state.residents
               .filter((r) => r.home === b.id)
               .map(
@@ -1170,7 +1173,7 @@ function updateInspector() {
         scene.focusBuilding(Number(el.dataset.serviceHome));
       }
     };
-  } else if (b.kind === "house" && !b.construction) {
+  } else if (isHome(b.kind) && !b.construction) {
     const people = simulation.state.residents.filter((r) => r.home === b.id);
     const need = people.length
       ? Math.round(

@@ -1,3 +1,4 @@
+import {isHome} from "./catalog.js";
 import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
 import { daylight } from "./daylight.js";
@@ -247,7 +248,7 @@ export class TownAnimation {
         );
       };
       const chimney = art.chimney;
-      if (chimney && b.enabled && (b.kind === "house" || active))
+      if (chimney && b.enabled && (isHome(b.kind) || active))
         for (let i = 0; i < 3; i++) {
           const t = (time * 0.3 + i / 3 + b.id * 0.11) % 1;
           dot(

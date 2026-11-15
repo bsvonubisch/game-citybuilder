@@ -1,3 +1,4 @@
+import {isHome} from "./catalog.js";
 import { BUILDINGS, type BuildingKind } from "./catalog.js";
 import type { Building, Simulation } from "./simulation.js";
 import type { ProductionConnections } from "./logistics.js";
@@ -78,7 +79,7 @@ export function buildingGuidance(
     if (idle) {
       const disconnected = sim.state.buildings.find(
         (home) =>
-          home.kind === "house" && !home.connected && !home.construction,
+          isHome(home.kind) && !home.connected && !home.construction,
       );
       if (disconnected)
         return inspect(

@@ -1,3 +1,4 @@
+import {isHome} from "./catalog.js";
 import { houseCapacity, type BuildingKind } from "./catalog.js";
 import { roadTravelTime } from "./roads.js";
 import type { Building, Simulation } from "./simulation.js";
@@ -22,7 +23,7 @@ export function serviceCoverage(sim: Simulation, b: Building) {
     ? sim.state.buildings
         .filter(
           (h) =>
-            h.kind === "house" && (!h.construction || h.construction.upgradeTo),
+            isHome(h.kind) && (!h.construction || h.construction.upgradeTo || h.construction.upgradeLevel),
         )
         .map((home) => {
           const path = sim.route(b, home),

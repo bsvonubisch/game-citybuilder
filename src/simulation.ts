@@ -1,3 +1,4 @@
+import {isHome} from "./catalog.js";
 import {parkVisitDuration} from "./park-visitors.js";
 import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
@@ -478,7 +479,7 @@ export class Simulation {
     }
     const homes = this.state.buildings.filter(
       (b) =>
-        b.kind === "house" && (!b.construction || b.construction.upgradeTo),
+        isHome(b.kind) && (!b.construction || b.construction.upgradeTo || b.construction.upgradeLevel),
     );
     this.state.residents = this.state.residents.filter((r) =>
       homes.some((h) => h.id === r.home),
@@ -1264,7 +1265,7 @@ export class Simulation {
         completed: 0,
         ...(b.kind === "house" ? { upgradeTo: tier } : { upgradeLevel: tier }),
       };
-      message = `Upgrading to ${next.name.toLowerCase()}. ${b.kind === "house" ? "Residents keep their home" : "Stored inventory stays here"} while builders work.`;
+      message = `Upgrading to ${next.name.toLowerCase()}. ${isHome(b.kind) ? "Residents keep their home" : "Stored inventory stays here"} while builders work.`;
     } else if (c.type === "toggle") {
       const b = this.building(c.id);
       if (!b)
@@ -1699,7 +1700,7 @@ export class Simulation {
     if (b.kind === "forester" && !b.forestry?.length && !forestTargets(this,b).length)
       return {kind:"input", title:"No reachable mature trees", message:"Wait for nearby stumps to regrow, clear a walking route, or move this lodge closer to woodland. Its highlighted area reaches 10 tiles. Planted garden trees are protected."};
     if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
-    if (b.kind === "house") {
+    if (isHome(b.kind)) {
       const residents = this.state.residents.filter((r) => r.home === b.id);
       if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
         return {
@@ -1726,8 +1727,8 @@ export class Simulation {
     const d = BUILDINGS[b.kind];
     return d.recipe
       ? "Producing"
-      : b.kind === "house"
-        ? `${this.state.residents.filter((r) => r.home === b.id).length} residents · tier ${b.houseTier ?? 1} home`
+      : isHome(b.kind)
+        ? `${this.state.residents.filter((r) => r.home === b.id).length} residents · tier ${b.houseTier ?? b.level ?? 1} home`
         : "Connected to town";
   }
   snapshot(): World {
@@ -2064,7 +2065,7 @@ export function parseSave(raw: string): World {
       !ids.has(r.id) &&
       typeof r.name === "string" &&
       r.name.length <= 40 &&
-      s.buildings.some((b) => b.id === r.home && b.kind === "house"),
+      s.buildings.some((b) => b.id === r.home && isHome(b.kind)),
   );
   s.history = s.history.filter((x) => typeof x === "string").slice(0, 20);
   for (const r of s.residents)

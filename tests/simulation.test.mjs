@@ -2538,3 +2538,23 @@ test("a small fountain admits at most four simultaneous visitors with unique pla
  const visitors=sim.state.agents.filter(a=>a.target===park.id&&a.parkSlot!==undefined&&a.returning&&a.wait>0);
  assert.equal(visitors.length,4);assert.equal(new Set(visitors.map(a=>a.parkSlot)).size,4);
 });
+
+test("little cottages use one tile, retain residents during upgrades and restore capacity",()=>{
+ const sim=new Simulation(),old=sim.state.buildings.find(b=>b.kind==='house'&&b.connected);
+ const p=frontage(old.kind,old.x,old.y,old.rotation)[0];
+ const x=p.x,y=p.y-1;
+ assert.equal(execute(sim,{type:'demolish',x:old.x,y:old.y}).ok,true);
+ assert.equal(execute(sim,{type:'place',kind:'cottage',x,y,rotation:0}).ok,true);
+ const b=sim.buildingAt(x,y);assert.equal(footprint('cottage',x,y).length,1);
+ assert.equal(houseCapacity(b),2);assert.equal(sim.state.residents.filter(r=>r.home===b.id).length,0);
+ finishConstruction(sim,b);assert.equal(sim.state.residents.filter(r=>r.home===b.id).length,2);
+ const ids=sim.state.residents.filter(r=>r.home===b.id).map(r=>r.id);
+ assert.equal(execute(sim,{type:'upgrade',id:b.id}).ok,true);
+ assert.deepEqual(sim.state.residents.filter(r=>r.home===b.id).map(r=>r.id),ids);
+ const loaded=new Simulation(parseSave(JSON.stringify(sim.snapshot()))),home=loaded.building(b.id);
+ assert.deepEqual(loaded.state.residents.filter(r=>r.home===b.id).map(r=>r.id),ids);
+ finishConstruction(loaded,home);assert.equal(home.level,2);assert.equal(houseCapacity(home),3);
+ assert.equal(loaded.state.residents.filter(r=>r.home===b.id).length,3);
+ assert.equal(townNeeds(loaded).find(n=>n.id==='homes').have,loaded.state.buildings.filter(b=>b.connected&&(!b.construction||b.construction.upgradeTo||b.construction.upgradeLevel)).reduce((n,b)=>n+houseCapacity(b),0));
+ for(let r=0;r<4;r++)assert.deepEqual(dimensions('cottage',r),[1,1]);
+});

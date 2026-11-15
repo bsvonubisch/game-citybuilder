@@ -10,6 +10,7 @@ export type Resource =
   | "planks"
   | "tools";
 export type BuildingKind =
+  | "cottage"
   | "brickworks"
   | "house"
   | "farm"
@@ -66,10 +67,12 @@ export const buildingName = (b: {
   b.kind === "house"
     ? HOUSE_TIERS[b.houseTier ?? 1].name
     : BUILDINGS[b.kind].name;
+export const isHome = (kind: string) => kind === "house" || kind === "cottage";
 export const houseCapacity = (b: {
   kind: BuildingKind;
   houseTier?: HouseTier;
-}) => (b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].capacity : 0);
+  level?: HouseTier;
+}) => (b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].capacity : b.kind === "cottage" ? 1 + (b.level ?? 1) : 0);
 export const buildingInvestment = (b: {
   kind: BuildingKind;
   houseTier?: HouseTier;
@@ -175,6 +178,7 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
+  cottage: {name:"Little cottage", cost:55, jobs:0, frame:0, materials:{wood:3}, category:"homes", description:"A compact 1×1 home for two residents. Upgrade for more room without enlarging the plot."},
   brickworks:{name:"Village brickworks",cost:260,jobs:2,frame:0,materials:{wood:10,stone:12},category:"production",description:"Fires stone into bricks for faster roads and sturdy bridges.",recipe:{input:"stone",amount:2,output:"bricks",count:4,seconds:10}},
   house: {
     name: "Timber cottage",
@@ -354,6 +358,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   tools: "Tools",
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
+  cottage:[1,1],
   brickworks:[2,2],
   house: [2, 2],
   farm: [2, 2],
