@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import {townNeeds,buildingNeeds} from "./needs.js";
 import "./style.css";
 import { ROAD_TYPES, roadTypeAt, type RoadType } from "./roads.js";
 import { FOREST_RADIUS, REGROW_TICKS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
@@ -177,7 +178,7 @@ $("#app").innerHTML = `
    )
    .join("")}
  </div><div class="header-actions"><button class="quiet" id="cloud-button" title="Sign in & cloud saves">${icon("cloud")}<span id="cloud-label">Connect</span></button><button class="icon-button" id="settings" aria-label="Save and settings">${icon("settings")}</button></div></header>
- <div class="townbar"><div class="town-identity"><span class="eyebrow">THE EMERALD VALLEY</span><h1>Pinehaven <span class="town-star">✦</span></h1><span class="town-motto">A little industry. A lovely life.</span></div><div class="town-season">${icon("sun")}<b id="day">Day 1</b><span>Spring · Year 1</span></div><details class="town-progress"><summary>${icon("flag")}<span>Town progress</span></summary><div class="town-progress-content"><h3>Small town. Big possibilities.</h3><p id="goal-copy">Let your first deliveries find their way home.</p><div class="goal-progress"><span id="goal-progress"></span></div><small id="goal-count">0 / 30 goods delivered</small></div></details><div class="save-indicator"><span class="status-dot"></span><span id="save-status">Saved on this device</span><button id="save-now" title="Save now" aria-label="Save town">${icon("save")}</button></div></div>
+ <div class="townbar"><div class="town-identity"><span class="eyebrow">THE EMERALD VALLEY</span><h1>Pinehaven <span class="town-star">✦</span></h1><span class="town-motto">A little industry. A lovely life.</span></div><button id="town-needs-button" class="quiet town-needs-button">Town needs</button><div class="town-season">${icon("sun")}<b id="day">Day 1</b><span>Spring · Year 1</span></div><details class="town-progress"><summary>${icon("flag")}<span>Town progress</span></summary><div class="town-progress-content"><h3>Small town. Big possibilities.</h3><p id="goal-copy">Let your first deliveries find their way home.</p><div class="goal-progress"><span id="goal-progress"></span></div><small id="goal-count">0 / 30 goods delivered</small></div></details><div class="save-indicator"><span class="status-dot"></span><span id="save-status">Saved on this device</span><button id="save-now" title="Save now" aria-label="Save town">${icon("save")}</button></div></div>
  <main>
  <section class="world" aria-label="Interactive town map"><div id="game"></div><div id="building-alerts" role="group" aria-label="Building alerts"></div>
  <div id="inspector" class="inspector" hidden></div>
@@ -203,6 +204,14 @@ $("#building-alerts").insertAdjacentHTML(
   "afterend",
   '<div id="traffic-alerts" role="group" aria-label="Traffic warnings"></div>',
 );
+$("#town-needs-button").onclick=()=>{setTool("inspect");closeInspection();tab="town";renderPanel();setPanelOpen(true);};
+$("#panel-content").addEventListener("wheel",(event)=>{
+  const target=event.target as Element;
+  const scroller=target.closest<HTMLElement>(".building-grid,.category-tabs")??(tab==="build"&&tool!=="terrain"?document.querySelector<HTMLElement>(".building-grid"):null);
+  if(!scroller||event.ctrlKey)return;
+  event.preventDefault();event.stopPropagation();
+  scroller.scrollLeft+=(Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY)*(event.deltaMode===1?20:event.deltaMode===2?scroller.clientWidth:1);
+},{passive:false});
 const daylightUI = new DaylightUI($(".town-season"));
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -426,7 +435,8 @@ function renderPanel() {
   setPanelOpen(panelOpen);
   if (tab === "town") {
     $("#panel-content").innerHTML =
-      `<div class="town-overview"><section><span class="eyebrow">GROWING TOGETHER</span><h3>Life in Pinehaven</h3><div id="town-stats"></div></section><section><h4>Town inventory</h4><p class="muted">Across buildings and deliveries.</p><div id="inventory"></div></section></div>`;
+      `<div class="town-overview"><section><span class="eyebrow">GROWING TOGETHER</span><h3>Life in Pinehaven</h3><p class="muted">Have / need. Select a shortage to take the next step.</p><div id="town-needs"></div><div id="town-stats"></div></section><section><h4>Town inventory</h4><p class="muted">Ready = warehouses. Elsewhere = workplaces and deliveries.</p><div class="stock-heading"><span>Material</span><b>Ready</b><b>Elsewhere</b></div><div id="inventory"></div></section></div>`;
+    $("#town-needs").onclick=(event)=>{const button=(event.target as Element).closest<HTMLButtonElement>("[data-need]");if(!button)return;const need=townNeeds(simulation).find(n=>n.id===button.dataset.need);if(need?.action?.building){setPanelOpen(false);scene.onSelect(need.action.building);scene.focusBuilding(need.action.building);}else if(need?.action?.kind)setTool(need.action.kind);};
     updateUI();
     return;
   }
@@ -660,7 +670,7 @@ function renderInspector() {
   panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}`;
   panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><p>${b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].description : d.description}</p><div id="building-status" class="building-status"></div>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${b.kind === "house" ? `HOME · TIER ${b.houseTier ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) ? '<button id="toggle-production" class="primary"></button>' : ""}`;
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
       const link = (event.target as Element).closest<HTMLButtonElement>(
@@ -671,9 +681,9 @@ function renderInspector() {
       scene.onSelect(id);
       scene.focusBuilding(id);
     };
-  $("#building-status").insertAdjacentHTML(
+  $("#building-needs").insertAdjacentHTML(
     "afterend",
-    '<div class="building-actions"><p id="building-next-step" class="next-step" hidden></p><div id="building-primary"></div><button id="resolve-issue" hidden></button><details id="building-more"><summary>More actions</summary><div id="building-menu-items"></div></details></div>',
+    '<div class="building-actions"><p id="building-next-step" class="next-step" hidden></p><div id="building-primary"></div><small id="primary-action-reason" class="upgrade-reason"></small><button id="resolve-issue" hidden></button><details id="building-more"><summary>More actions</summary><div id="building-menu-items"></div></details></div>',
   );
   if (b.construction) {
     $(".building-actions").insertAdjacentHTML(
@@ -795,6 +805,8 @@ function renderInspector() {
       save(false);
       updateInspector();
     };
+  const fold=(id:string,label:string)=>{const content=document.getElementById(id);if(!content)return;const details=document.createElement("details");details.className="inspector-fold";details.innerHTML=`<summary>${label}</summary>`;content.before(details);details.append(content);};
+  fold("building-detail","Inventory & production");fold("production-logistics","Routes & workers");fold("boat-detail","Fishing boat");fold("service-detail","Service area");fold("construction-crew","Assigned builders");fold("industry-upgrade","Upgrade costs");fold("deposit-upgrade","Excavation costs");fold("house-upgrade","Upgrade costs");
   updateInspector();
 }
 function closeInspection() {
@@ -815,7 +827,7 @@ function updateBuildingActions(b: Building) {
   $("#building-next-step").hidden = !guide;
   if (guide) {
     $("#building-next-step").textContent =
-      `What to do: ${guide.message}${b.kind === "house" && !b.construction && (b.houseTier ?? 1) < 3 ? ` Choose “${guide.label}” in More actions.` : ""}`;
+      `${guide.message.split(/(?<=\.)\s/)[0]}`;
     resolve.textContent = guide.label;
     resolve.disabled =
       guide.action.type === "deepen" && !!simulation.canDeepen(b.id);
@@ -856,6 +868,7 @@ function updateBuildingActions(b: Building) {
                   ? "toggle-production"
                   : "move-building"),
   )!;
+  $("#primary-action-reason").textContent=primary.disabled?(primary.id.includes("upgrade")?simulation.canUpgrade(b.id):simulation.canDeepen(b.id))??"":"";
   if (primary.id === "upgrade-house")
     $("#building-primary").after($("#building-next-step"));
   for (const button of buttons) {
@@ -1029,8 +1042,10 @@ function updateInspector() {
     return;
   }
   $("#building-status").innerHTML = alert
-    ? `<div class="status-heading">${icon(alertIcon[alert.kind])}<b>${escapeHtml(alert.title)}</b></div><p>${escapeHtml(alert.message)}</p>`
+    ? `<div class="status-heading">${icon(alertIcon[alert.kind])}<b>${escapeHtml(alert.title)}</b></div>`
     : escapeHtml(simulation.status(b));
+  const rows=buildingNeeds(simulation,b);
+  $("#building-needs").innerHTML=`<div class="needs-heading"><b>Needs & stock</b><span>Have</span><span>Need</span></div>${rows.map(row=>`<div class="building-need ${row.ok?"met":"short"}"><span>${escapeHtml(row.label)}</span><b>${escapeHtml(row.have)}</b><small>${escapeHtml(row.need)}</small></div>`).join("")}${b.construction?`<div class="goal-progress"><span style="width:${Math.floor(b.construction.completed/b.construction.required*100)}%"></span></div>`:""}`;
   $("#building-status").classList.toggle("warning", !!alert);
   $("#building-status").dataset.kind = alert?.kind ?? "ready";
   $("#building-detail").innerHTML =
@@ -1450,13 +1465,17 @@ function updateUI() {
     s.delivered < 30
       ? "Let your first deliveries find their way home."
       : "Your little industries are finding their rhythm.";
+  const needs=townNeeds(simulation),shortages=needs.filter(n=>n.have<n.need);
+  $("#town-needs-button").textContent=shortages.length?`${shortages.length} town needs`:"Town needs met";
+  $("#town-needs-button").classList.toggle("shortage",shortages.length>0);
   if (tab === "town") {
+    $("#town-needs").innerHTML=needs.map(n=>`<div class="town-need ${n.have<n.need?"short":"met"}"><div><b>${n.label}</b><small>${n.have<n.need?`${n.need-n.have} more ${n.unit} needed`:n.id==="food"?`${n.need?Math.floor(n.have/n.need):0} days in reserve`:"Need met"}</small></div><strong>${n.have} <span>/ ${n.need}</span></strong>${n.have<n.need&&n.action?`<button class="quiet" data-need="${n.id}">${n.action.label}</button>`:""}</div>`).join("");
     $("#town-stats").innerHTML =
       `<div class="detail-row"><span>Employed residents</span><b>${employed} / ${s.residents.length}</b></div><div class="detail-row"><span>Deliveries on the road</span><b>${s.agents.filter((a) => a.kind === "truck").length}</b></div><div class="detail-row"><span>Tools exported</span><b>${s.exported}</b></div><div class="detail-row"><span>Food needs met</span><b>${s.food}%</b></div>`;
     const totals = simulation.totals();
     $("#inventory").innerHTML = RESOURCES.map(
       (r) =>
-        `<div class="inventory-row">${icon(r === "bread" || r === "fish" || r === "wood" || r === "stone" || r === "metal" ? r : "box")}<span>${RESOURCE_NAMES[r]}</span><b>${totals[r]}</b></div>`,
+        `<div class="inventory-row">${icon(r === "bread" || r === "fish" || r === "wood" || r === "stone" || r === "metal" ? r : "box")}<span>${RESOURCE_NAMES[r]}</span><b>${simulation.stored(r)}</b><b>${totals[r]-simulation.stored(r)}</b></div>`,
     ).join("");
   }
   updateInspector();

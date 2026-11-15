@@ -43,6 +43,7 @@ import {
 } from "../.test-dist/deposits.js";
 import { baseTerrain } from "../.test-dist/terrain.js";
 import { daylight, warmEmission, shiftChange, DAY_TICKS, lengthenDays } from "../.test-dist/daylight.js";
+import {townNeeds,buildingNeeds} from "../.test-dist/needs.js";
 import {
   NIGHT_AMBIENT,
   windowGround,
@@ -98,6 +99,23 @@ test("the displayed day advances at midnight while keeping the 08:00 start", () 
   assert.equal(daylight(160 * 4).day, 2);
   assert.equal(daylight(160 * 4).hour, 0);
   assert.equal(daylight(240 * 4).day, 2);
+});
+
+test("needs distinguish ready meals, staffed workplaces and reachable leisure from stored totals",()=>{
+  const sim=new Simulation();
+  for(const b of sim.state.buildings){b.inventory.bread=0;b.inventory.fish=0;}
+  const bakery=sim.state.buildings.find(b=>b.kind==="bakery");
+  bakery.inventory.bread=90;
+  const needs=townNeeds(sim),food=needs.find(n=>n.id==="food");
+  assert.equal(food.have,0,"undelivered food is not ready for households");
+  assert.equal(food.need,Math.ceil(sim.state.residents.length/3));
+  assert.equal(needs.find(n=>n.id==="nightlife").have,0);
+  const jobs=sim.state.buildings.filter(b=>b.enabled&&!b.construction&&BUILDINGS[b.kind].jobs);
+  assert.equal(needs.find(n=>n.id==="workers").need,jobs.reduce((n,b)=>n+BUILDINGS[b.kind].jobs,0));
+  bakery.inventory.flour=0;
+  assert.equal(buildingNeeds(sim,bakery).find(n=>n.label==="Flour").ok,false);
+  bakery.inventory.flour=BUILDINGS.bakery.recipe.amount;
+  assert.equal(buildingNeeds(sim,bakery).find(n=>n.label==="Flour").ok,true);
 });
 
 test("longer days preserve old save date, hour and stump regrowth age exactly once",()=>{

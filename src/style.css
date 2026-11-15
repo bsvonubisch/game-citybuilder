@@ -3487,3 +3487,39 @@ dialog p.muted {
     animation: none;
   }
 }
+.town-needs-button { white-space: nowrap; min-height: 34px; font-size: 11px; }
+.town-needs-button.shortage { color: #98552f; background: #f7e7cf; border-color: #dec7a2; }
+.building-needs { margin: 12px 0 14px; }
+.needs-heading,.building-need { display: grid; grid-template-columns: 1.05fr .8fr 1fr; align-items: center; gap: 8px; }
+.needs-heading { font-size: 10px; color: #7e8775; padding: 0 4px 7px; }
+.building-need { border-top: 1px solid var(--line); padding: 9px 4px; font-size: 12px; }
+.building-need small { font-size: 10px; text-align: right; color: #6c7768; }
+.building-need b { font-size: 12px; color: #537442; }
+.building-need.short b { color: #a95331; }
+.building-need.short { background: #f7e8d9; border-radius: 5px; }
+.inspector-fold { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 11px; }
+.inspector-fold > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #5d7356; }
+.inspector-fold > section,.inspector-fold > div { margin-top: 12px; }
+.inspector:has(#building-needs) > .inspector-art { width: 90px; height: 72px; margin: 4px auto; }
+.inspector:has(#building-needs) > h3 { margin: 5px 0 12px; font-size: 23px; }
+.inspector:has(#building-needs) .building-status { padding: 10px 12px; font-size: 12px; }
+.inspector:has(#building-needs) .next-step { font-size: 11px; line-height: 1.5; margin: 0 0 10px; }
+.town-need { display: grid; grid-template-columns: 1fr auto; gap: 3px 16px; padding: 9px 10px; margin-bottom: 5px; border-radius: 7px; background: #ecf1e3; }
+.town-need.short { background: #f7ead7; }
+.town-need b { font-size: 12px; }
+.town-need small { display: block; font-size: 10px; color: #687661; margin-top: 3px; }
+.town-need strong { color: #54713f; font-size: 16px; align-self: center; }
+.town-need.short strong { color: #a15933; }
+.town-need strong span { font-size: 12px; color: #7b806f; }
+.town-need button { grid-column: 1/-1; justify-self: start; padding: 5px 0; min-height: 28px; font-size: 11px; border: 0; }
+.build-drawer .town-overview { grid-template-columns: 1.25fr 1fr; gap: 28px; }
+.build-drawer #inventory { display: block; }
+.build-drawer .inventory-row { display: grid; grid-template-columns: 20px 1fr 60px 65px; gap: 8px; }
+.build-drawer .inventory-row b { text-align: right; }
+.stock-heading { display: grid; grid-template-columns: 1fr 60px 65px; gap: 8px; font-size: 10px; color: #73826a; margin-top: 15px; }
+.stock-heading b { text-align: right; }
+@media(max-width:700px) {
+  .town-needs-button { font-size: 10px; padding: 5px 8px; }
+  .build-drawer .town-overview { display: block; }
+  .build-drawer .town-overview > section + section { margin-top: 20px; }
+}
