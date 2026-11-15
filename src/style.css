@@ -469,7 +469,7 @@ main {
   inset: 0;
   pointer-events: none;
 }
-#traffic-alerts {
+#traffic-alerts, #roadwork-alerts {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -575,6 +575,9 @@ main {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+.building-alert.roadwork-alert{display:flex;align-items:center;justify-content:center;gap:6px;min-width:50px;width:auto;height:36px;padding:0 9px;background:#fff4d8;color:#8b572b;border-color:#b58b4d;}
+.roadwork-alert>b{font-size:12px;font-variant-numeric:tabular-nums}
+#roadwork-crew{margin-top:18px}
 :is(.building-alert, .building-status.warning)[data-kind="construction"] {
   background: #def4eb;
   color: #22665a;

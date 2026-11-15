@@ -1,3 +1,4 @@
+import {roadWorkCrew,type RoadWorkSite} from './roadwork-sites.js';
 import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
@@ -127,6 +128,7 @@ let category: keyof typeof catalogGroups = "homes",
   selected: number | null = null,
   selectedAgent: number | null = null,
   selectedTraffic: number[] | null = null,
+  selectedRoadWork:RoadWorkSite|null=null,
   selectedDecoration: number | null = null,
   hovered: Point | null = null,
   tool: Tool = "inspect",
@@ -221,7 +223,7 @@ $("#app").innerHTML = `
  <div id="toast" role="status" aria-live="polite"></div><dialog id="dialog"><button id="close-dialog" class="icon-button close" aria-label="Close dialog">${icon("close")}</button><div id="dialog-content"></div></dialog><input id="import-file" type="file" accept="application/json,.json" hidden>`;
 $("#building-alerts").insertAdjacentHTML(
   "afterend",
-  '<div id="traffic-alerts" role="group" aria-label="Traffic warnings"></div>',
+  '<div id="traffic-alerts" role="group" aria-label="Traffic warnings"></div><div id="roadwork-alerts" role="group" aria-label="Road work"></div>',
 );
 const townLog=new TownLog($<HTMLDetailsElement>("#town-log"),event=>{
   setTool("inspect");closeInspection();
@@ -710,6 +712,7 @@ scene.onSelectAgent = (id) => {
   const agent=simulation.state.agents.find(a=>a.id===id);
   if(agent?.kind==="person")townAudio.person(agent.resident??agent.id);else if(agent)townAudio.vehicle();
   selectedTraffic = null;
+  selectedRoadWork=null;scene.selectedRoadWorks=[];
   selected = null;
   selectedDecoration = null;
   scene.selected = null;
@@ -722,6 +725,7 @@ scene.onSelect = (id) => {
   const building=id!==null?simulation.building(id):undefined;
   if(building)townAudio.building(building.kind,!!building.construction);
   selectedTraffic = null;
+  selectedRoadWork=null;scene.selectedRoadWorks=[];
   selectedAgent = null;
   selectedDecoration = null;
   scene.selectedAgent = null;
@@ -742,6 +746,7 @@ scene.onCamera = () => {
 };
 function renderInspector() {
   selectedTraffic = null;
+  selectedRoadWork=null;scene.selectedRoadWorks=[];
   const b = selected ? simulation.building(selected) : null;
   const panel = $("#inspector");
   panel.hidden = !b;
@@ -894,6 +899,7 @@ function renderInspector() {
 }
 function closeInspection() {
   selectedTraffic = null;
+  selectedRoadWork=null;scene.selectedRoadWorks=[];
   selected = null;
   selectedAgent = null;
   selectedDecoration = null;
@@ -1001,6 +1007,7 @@ function runGuidance(b: Building, action: GuidanceAction) {
 }
 function renderDecorationInspector() {
   selectedTraffic = null;
+  selectedRoadWork=null;scene.selectedRoadWorks=[];
   const d = simulation.state.decorations.find(
     (d) => d.id === selectedDecoration,
   );
@@ -1132,7 +1139,37 @@ function updateAgentInspector() {
   $("#traveller-detail").innerHTML =
     `<div class="detail-row"><span>From</span><b>${escapeHtml(label(from))}</b></div><div class="detail-row"><span>Headed to</span><b>${escapeHtml(label(to))}</b></div>${a.cargo ? `<div class="detail-row"><span>Carrying</span><b>${a.amount} ${RESOURCE_NAMES[a.cargo]}</b></div>` : ""}<p class="muted">The gold line shows this journey on the map.</p>`;
 }
+scene.onSelectRoadWork=(site)=>{
+  setTool('inspect');setPanelOpen(false);closeInspection();
+  selectedRoadWork=structuredClone(site);scene.selectedRoadWorks=site.works.map(w=>w.id);
+  $('#inspector').hidden=false;
+  $('#inspector').innerHTML=`<button id="close-inspector" class="icon-button close" aria-label="Close road work details">${icon('close')}</button><span class="eyebrow">STREETS & JOURNEYS</span><h3>${escapeHtml(site.label)}</h3><div id="roadwork-status" class="building-status"></div><div class="goal-progress" role="progressbar" aria-label="Road work progress" aria-valuemin="0" aria-valuemax="100"><span id="roadwork-progress"></span></div><div id="roadwork-summary" class="detail-row"></div><section id="roadwork-crew" class="construction-crew" aria-label="Assigned road workers"></section><p id="roadwork-guidance" class="muted"></p><button id="locate-roadwork" class="primary">Show work stretch</button>`;
+  $('#close-inspector').onclick=closeInspection;
+  $('#locate-roadwork').onclick=()=>scene.focusTile(site.anchor.x,site.anchor.y);
+  $('#roadwork-crew').onclick=event=>{
+    const button=(event.target as Element).closest<HTMLButtonElement>('[data-road-worker]');if(!button)return;
+    const id=Number(button.dataset.roadWorker);
+    if(!simulation.state.agents.some(a=>a.id===id))return;
+    scene.onSelectAgent(id);scene.focusAgent(id);
+  };
+  updateRoadWorkInspector();
+};
+function updateRoadWorkInspector(){
+  const site=selectedRoadWork;if(!site)return;
+  const ids=site.works.map(w=>w.id),jobs=new Map((simulation.state.roadWorks??[]).map(w=>[w.id,w]));
+  const remaining=site.works.filter(w=>jobs.has(w.id)),crew=roadWorkCrew(simulation.state,ids);
+  const required=site.works.reduce((n,w)=>n+w.required,0),done=site.works.reduce((n,w)=>n+(jobs.get(w.id)?.completed??w.required),0);
+  const progress=Math.min(100,Math.floor(done/required*100)),working=crew.filter(c=>c.working).length,removal=site.works[0].operation==='remove';
+  $('#roadwork-status').textContent=!remaining.length?'Work complete':working?`${working} working · ${crew.length-working} on the way`:crew.length?'Crew on the way':progress===100?'Cleared · finishing this removal stretch':'Waiting for a crew';
+  $('#roadwork-progress').style.width=`${progress}%`;
+  $('#roadwork-progress').parentElement!.setAttribute('aria-valuenow',String(progress));
+  $('#roadwork-summary').innerHTML=`<span>${remaining.length} / ${site.works.length} tiles remaining</span><b>${progress}%</b>`;
+  const html=`<h4>Assigned workers <span>${crew.length}</span></h4>${crew.length?`<div class="builder-roster">${crew.map(c=>`<button class="builder-row ${c.working?'on-site':''}" data-road-worker="${c.agent.id}" aria-label="Locate ${escapeHtml(c.resident.name)}"><span>${icon(c.working?'hammer':'people')}</span><span><b>${escapeHtml(c.resident.name)}</b><small>${c.status}</small></span><span class="builder-locate">${icon('arrow')}</span></button>`).join('')}</div>`:!remaining.length?'<p class="muted">The crew is available for other work.</p>':'<p class="muted">Workers appear here when assigned.</p>'}`;
+  if($('#roadwork-crew').innerHTML!==html)$('#roadwork-crew').innerHTML=html;
+  $('#roadwork-guidance').textContent=!remaining.length?'':crew.length?(removal?'Traffic can pass until the whole removal stretch is cleared.':'Existing roads stay open during upgrades. New roads open as each tile is finished.'):'Road crews use unassigned residents. Keep a walking route to this stretch; new crews set out during the day.';
+}
 function updateInspector() {
+  if(selectedRoadWork){updateRoadWorkInspector();return;}
   if (selectedTraffic) {
     updateTrafficInspector();
     return;

@@ -36,7 +36,7 @@ export function roadVisualState(sim:Simulation):Simulation {
   if(!sim.state.roadWorks?.length)return sim;
   const cached=visualCache.get(sim);if(cached?.revision===sim.state.revision)return cached.view;
   const roads=new Set(sim.roads),roadTypes={...sim.state.roadTypes};
-  for(const w of sim.state.roadWorks){roads.add(key(w));roadTypes[key(w)]=w.type;}
+  for(const w of sim.state.roadWorks){if(!roads.has(key(w)))roadTypes[key(w)]=w.type;roads.add(key(w));}
   const view={roads,state:{...sim.state,roads:[...roads],roadTypes}} as Simulation;
   visualCache.set(sim,{revision:sim.state.revision,view});return view;
 }

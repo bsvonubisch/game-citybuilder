@@ -8,6 +8,7 @@
     "outDir": ".test-dist"
   },
   "include": [
+    "src/roadwork-sites.ts",
     "src/sprite-ground.ts",
     "src/needs.ts",
     "src/edge-occlusion.ts",

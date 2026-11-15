@@ -4,6 +4,7 @@ import {Simulation,parseSave,key} from '../.test-dist/simulation.js';
 import {footprint,SIZE} from '../.test-dist/catalog.js';
 import {roadTypeAt} from '../.test-dist/roads.js';
 import {roadVisualState} from '../.test-dist/roadworks.js';
+import {roadWorkSites,roadWorkCrew} from '../.test-dist/roadwork-sites.js';
 
 const execute=(sim,command)=>sim.execute({id:`work-${sim.state.revision}`,expectedRevision:sim.state.revision,command});
 function town(){
@@ -78,4 +79,23 @@ test('without available residents road work waits instead of instantly completin
  const sim=town();sim.state.buildings=sim.state.buildings.filter(b=>b.kind==='warehouse');sim.reconnect();
  execute(sim,{type:'roadStroke',from:{x:9,y:7},to:{x:10,y:7},roadType:'dirt'});
  for(let i=0;i<100;i++)sim.step();assert.equal(sim.state.agents.filter(a=>a.roadWork!==undefined).length,0);assert.ok(sim.state.roadWorks.every(w=>w.completed===0));
+});
+test('road sites group connected work and expose its actual assigned crew',()=>{
+ const sim=town();execute(sim,{type:'roadStroke',from:{x:9,y:7},to:{x:11,y:7},roadType:'stone'});
+ execute(sim,{type:'roadStroke',from:{x:9,y:4},to:{x:10,y:4},roadType:'stone'});
+ const sites=roadWorkSites(sim.state);assert.equal(sites.length,2);assert.deepEqual(sites.map(s=>s.works.length).sort(),[2,3]);
+ for(let i=0;i<12;i++)sim.step();
+ const ids=sites[0].works.map(w=>w.id),crew=roadWorkCrew(sim.state,ids);
+ assert.ok(crew.length);assert.ok(crew.every(c=>ids.includes(c.agent.roadWork)&&c.resident.id===c.agent.resident));
+ assert.ok(crew.every(c=>['Working on the road','Walking to the work'].includes(c.status)));
+});
+test('cars keep travelling on the original surface throughout road upgrades',()=>{
+ const sim=town(),p={x:8,y:7};
+ execute(sim,{type:'roadStroke',from:p,to:p,roadType:'brick'});
+ assert.ok(sim.path({x:8,y:6},{x:8,y:8}));
+ assert.equal(roadTypeAt(roadVisualState(sim).state.roadTypes,p),'stone','original art stays in place until work is finished');
+ const home=sim.state.buildings.find(b=>b.kind==='cottage');
+ const car={id:sim.state.nextId++,kind:'car',resident:null,source:home.id,target:home.id,path:[{x:8,y:6},p,{x:8,y:8}],segment:0,progress:0,wait:0,active:true,returning:false,cargo:null,amount:0};sim.state.agents.push(car);
+ sim.step();sim.step();assert.ok(car.segment+car.progress>0,'car advances through an active upgrade');
+ assert.ok(sim.state.roadWorks.length);assert.equal(roadTypeAt(sim.state.roadTypes,p),'stone');
 });

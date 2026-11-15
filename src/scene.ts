@@ -1,3 +1,5 @@
+import {RoadWorkAlerts} from './roadwork-alerts.js';
+import type {RoadWorkSite} from './roadwork-sites.js';
 import {roadWorkerPosition,roadVisualState} from './roadworks.js';
 import {retainSourceImages} from "./source-images.js";
 import {HuntingArt,prepareHuntingFrames} from "./hunting-art.js";
@@ -138,6 +140,9 @@ export class TownScene extends Phaser.Scene {
   selected: number | null = null;
   guidanceBuilding: number | null = null;
   selectedAgent: number | null = null;
+  selectedRoadWorks:number[]=[];
+  onSelectRoadWork:(site:RoadWorkSite)=>void=()=>{};
+  private roadWorkAlerts!:RoadWorkAlerts;
   onSelectAgent: (id: number) => void = () => {};
   onSelectBoat: (id: number) => void = () => {};
   showGrid = false;
@@ -344,6 +349,8 @@ export class TownScene extends Phaser.Scene {
       document.querySelector("#building-alerts")!,
       (id) => this.onSelect(id),
     );
+    this.roadWorkAlerts=new RoadWorkAlerts(this,document.querySelector("#roadwork-alerts")!,site=>this.onSelectRoadWork(site));
+    this.events.once("shutdown",()=>this.roadWorkAlerts.clear());
     this.trafficAlerts = new TrafficAlerts(
       this,
       document.querySelector("#traffic-alerts")!,
@@ -1213,6 +1220,7 @@ export class TownScene extends Phaser.Scene {
   private drawAgentRoute() {
     this.routeOverlay.clear();
     this.drawProductionLogistics();
+    for(const a of this.simulation.state.agents)if(a.roadWork!==undefined&&this.selectedRoadWorks.includes(a.roadWork))this.highlightWorker(a,0x7ee0c7);
     const site = this.selected ? this.simulation.building(this.selected) : null;
     if (site?.construction) {
       const crew = new Set(
@@ -1612,6 +1620,7 @@ export class TownScene extends Phaser.Scene {
     this.huntingArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
     this.farmArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
     this.fishingArt.update(this.simulation, this.acc, time, this.selected);
+    this.roadWorkAlerts.update(this.simulation,this.tool==="inspect");
     this.trafficAlerts.update(
       this.simulation,
       this.tool === "inspect",
@@ -1708,6 +1717,7 @@ export class TownScene extends Phaser.Scene {
     this.shadowArt.clear();
     this.fishingArt.clear();this.huntingArt.clear();
     this.trafficAlerts.clear();
+    this.roadWorkAlerts.clear();this.selectedRoadWorks=[];
     this.acc = 0;
     this.selected = null;
     this.selectedAgent = null;

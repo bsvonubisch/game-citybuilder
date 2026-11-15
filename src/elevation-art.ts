@@ -1,4 +1,4 @@
-import {roadVisualState,roadWorkAt} from './roadworks.js';
+import {roadVisualState} from './roadworks.js';
 import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import { roadSurface } from "./road-art.js";
@@ -165,7 +165,6 @@ export class ElevationArt {
             { x: number; y: number }[],
           ][]) {
             ctx.save();
-            if(roadWorkAt(sim.state,{x,y})){ctx.globalAlpha=.9;ctx.filter='saturate(.15) brightness(.8)';}
             ctx.beginPath();
             triangle.forEach((p, i) =>
               i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
