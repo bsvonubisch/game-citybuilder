@@ -238,8 +238,7 @@ $("#panel-content").addEventListener("wheel",(event)=>{
   const scroller=target.closest<HTMLElement>(".building-grid,.category-tabs")??(tab==="build"&&tool!=="terrain"?document.querySelector<HTMLElement>(".building-grid"):null);
   if(!scroller||event.ctrlKey)return;
   event.preventDefault();event.stopPropagation();
-  if(scroller.scrollHeight>scroller.clientHeight+1)scroller.scrollTop+=event.deltaY*(event.deltaMode===1?20:1);
-  else scroller.scrollLeft+=(Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY)*(event.deltaMode===1?20:event.deltaMode===2?scroller.clientWidth:1);
+  scroller.scrollLeft+=(Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY)*(event.deltaMode===1?20:event.deltaMode===2?scroller.clientWidth:1);
 },{passive:false});
 const daylightUI = new DaylightUI($(".town-season"));
 const game = new Phaser.Game({

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Simulation,parseSave} from '../.test-dist/simulation.js';
 import {BUILDINGS,buildingRecipe,buildingJobs} from '../.test-dist/catalog.js';
-import {ensureHerd,stepLivestock,livestockCapacity,livestockPose,penRectangle,LIVESTOCK} from '../.test-dist/livestock.js';
+import {ensureHerd,stepLivestock,livestockCapacity,livestockJobs,livestockPose,penRectangle,LIVESTOCK} from '../.test-dist/livestock.js';
 import {canSupply,productionConnections} from '../.test-dist/logistics.js';
 
 function setup(kind='cattle',plot=[3,3]){
@@ -41,6 +41,23 @@ test('rectangular pens clamp 2–10 and animals remain inside every rotated foot
   for(let i=0;i<livestockCapacity(kind,plot);i++)for(const t of [0,3,10,20,100]){const p=livestockPose(b,i,t);assert.ok(p.x>=9.5&&p.x<10+plot[0]-.5);assert.ok(p.y>=9.5&&p.y<10+plot[1]-.5);}
  }
 });
+test('larger pens hold more animals with only one to three farmers and no shared grazing patches',()=>{
+ for(const kind of Object.keys(LIVESTOCK)){
+  assert.equal(livestockJobs(kind,[3,3]),1);assert.equal(livestockJobs(kind,[6,6]),1);assert.equal(livestockJobs(kind,[8,8]),2);assert.equal(livestockJobs(kind,[10,10]),3);
+  assert.ok(livestockCapacity(kind,[10,10])>48);
+  for(const plot of [[2,2],[3,3],[2,10],[10,2],[10,10]]){
+   const points=Array.from({length:livestockCapacity(kind,plot)},(_,i)=>livestockPose({id:1,kind,x:0,y:0,plot,rotation:0},i,0));
+   for(let i=0;i<points.length;i++)for(let j=0;j<i;j++)assert.ok(Math.hypot(points[i].x-points[j].x,points[i].y-points[j].y)>.15,'Distinct patches');
+  }
+ }
+});
+test('breeding has a steady slower interval, regardless of herd size or building upgrades',()=>{
+ for(const kind of Object.keys(LIVESTOCK))for(const count of [2,8]){
+  const {sim,b}=setup(kind,[10,10]);b.herd={count,growth:0,fed:1000};b.level=3;
+  for(let i=0;i<LIVESTOCK[kind].birth*4-1;i++)stepLivestock(sim,b);
+  assert.equal(b.herd.count,count,'No early birth');stepLivestock(sim,b);assert.equal(b.herd.count,count+1);assert.equal(b.herd.growth,0);
+ }
+});
 test('custom pen costs, herd and stock survive moving, rotation and reload',()=>{
  const sim=new Simulation(),b=sim.state.buildings.find(b=>b.kind==='cattle');b.herd={count:3,growth:23,fed:12};b.inventory={grain:5,milk:9};
  const result=sim.execute({id:'move-pen',expectedRevision:sim.state.revision,command:{type:'move',id:b.id,x:b.x,y:b.y,rotation:2}});assert.equal(result.ok,true,result.message);
@@ -70,11 +87,12 @@ test('each new butcher recipe consumes actual meat and produces its chosen cut',
   assert.ok(b.inventory[cut]>=recipe.count);assert.equal(40-b.inventory.meat,b.inventory[cut]/recipe.count*recipe.amount);
  }
 });
-test('starter livestock receives real farmers and feed deliveries, then produces food',()=>{
+test('starter livestock receives real farmers and feed; dairy and poultry produce while the pig herd grows',()=>{
  const sim=new Simulation(),pens=sim.state.buildings.filter(b=>Object.hasOwn(LIVESTOCK,b.kind)),fed=new Set(),onsite=new Set();
- for(let i=0;i<6400&&!pens.every(b=>b.produced>0&&fed.has(b.id)&&onsite.has(b.id));i++){
+ const productive=b=>b.kind==='pigs'?b.herd.count>2:b.produced>0;
+ for(let i=0;i<6400&&!pens.every(b=>productive(b)&&fed.has(b.id)&&onsite.has(b.id));i++){
   sim.step();for(const a of sim.state.agents){if(a.cargo==='grain'&&pens.some(b=>b.id===a.target))fed.add(a.target);if(a.onsite)onsite.add(a.onsite);}
  }
- for(const b of pens){assert.ok(onsite.has(b.id),b.kind+' farmers arrived');assert.ok(fed.has(b.id),b.kind+' feed hauled');assert.ok(b.produced>0,b.kind+' output');assert.ok(b.herd.count>=2);}
+ for(const b of pens){assert.ok(onsite.has(b.id),b.kind+' farmers arrived');assert.ok(fed.has(b.id),b.kind+' feed hauled');assert.ok(productive(b),b.kind+' output or herd growth');assert.ok(b.herd.count>=2);}
  assert.doesNotThrow(()=>parseSave(JSON.stringify(sim.snapshot())));
 });
