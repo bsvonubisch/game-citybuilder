@@ -1,7 +1,8 @@
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
 import { fisheryLayout } from "./shoreline.js";
 import { daylight } from "./daylight.js";
-import type { Building, Simulation } from "./simulation.js";
+import type { Building, Point, Simulation } from "./simulation.js";
+export const ROCK_CLEARING_WORK = 12;
 
 /** The roster follows actual job assignments, including builders still on a journey. */
 export function constructionCrew(sim: Simulation, site: Building) {
@@ -19,7 +20,7 @@ export function constructionCrew(sim: Simulation, site: Building) {
           : onsite
             ? night
               ? "Working on site · night pace"
-              : "Working on site"
+              : site.construction?.clearance ? "Clearing surface rocks" : "Working on site"
             : agent?.active !== false && agent
               ? agent.target === site.id && !agent.returning
                 ? "Travelling to site"
@@ -37,6 +38,8 @@ export interface Construction {
   /** Labour in worker-seconds; only builders who reached the site contribute. */
   required: number;
   completed: number;
+  /** Surface clearance happens before foundations; geology remains underground. */
+  clearance?: { tiles: Point[]; work: number };
   upgradeTo?: HouseTier;
   upgradeLevel?: HouseTier;
   /** Permanent excavation at the current deposit; completed depth is stored on the world. */

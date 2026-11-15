@@ -311,7 +311,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     frame: 4,
     category: "production",
     description:
-      "Build on a stone deposit. Delivers building stone to a warehouse.",
+      "Build beside a stone deposit, within 8 tiles. Miners carry stone back for warehouse deliveries.",
     recipe: { output: "stone", count: 3, seconds: 10 },
   },
   mine: {
@@ -322,7 +322,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     materials: { wood: 8, stone: 5 },
     category: "production",
     description:
-      "Build on a metal deposit. Extracts metal for advanced construction.",
+      "Build beside a metal deposit, within 8 tiles. Miners carry ore back for advanced construction.",
     recipe: { output: "metal", count: 2, seconds: 12 },
   },
 };

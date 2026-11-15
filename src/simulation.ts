@@ -1,5 +1,8 @@
 import { planRoad } from "./road-stroke.js";
 import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
+import { stepMining, miningTargets, landOre, validMiningTrip, type MiningTrip } from "./mining.js";
+import { depositAt, exposedDeposit, nearbyDeposit, buildingDeposit, expandReserves } from "./deposits.js";
+import { ROCK_CLEARING_WORK } from "./construction.js";
 import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType, type RoadTypes } from "./roads.js";
 import {
   BUILDINGS,
@@ -76,6 +79,8 @@ export interface Point {
 }
 export interface Building extends Point {
   forestry?: ForestTrip[];
+  mining?: MiningTrip[];
+  deposit?: string;
   id: number;
   kind: BuildingKind;
   inventory: Partial<Record<Resource, number>>;
@@ -137,6 +142,8 @@ export interface World {
   terrain?: TerrainMap;
   valleyVersion?: 2;
   depositDepths?: Record<string, number>;
+  geologyVersion?: 2;
+  clearedDeposits?: string[];
 }
 export type Command =
   | { type: "roadStroke"; from: Point; to: Point; roadType?: RoadType }
@@ -248,6 +255,7 @@ export class Simulation {
       : {
           version: 3,
           valleyVersion: 2,
+          geologyVersion: 2,
           depositDepths: {},
           tick: 0,
           revision: 0,
@@ -284,10 +292,13 @@ export class Simulation {
         (x, y) =>
           terrain(x, y, this.state.terrain) === "water" ||
           !!this.buildingAt(x, y) ||
-          !!DEPOSITS[key({ x, y })],
+          !!depositAt({ x, y }),
         () => this.state.nextId++,
       );
     expandValley(this.state);
+    expandReserves(this.state);
+    for(const b of this.state.buildings)if(isExtractor(b.kind))b.deposit=buildingDeposit(b);
+    this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
     this.reconnect();
   }
   private seed() {
@@ -579,7 +590,7 @@ export class Simulation {
         existing &&
         this.retarget(existing, existing.returning ? home : destination)
       ) {
-        if (existing.onsite && !destination.construction && destination.kind !== "forester") {
+        if (existing.onsite && !destination.construction && destination.kind !== "forester" && !isExtractor(destination.kind)) {
           delete existing.onsite;
           existing.wait = 0;
           existing.path = this.route(destination, home) ?? existing.path;
@@ -593,7 +604,7 @@ export class Simulation {
       if (p)
         this.state.agents.push({
           id: this.state.nextId++,
-          kind: destination.construction || destination.kind === "forester"
+          kind: destination.construction || destination.kind === "forester" || isExtractor(destination.kind)
             ? "person"
             : r.id % 4 === 0
               ? "car"
@@ -701,6 +712,7 @@ export class Simulation {
         (this.buildingAt(p.x, p.y)?.id ?? id) !== id
       )
         return "The footprint overlaps a road or another building.";
+      if(exposedDeposit(this.state,p)&&!footprint(b.kind,b.x,b.y,b.rotation,b.plot).some(q=>q.x===p.x&&q.y===p.y))return "Builders must clear these surface rocks before an existing building can move here.";
       if (
         this.state.buildings.some(
           (other) =>
@@ -712,9 +724,9 @@ export class Simulation {
     }
     if (
       (b.kind === "quarry" || b.kind === "mine") &&
-      DEPOSITS[key({ x, y })] !== (b.kind === "quarry" ? "stone" : "metal")
+      !nearbyDeposit({...b,x,y,rotation:facing,plot:this.relocationPlot(b,facing)})
     )
-      return "This building must remain on a matching deposit.";
+      return "Move within 8 tiles of a matching deposit, keeping the building beside the rocks.";
     return null;
   }
   canPlace(
@@ -774,6 +786,8 @@ export class Simulation {
         return "The whole building must fit inside the valley.";
       if (this.buildingAt(p.x, p.y) || this.roadSet.has(key(p)))
         return "The building footprint overlaps a road or another building.";
+      if(exposedDeposit(this.state,p)&&!isBuilding(kind))return "Surface rocks need to be cleared by builders before this tile can be used.";
+      if(exposedDeposit(this.state,p)&&isExtractor(kind))return "Place the workplace beside the rocks, within its mining area.";
       if (
         terrain(p.x, p.y, this.state.terrain) === "water" &&
         kind !== "road" &&
@@ -784,14 +798,14 @@ export class Simulation {
     }
     if (
       isDecoration(kind) &&
-      (this.decorationAt(x, y) || DEPOSITS[key({ x, y })])
+      (this.decorationAt(x, y) || exposedDeposit(this.state,{x,y}))
     )
       return "Choose an empty land tile for this decoration.";
     if (
       (kind === "quarry" || kind === "mine") &&
-      DEPOSITS[key({ x, y })] !== (kind === "quarry" ? "stone" : "metal")
+      !nearbyDeposit({kind,x,y,rotation})
     )
-      return `Place this on a ${kind === "quarry" ? "stone" : "metal"} deposit.`;
+      return `Place this beside a ${kind === "quarry" ? "stone" : "metal"} deposit within 8 tiles.`;
     const cost =
       kind === "road" || kind === "bridge"
         ? terrain(x, y, this.state.terrain) === "water"
@@ -844,11 +858,12 @@ export class Simulation {
     if (!b || !isExtractor(b.kind))
       return "Select a quarry or mine to dig deeper.";
     if (b.construction) return "Finish the current construction first.";
-    if (DEPOSITS[key(b)] !== (b.kind === "quarry" ? "stone" : "metal"))
+    if (!buildingDeposit(b))
       return "This extractor needs its matching deposit.";
+    if(this.state.buildings.some(other=>other.id!==b.id&&other.construction?.deeperTo!==undefined&&buildingDeposit(other)===buildingDeposit(b)))return "Another crew is already digging deeper at this deposit.";
     if (!b.connected)
       return "Connect the entrance to a warehouse road before digging deeper.";
-    const next = deeperLayer(this.state.depositDepths?.[key(b)] ?? 0);
+    const next = deeperLayer(this.state.depositDepths?.[buildingDeposit(b)!] ?? 0);
     if (this.state.money < next.cost)
       return `Need ${next.cost} gold to dig deeper.`;
     for (const [r, n] of Object.entries(next.materials))
@@ -1011,7 +1026,11 @@ export class Simulation {
           rotation: c.rotation ?? 0,
           plot: dimensions(c.kind, c.rotation),
           ...(c.kind === "house" ? { houseTier: 1 as const } : {}),
-          construction: { required: constructionWork(c.kind), completed: 0 },
+          ...(isExtractor(c.kind)?{deposit:nearbyDeposit({kind:c.kind,x:c.x,y:c.y,rotation:c.rotation??0})}:{}),
+          construction: (()=>{
+            const tiles=footprint(c.kind,c.x,c.y,c.rotation??0).filter(p=>exposedDeposit(this.state,p));
+            return {required:constructionWork(c.kind)+tiles.length*ROCK_CLEARING_WORK,completed:0,...(tiles.length?{clearance:{tiles,work:0}}:{})};
+          })(),
         });
       message =
         c.kind === "road" || c.kind === "bridge"
@@ -1036,6 +1055,7 @@ export class Simulation {
       if (b) {
         landCatch(b);
         landTimber(b);
+        landOre(b);
         const depot = this.state.buildings.find(
           (w) => w.kind === "warehouse" && w.id !== b.id,
         );
@@ -1077,9 +1097,11 @@ export class Simulation {
       const b = this.building(c.id)!;
       landCatch(b);
       landTimber(b);
+      landOre(b);
       b.plot = this.relocationPlot(b, c.rotation ?? b.rotation);
       b.x = c.x;
       b.y = c.y;
+      if(isExtractor(b.kind))b.deposit=nearbyDeposit({...b,rotation:c.rotation??b.rotation});
       b.rotation = c.rotation ?? b.rotation;
       const cells = footprint(b.kind, b.x, b.y, b.rotation, b.plot);
       this.state.decorations = this.state.decorations.filter(
@@ -1136,7 +1158,8 @@ export class Simulation {
       if (error)
         return { ok: false, message: error, revision: this.state.revision };
       const b = this.building(c.id)!;
-      const next = deeperLayer(this.state.depositDepths?.[key(b)] ?? 0);
+      const next = deeperLayer(this.state.depositDepths?.[buildingDeposit(b)!] ?? 0);
+      landOre(b);
       this.state.money -= next.cost;
       for (const [r, n] of Object.entries(next.materials))
         this.consume(r as Resource, n);
@@ -1155,6 +1178,7 @@ export class Simulation {
       const next = nextUpgrade(b)!,
         tier = next.level;
       landTimber(b);
+      landOre(b);
       this.state.money -= next.cost;
       for (const [r, n] of Object.entries(next.materials))
         this.consume(r as Resource, n);
@@ -1206,14 +1230,26 @@ export class Simulation {
         b.construction.required,
         b.construction.completed + crew * STEP * day.workRate,
       );
+      const clearance=b.construction.clearance;
+      if(clearance) {
+        clearance.work+=crew*STEP*day.workRate;
+        while(clearance.tiles.length&&clearance.work>=ROCK_CLEARING_WORK) {
+          const tile=key(clearance.tiles.shift()!);
+          this.state.clearedDeposits??=[];
+          if(!this.state.clearedDeposits.includes(tile))this.state.clearedDeposits.push(tile);
+          clearance.work-=ROCK_CLEARING_WORK;
+          this.state.revision++;
+        }
+        if(!clearance.tiles.length){delete b.construction.clearance;this.state.revision++;}
+      }
       if (b.construction.completed >= b.construction.required) {
         if (b.construction.upgradeTo) b.houseTier = b.construction.upgradeTo;
         if (b.construction.upgradeLevel) b.level = b.construction.upgradeLevel;
         if (b.construction.deeperTo !== undefined) {
           const depth = b.construction.deeperTo;
           this.state.depositDepths ??= {};
-          this.state.depositDepths[key(b)] = depth;
-          this.state.deposits[key(b)] += deeperLayer(depth - 1).reserve;
+          this.state.depositDepths[buildingDeposit(b)!] = depth;
+          this.state.deposits[buildingDeposit(b)!] += deeperLayer(depth - 1).reserve;
         }
         delete b.construction;
         this.state.history.unshift(`${buildingName(b)} construction finished.`);
@@ -1228,6 +1264,7 @@ export class Simulation {
     for (const b of this.state.buildings) {
       const recipe = BUILDINGS[b.kind].recipe;
       if (b.kind === "forester") { stepForestry(this,b); continue; }
+      if (isExtractor(b.kind)) { stepMining(this,b); continue; }
       if (b.kind === "fishery") {
         stepFishing(this, b);
         continue;
@@ -1240,11 +1277,6 @@ export class Simulation {
         b.workers < BUILDINGS[b.kind].jobs
       )
         continue;
-      if (
-        (b.kind === "quarry" || b.kind === "mine") &&
-        (this.state.deposits[key(b)] ?? 0) < recipe.count
-      )
-        continue;
       if ((b.inventory[recipe.output] ?? 0) >= outputCapacity(b)) continue;
       if (
         recipe.input &&
@@ -1255,8 +1287,6 @@ export class Simulation {
       if (b.progress >= recipe.seconds) {
         b.progress -= recipe.seconds;
         if (recipe.input) b.inventory[recipe.input]! -= recipe.amount!;
-        if (b.kind === "quarry" || b.kind === "mine")
-          this.state.deposits[key(b)] -= recipe.count;
         b.inventory[recipe.output] =
           (b.inventory[recipe.output] ?? 0) + recipe.count;
         b.produced += recipe.count;
@@ -1305,9 +1335,9 @@ export class Simulation {
         a.active = false;
         continue;
       }
-      if (a.onsite && this.building(a.onsite)?.kind === "forester") {
+      if (a.onsite && (this.building(a.onsite)?.kind === "forester" || isExtractor(this.building(a.onsite)?.kind??""))) {
         const lodge=this.building(a.onsite)!;
-        if (lodge.forestry?.some(t=>t.resident===a.resident) || (!day.night && lodge.enabled && lodge.connected && this.state.residents.some(r=>r.id===a.resident&&r.job===lodge.id))) {
+        if (lodge.forestry?.some(t=>t.resident===a.resident) || lodge.mining?.some(t=>t.resident===a.resident) || (!day.night && lodge.enabled && lodge.connected && this.state.residents.some(r=>r.id===a.resident&&r.job===lodge.id))) {
           a.wait=1; a.active=false; continue;
         }
         delete a.onsite; a.wait=0;
@@ -1368,7 +1398,7 @@ export class Simulation {
           a.active = false;
           if (
             a.returning &&
-            (this.building(a.target)?.construction || this.building(a.target)?.kind === "forester") &&
+            (this.building(a.target)?.construction || this.building(a.target)?.kind === "forester" || isExtractor(this.building(a.target)?.kind??"")) &&
             this.state.residents.some(
               (r) => r.id === a.resident && r.job === a.target,
             )
@@ -1429,7 +1459,7 @@ export class Simulation {
                   .filter((b) => isExtractor(b.kind))
                   .map(
                     (b) =>
-                      deeperLayer(this.state.depositDepths?.[key(b)] ?? 0)
+                      deeperLayer(this.state.depositDepths?.[buildingDeposit(b)!] ?? 0)
                         .materials.planks ?? 0,
                   ),
               )
@@ -1483,7 +1513,8 @@ export class Simulation {
             n +
             (b.inventory[r] ?? 0) +
             (r === "fish" ? (b.fishing?.cargo ?? 0) : 0) +
-            (r === "wood" ? (b.forestry??[]).reduce((total,t)=>total+t.cargo,0) : 0),
+            (r === "wood" ? (b.forestry??[]).reduce((total,t)=>total+t.cargo,0) : 0) +
+            (r===(b.kind==="quarry"?"stone":b.kind==="mine"?"metal":"")?(b.mining??[]).reduce((total,t)=>total+t.cargo,0):0),
           0,
         ) +
           this.state.agents
@@ -1504,7 +1535,7 @@ export class Simulation {
     if (b.construction)
       return {
         kind: "construction",
-        title: `${b.construction.deeperTo !== undefined ? "Digging deeper" : b.construction.upgradeTo || b.construction.upgradeLevel ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
+        title: `${b.construction.clearance ? "Clearing rocks" : b.construction.deeperTo !== undefined ? "Digging deeper" : b.construction.upgradeTo || b.construction.upgradeLevel ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
         message: !b.enabled
           ? "Construction is paused. Resume it to assign builders."
           : !b.connected
@@ -1538,7 +1569,7 @@ export class Simulation {
       };
     if (
       (b.kind === "quarry" || b.kind === "mine") &&
-      (this.state.deposits[key(b)] ?? 0) < d.recipe!.count
+      (this.state.deposits[buildingDeposit(b)!] ?? 0) <= 0
     )
       return {
         kind: "depleted",
@@ -1576,6 +1607,7 @@ export class Simulation {
       };
     if (b.kind === "forester" && !b.forestry?.length && !forestTargets(this,b).length)
       return {kind:"input", title:"No reachable mature trees", message:"Wait for nearby stumps to regrow, clear a walking route, or move this lodge closer to woodland. Its highlighted area reaches 10 tiles. Planted garden trees are protected."};
+    if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
     if (b.kind === "house") {
       const residents = this.state.residents.filter((r) => r.home === b.id);
       if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
@@ -1592,6 +1624,7 @@ export class Simulation {
     const alert = this.alert(b);
     if (alert) return alert.title;
     if (b.kind === "fishery") return fishingStatus(b);
+    if(isExtractor(b.kind))return b.mining?.some(t=>t.phase==="returning")?"Carrying resources to the workplace":b.mining?.some(t=>t.phase==="mining")?"Mining the rock face":daylight(this.state.tick).night?"Miners resting until morning":"Miners walking to the deposit";
     if (b.kind === "forester") return b.forestry?.some(t=>t.phase==="returning") ? "Bringing logs to the lodge" : b.forestry?.some(t=>t.phase==="chopping") ? "Cutting trees" : daylight(this.state.tick).night ? "Foresters resting until morning" : "Workers walking to trees";
     if (isLeisure(b.kind))
       return serviceOpen(b.kind, daylight(this.state.tick).hour)
@@ -1645,12 +1678,14 @@ export function parseSave(raw: string): World {
   if (
     !s.deposits ||
     (s.valleyVersion !== undefined && s.valleyVersion !== 2) ||
+    (s.geologyVersion !== undefined && s.geologyVersion !== 2) ||
     Object.entries(s.deposits).some(
       ([k, v]) =>
         !Object.hasOwn(DEPOSITS, k) || !finite(v) || !Number.isSafeInteger(v),
     )
   )
     throw new Error("Invalid deposits.");
+  if(s.clearedDeposits!==undefined&&(!Array.isArray(s.clearedDeposits)||new Set(s.clearedDeposits).size!==s.clearedDeposits.length||s.clearedDeposits.some(k=>typeof k!=="string"||!depositAt({x:Number(k.split(",")[0]),y:Number(k.split(",")[1])})||k!==k.split(",").map(Number).join(","))))throw new Error("Invalid cleared deposits.");
   if (
     s.depositDepths !== undefined &&
     (!s.depositDepths ||
@@ -1677,6 +1712,10 @@ export function parseSave(raw: string): World {
     })
   )) throw new Error("Invalid road surfaces.");
   for (const b of s.buildings) {
+    const clearance=b.construction?.clearance;
+    if(clearance&&(!Array.isArray(clearance.tiles)||!clearance.tiles.length||clearance.tiles.length>16||!finite(clearance.work)||clearance.work>=ROCK_CLEARING_WORK||clearance.tiles.some(p=>!p||!Number.isInteger(p.x)||!Number.isInteger(p.y)||!exposedDeposit(s,p)||!footprint(b.kind,b.x,b.y,b.rotation,b.plot).some(q=>q.x===p.x&&q.y===p.y))||new Set(clearance.tiles.map(key)).size!==clearance.tiles.length))throw new Error("Invalid surface clearance.");
+    if(b.deposit!==undefined&&(!isExtractor(b.kind)||DEPOSITS[b.deposit] !== (b.kind==="quarry"?"stone":"metal")))throw new Error("Invalid assigned deposit.");
+    if(b.mining!==undefined&&(!isExtractor(b.kind)||!Array.isArray(b.mining)||b.mining.length>4||!b.mining.every(t=>validMiningTrip(t)&&t.deposit===buildingDeposit(b))))throw new Error("Invalid mining work.");
     if (b.forestry !== undefined && (b.kind!=="forester" || !Array.isArray(b.forestry) || b.forestry.length>2 || !b.forestry.every(validForestTrip))) throw new Error("Invalid forestry work.");
     b.rotation ??= 0;
     if (b.kind === "house") b.houseTier ??= 1;
@@ -1754,11 +1793,11 @@ export function parseSave(raw: string): World {
               b.construction.upgradeTo !== undefined)) ||
           (b.construction.deeperTo !== undefined &&
             (!isExtractor(b.kind) ||
-              !DEPOSITS[key(b)] ||
+              !buildingDeposit(b) ||
               b.construction.upgradeTo !== undefined ||
               !Number.isSafeInteger(b.construction.deeperTo) ||
               b.construction.deeperTo !==
-                (s.depositDepths?.[key(b)] ?? 0) + 1)) ||
+                (s.depositDepths?.[buildingDeposit(b)!] ?? 0) + 1)) ||
           (b.construction.upgradeTo !== undefined &&
             (b.kind !== "house" ||
               ![2, 3].includes(b.construction.upgradeTo) ||
@@ -1919,6 +1958,7 @@ export function parseSave(raw: string): World {
   s.agents = [];
   // Like delivery trucks, restore carried timber before resident journeys are rebuilt.
   for (const b of s.buildings) landTimber(b);
+  for (const b of s.buildings) landOre(b);
   s.residents = s.residents.filter(
     (r) =>
       Number.isInteger(r.id) &&
@@ -1942,6 +1982,7 @@ export function parseSave(raw: string): World {
   );
   s.version = 3;
   expandValley(s as World);
+  expandReserves(s as World);
   return s as World;
 }
 
@@ -1976,6 +2017,7 @@ function expandValley(s: World) {
   );
   s.depositDepths ??= {};
   s.valleyVersion = 2;
+  s.geologyVersion = 2;
   s.revision++;
   s.history.unshift(
     "The valley has expanded. Original town preserved; deposits now have larger reserves and repeatable deeper layers.",

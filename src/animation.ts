@@ -2,6 +2,7 @@ import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
 import { daylight } from "./daylight.js";
 import { productionRate, outputCapacity } from "./upgrades.js";
+import { buildingDeposit } from "./deposits.js";
 import { buildingArt } from "./building-art.js";
 import { rotorView } from "./windmill.js";
 import {
@@ -39,7 +40,7 @@ export function working(sim: Simulation, b: Building) {
     return false;
   if (
     (b.kind === "quarry" || b.kind === "mine") &&
-    (sim.state.deposits[key(b)] ?? 0) < r.count
+    (sim.state.deposits[buildingDeposit(b)!] ?? 0) < r.count
   )
     return false;
   return (

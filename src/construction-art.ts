@@ -107,6 +107,13 @@ export class ConstructionArt {
     return { name, left, top };
   }
   place(sprite: Phaser.GameObjects.Image, b: Building, sim: Simulation) {
+    if(b.construction?.clearance) {
+      const p=iso(b.x,b.y);
+      sprite.setPosition(p.x,p.y-48-groundHeight(b.x,b.y,sim.state.terrain)).setVisible(false);
+      this.fronts.get(b.id)?.setVisible(false);
+      return;
+    }
+    sprite.setVisible(true);
     const [w, h] = dimensions(b.kind, b.rotation, b.plot),
       p = iso(b.x, b.y);
     const height = groundHeight(b.x, b.y, sim.state.terrain);
@@ -129,6 +136,7 @@ export class ConstructionArt {
       this.fronts.set(b.id, f);
     }
     place(f, true);
+    f.setVisible(true);
     f.setDepth((b.x + b.y + w + h - 2) * 32 + 12.5);
   }
   sync(sim: Simulation) {

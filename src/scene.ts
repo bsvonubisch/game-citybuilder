@@ -5,6 +5,8 @@ import { planRoad, type RoadPlan } from "./road-stroke.js";
 import { prepareRoadSurfaces } from "./road-art.js";
 import { ForestryArt, prepareForestryFrames } from "./forestry-art.js";
 import { forestCenter, forestTargets, FOREST_RADIUS } from "./forestry.js";
+import { depositAt, exposedDeposit, depositTiles, buildingDeposit, MINING_RADIUS, isExtractor } from "./deposits.js";
+import { miningTargets } from "./mining.js";
 import type { RoadType } from "./roads.js";
 import { isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
 import {
@@ -253,12 +255,14 @@ export class TownScene extends Phaser.Scene {
     this.load.image("construction-earth", "/construction-earth.png");
     this.load.image("construction-workers", "/construction-workers.png");
     this.load.image("forestry", "/forestry-workers.png");
+    this.load.image("mining", "/mining-workers.png");
     this.load.image("fishing-boats", "/fishing-boats.png");
   }
   create() {
     setupArtworkScaling(this.game);
     prepareRoadSurfaces(this);
     prepareForestryFrames(this);
+    prepareForestryFrames(this,"mining");
     this.forestryArt=new ForestryArt(this);
     this.events.once("shutdown",()=>this.forestryArt.clear());
     this.nightArt = new NightArt(this);
@@ -683,10 +687,11 @@ export class TownScene extends Phaser.Scene {
           }
         }
         if (water && !road && h > 0.45) this.waterPoints.push(p);
-        if (water || road || occupied) continue;
-        if (DEPOSITS[key({ x, y })]) {
+        if (water || road || (occupied&&!occupied.construction?.clearance)) continue;
+        const deposit=depositAt({x,y});
+        if (deposit && exposedDeposit(this.simulation.state,{x,y}) && !this.simulation.decorationAt(x,y)) {
           const frame =
-            (DEPOSITS[key({ x, y })] === "metal" ? 4 : 0) + Math.floor(h * 4);
+            (DEPOSITS[deposit] === "metal" ? 4 : 0) + Math.floor(h * 4);
           const rock = this.add.image(0, 0, "deposits", frame).setOrigin(0, 0);
           const w = rock.frame.width,
             ht = rock.frame.height;
@@ -696,16 +701,16 @@ export class TownScene extends Phaser.Scene {
               [w * 0.43, ht],
               [w, ht * 0.8],
             ],
-            1,
-            1,
+            .7,
+            .7,
           );
           rock
             .setScale(fit.scale)
             .setPosition(
               p.x + fit.x,
-              p.y + fit.y - groundHeight(x, y, this.simulation.state.terrain),
+              p.y + fit.y + 4.8 - groundHeight(x, y, this.simulation.state.terrain),
             )
-            .setDepth((x + y) * 32 + 6);
+            .setDepth((x + y) * 32 + 6).setData("depositPoint",{x,y});
           this.trees.push(rock);
           continue;
         }
@@ -759,7 +764,7 @@ export class TownScene extends Phaser.Scene {
       ...this.buildings.values(),
       ...this.trees.filter((t) => t.getData("streetlight")),
     ];
-    this.occludingPlots = this.simulation.state.buildings.map((b) => {
+    this.occludingPlots = this.simulation.state.buildings.filter(b=>!b.construction?.clearance).map((b) => {
       const s = this.buildings.get(b.id)!,
         [width, height] = dimensions(b.kind, b.rotation, b.plot);
       return {
@@ -774,6 +779,10 @@ export class TownScene extends Phaser.Scene {
         bottom: s.y + s.displayHeight,
       };
     });
+    for(const rock of this.trees) {
+      const point=rock.getData("depositPoint") as Point|undefined;
+      if(point)rock.setDepth(travellerDepth(point,{left:rock.x,right:rock.x+rock.displayWidth,top:rock.y,bottom:rock.y+rock.displayHeight},this.occludingPlots)-.1);
+    }
     this.drawOverlay();
   }
   private diamond(p: Point, color: number, alpha: number, height?: number) {
@@ -849,6 +858,7 @@ export class TownScene extends Phaser.Scene {
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
         if (isLeisure(b.kind)) this.drawCoverage(b);
         if (b.kind==="forester")this.drawForestRange(b);
+        if (isExtractor(b.kind))this.drawMiningRange(b);
       }
     }
     if (this.tool === "road") {
@@ -947,6 +957,7 @@ export class TownScene extends Phaser.Scene {
       }
       if (isBuilding(kind)) {
         if(kind==="forester")this.drawForestRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
+        if(isExtractor(kind))this.drawMiningRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if (isLeisure(kind))
           this.drawCoverage(
             servicePreview(
@@ -1089,7 +1100,8 @@ export class TownScene extends Phaser.Scene {
     );
     if (!a) return;
     if (a.onsite) {
-      const trip=this.simulation.building(a.onsite)?.forestry?.find(t=>t.resident===a.resident);
+      const workplace=this.simulation.building(a.onsite);
+      const trip=workplace?.forestry?.find(t=>t.resident===a.resident)??workplace?.mining?.find(t=>t.resident===a.resident);
       if(trip) this.routeOverlay.lineStyle(1.5,0xffdf88,.85).strokePoints(trip.path.slice(Math.floor(trip.distance)).map(p=>{const v=iso(p.x,p.y);return{x:v.x,y:v.y-groundHeight(p.x,p.y,this.simulation.state.terrain)};}),false);
       this.highlightWorker(a, 0xffdf88);
       return;
@@ -1405,17 +1417,20 @@ export class TownScene extends Phaser.Scene {
             (a) => a.onsite === site.id,
           ),
           slot = crew.findIndex((c) => c.id === a.id);
-        const p = builderPosition(site, slot),
+        const clearing=site.construction.clearance?.tiles;
+        const rock=clearing?.[slot%clearing.length];
+        const p = rock?{x:rock.x+.35,y:rock.y+.35}:builderPosition(site, slot),
           v = iso(p.x, p.y),
           [w, h] = dimensions(site.kind, site.rotation, site.plot);
         const working = site.enabled && site.connected;
         const phase = this.simulation.state.tick * STEP + this.acc + a.id;
         const pose = builderFrame(a.resident ?? a.id, slot % 2, phase, working);
-        s.setTexture("construction-workers", pose.frame)
-          .setOrigin(pose.originX, pose.originY)
+        const texture=rock?"mining":"construction-workers", frame=rock?8+[0,1,1,2,3,0][working?Math.floor(phase*6)%6:0]:pose.frame;
+        s.setTexture(texture, frame)
+          .setOrigin(rock?.56:pose.originX, rock?.97:pose.originY)
           .setScale(
             pose.size /
-              this.textures.getFrame("construction-workers", pose.frame).height,
+              this.textures.getFrame(texture, frame).height,
           )
           .setPosition(
             v.x,
@@ -1503,6 +1518,13 @@ export class TownScene extends Phaser.Scene {
     }
     this.overlay.lineStyle(1.4,0x98d7a0,.9).strokePoints(points,false);
     for(const target of forestTargets(this.simulation,b)) this.diamond(target.tree,0x93d993,.25);
+  }
+  private drawMiningRange(b:Building) {
+    const center=forestCenter(b),points=[];
+    for(let i=0;i<=64;i++){const angle=i/64*Math.PI*2,p=iso(center.x+Math.cos(angle)*MINING_RADIUS,center.y+Math.sin(angle)*MINING_RADIUS);points.push({x:p.x,y:p.y-groundHeight(b.x,b.y,this.simulation.state.terrain)});}
+    const deposit=buildingDeposit(b),reachable=new Set(miningTargets(this.simulation,b).map(t=>key(t.rock)));
+    this.overlay.lineStyle(1.4,b.kind==="quarry"?0xbecfdb:0xe8ac78,.9).strokePoints(points,false);
+    if(deposit)for(const p of depositTiles(deposit))if(!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.roads.has(key(p)))this.diamond(p,reachable.has(key(p))?0x93d993:0xe6c17d,.3);
   }
   replace(simulation: Simulation) {
     this.simulation = simulation;

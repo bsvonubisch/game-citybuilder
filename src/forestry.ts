@@ -2,7 +2,7 @@ import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import { daylight } from "./daylight.js";
 import { outputCapacity, productionRate } from "./upgrades.js";
-import { DEPOSITS } from "./deposits.js";
+import { DEPOSIT_TILES } from "./deposits.js";
 import type { Decoration } from "./decorations.js";
 import type { Building, Point, Simulation } from "./simulation.js";
 
@@ -45,7 +45,8 @@ export function forestTargets(sim: Simulation, b: Building) {
   if (cached) return cached;
   const blocked = new Set(sim.state.buildings.flatMap(other => footprint(other.kind,other.x,other.y,other.rotation,other.plot).map(key)));
   for (const p of footprint(b.kind,b.x,b.y,b.rotation,b.plot)) blocked.add(key(p));
-  for (const k of Object.keys(DEPOSITS)) blocked.add(k);
+  for (const k of Object.keys(DEPOSIT_TILES)) blocked.add(k);
+  for (const k of sim.roads) blocked.delete(k);
   for (const d of sim.state.decorations) if (d.kind === "fence" || (["oak","pine","birch","blossom"].includes(d.kind) && treeStage(d,sim.state.tick) === "mature")) blocked.add(key(d));
   const start = sim.adjacent(b).find(p => walkable(sim,p,blocked));
   const candidates: {tree:Decoration; path:Point[]}[] = [];

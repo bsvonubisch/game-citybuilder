@@ -1,4 +1,5 @@
 import { SIZE, STARTING_SIZE, footprint } from "./catalog.js";
+import { depositAt } from "./deposits.js";
 import type { World, Point } from "./simulation.js";
 
 export type TerrainCell = { kind: "land" | "water"; height: number };
@@ -174,7 +175,7 @@ export function planTerrain(
       world.decorations.some((d) => d.x === c.x && d.y === c.y && !d.natural)
     )
       error = "Remove garden objects before adding water.";
-    if (c.kind === "water" && Object.hasOwn(world.deposits, key(c.x, c.y)))
+    if (c.kind === "water" && depositAt(c))
       error = "Keep resource deposits on dry ground.";
   }
   if (world.money < cost) error = `Need ${cost} gold for this terrain edit.`;

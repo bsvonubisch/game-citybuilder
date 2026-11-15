@@ -1,0 +1,9 @@
+# Mining and surface clearance
+
+Deposits retain permanent anchors and excavation depth. Each seam starts with 60,000 resources, with small 2–5 tile surface clusters. Older 6,000-resource saves gain the difference once, retaining consumed resources; exhausted layers stay exhausted. Dig deeper adds 120,000 on the first expansion, then 60,000 more per subsequent layer.
+
+Place a quarry or metal mine beside its matching deposit, within eight tiles. The placement overlay shows reach and accessible rock faces. Actual assigned residents commute to work, walk over clear land to a rock face, swing a pickaxe and carry up to six resources back. No stock appears at the workplace until they return. Faces are reserved between workers; reserves cannot go negative. New mining trips stop overnight. Returning cargo is preserved when relocating, upgrading, demolishing or loading a save.
+
+Other buildings can be queued over surface rocks. Builders must reach the site and spend twelve worker-seconds per rock tile clearing it before foundations appear. Cleared surface cells persist through saves and demolition. Underground resources remain at the original location. Existing buildings and roads from old towns keep their locations; new extraction workplaces belong beside exposed deposits.
+
+`public/mining-workers.png` was generated using the built-in image tool on 15 November 2026. It contains four columns and five rows: four directional pickaxe cycles (southeast, southwest, northwest, northeast), followed by stone basket, ore basket, stone rubble and copper rubble. The brief specified the same moss-shirt/brown-vest worker, fixed feet, ready/windup/strike/recovery poses, a transparent background and the existing cozy isometric painted pixel style. Source: `exec-71ba04fc-77ec-4137-8f67-d815365466d6.png`.

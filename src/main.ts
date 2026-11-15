@@ -44,7 +44,8 @@ import {
   servicePreview,
   serviceOpen,
 } from "./proximity.js";
-import { deeperLayer, isExtractor } from "./deposits.js";
+import { deeperLayer, isExtractor, depositAt, DEPOSIT_TILES, buildingDeposit, MINING_RADIUS } from "./deposits.js";
+import { miningTargets } from "./mining.js";
 import {
   builderCapacity,
   constructionWork,
@@ -303,6 +304,7 @@ function setTool(next: Tool) {
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
+  if(isExtractor(next))$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">Build beside the deposit · ${MINING_RADIUS}-tile reach · Green rocks are reachable from the entrance</span>`);
   if (next === "road") document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((button) => {
     button.onclick = () => {
       scene.cancelRoad();
@@ -542,9 +544,9 @@ scene.onTile = async (p: Point) => {
     scene.drawOverlay();
     if (selectedDecoration) renderDecorationInspector();
     else renderInspector();
-    if (!b && DEPOSITS[key(p)])
+    if (!b && depositAt(p))
       toast(
-        `${DEPOSITS[key(p)] === "stone" ? "Stone" : "Metal"} deposit · ${simulation.state.deposits[key(p)]} remaining`,
+        `${DEPOSITS[depositAt(p)!] === "stone" ? "Stone" : "Metal"} deposit · ${simulation.state.deposits[depositAt(p)!].toLocaleString()} remaining · build beside it`,
       );
     return;
   }
@@ -616,7 +618,7 @@ scene.onHover = (p) => {
       : `${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].name} road · ${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].description.toLowerCase()}`
     : "";
   $("#tile-label").textContent = p
-    ? `${p.x}, ${p.y}${surface ? " · " + surface : DEPOSITS[key(p)] ? " · " + DEPOSITS[key(p)] + " deposit" : ""}`
+    ? `${p.x}, ${p.y}${surface ? " · " + surface : depositAt(p) ? " · " + DEPOSITS[depositAt(p)!] + " deposit" : ""}`
     : "";
 };
 scene.onSelectAgent = (id) => {
@@ -963,6 +965,13 @@ function updateAgentInspector() {
       $("#traveller-detail").innerHTML=`<div class="detail-row"><span>Workplace</span><b>${escapeHtml(buildingName(site))}</b></div><div class="detail-row"><span>Carrying</span><b>${trip?.cargo??0} wood</b></div><p class="muted">Wood enters the lodge's inventory only when this worker returns. Cut trees leave stumps that regrow.</p>`;
       return;
     }
+    if(site&&isExtractor(site.kind)&&!site.construction){
+      const trip=site.mining?.find(t=>t.resident===a.resident),resource=site.kind==="quarry"?"stone":"metal";
+      $("#traveller-name").textContent=person?.name??"Miner";
+      $("#traveller-kind").textContent=site.kind==="quarry"?"Stone miner":"Metal miner";
+      $("#traveller-status").textContent=trip?.phase==="mining"?"Mining the rock face":trip?.phase==="returning"?"Carrying resources back":trip?"Walking to the deposit":"At the workplace";
+      $("#traveller-detail").innerHTML=`<div class="detail-row"><span>Carrying</span><b>${trip?.cargo??0} ${resource}</b></div><p class="muted">Resources enter ${escapeHtml(buildingName(site))} when this worker returns.</p>`;return;
+    }
     $("#traveller-name").textContent = person?.name ?? "Builder";
     $("#traveller-kind").textContent = "Construction worker";
     $("#traveller-status").textContent =
@@ -1036,7 +1045,7 @@ function updateInspector() {
             )
             .join(
               "",
-            )}${b.kind === "quarry" || b.kind === "mine" ? `<div class="detail-row"><span>Deposit remaining</span><b>${simulation.state.deposits[key(b)]}</b></div>` : ""}`
+            )}${isExtractor(b.kind) ? `<div class="detail-row"><span>Deposit remaining</span><b>${(simulation.state.deposits[buildingDeposit(b)!]??0).toLocaleString()}</b></div>` : ""}`
         : b.kind === "house"
           ? `<div class="detail-row"><span>Residents</span><b>${simulation.state.residents.filter((r) => r.home === b.id).length} / ${houseCapacity(b)}</b></div><div class="residents">${simulation.state.residents
               .filter((r) => r.home === b.id)
@@ -1068,6 +1077,10 @@ function updateInspector() {
       `<div class="detail-row"><span>Level ${b.level ?? 1} · capacity</span><b>${Math.round(productionRate(b) * 100)}% pace · ${outputCapacity(b)} output</b></div>`,
     );
   if (d.recipe) updateLogistics(b);
+  if(isExtractor(b.kind)&&!b.construction) {
+    const targets=miningTargets(simulation,b);
+    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Mining area · ${MINING_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable rock faces</span><b>${targets.length}</b></div><p class="muted">Miners walk to the highlighted deposit, break up rock and carry it back. Digging deeper extends this same deposit.</p>${(b.mining??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Miner")}</span><b>${t.phase==="mining"?"Mining":t.phase==="returning"?`Carrying ${t.cargo} ${b.kind==="quarry"?"stone":"metal"}`:"Walking to the deposit"}</b></div>`).join("")}`);
+  }
   if (b.kind==="forester"&&!b.construction) {
     const reachable=forestTargets(simulation,b).length;
     const regrowing=simulation.state.decorations.filter(d=>harvestable(d)&&forestInside(b,d)&&treeStage(d,simulation.state.tick)!=="mature").length;
@@ -1146,10 +1159,11 @@ function updateInspector() {
       `<h4>Leisure · ${need}%</h4><p>${nearby.length ? nearby.map((s) => escapeHtml(buildingName(s))).join(" · ") : "No nearby leisure. Build a fountain square or tavern within walking distance and connect the roads."}</p><p class="muted">Leisure improves after a visit. Workplaces must be within 28 road tiles; nearby jobs are assigned first.</p>`;
   }
   if (isExtractor(b.kind) && !b.construction) {
-    const depth = simulation.state.depositDepths?.[key(b)] ?? 0;
+    const deposit=buildingDeposit(b)!;
+    const depth = simulation.state.depositDepths?.[deposit] ?? 0;
     const next = deeperLayer(depth);
     $("#deepen-benefit").textContent =
-      `Layer ${depth + 1} · ${simulation.state.deposits[key(b)].toLocaleString()} remaining. Next layer adds ${next.reserve.toLocaleString()} resources · ${next.labour} worker-seconds. Repeat whenever needed; the deposit stays here.`;
+      `Layer ${depth + 1} · ${(simulation.state.deposits[deposit]??0).toLocaleString()} remaining at ${deposit}. Next layer adds ${next.reserve.toLocaleString()} resources · ${next.labour} worker-seconds. Repeat whenever needed; the deposit stays here.`;
     const costs = [
       { name: "Gold", need: next.cost, have: simulation.state.money },
       ...Object.entries(next.materials).map(([r, need]) => ({
@@ -1190,7 +1204,7 @@ function updateInspector() {
       rosterElement.dataset.roster = roster;
     }
     $("#building-detail").innerHTML =
-      `<h4>${b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : b.construction.upgradeLevel ? "Building upgrade" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div>${b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
+      `<h4>${b.construction.clearance ? "Clearing surface rocks" : b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : b.construction.upgradeLevel ? "Building upgrade" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div>${b.construction.clearance ? `<p class="muted">Builders must clear ${b.construction.clearance.tiles.length} rock tiles before foundations begin. Underground reserves remain in place.</p>` : b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
     if (d.recipe) $("#production-logistics").hidden = true;
     $("#toggle-production").textContent = b.enabled
       ? "Pause construction"
@@ -1344,10 +1358,10 @@ function drawMinimap() {
     ctx.fillStyle = terrainCell(x, y, simulation.state.terrain).kind === "water" ? "#c2a36c" : ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, {x, y})].color;
     ctx.fillRect(p.x, p.y, sx + 0.4, sy + 0.4);
   });
-  for (const [k, kind] of Object.entries(DEPOSITS)) {
+  for (const [k, deposit] of Object.entries(DEPOSIT_TILES)) {
     const [x, y] = k.split(",").map(Number),
       p = map(x, y);
-    ctx.fillStyle = kind === "stone" ? "#f6efd5" : "#ae603c";
+    ctx.fillStyle = DEPOSITS[deposit] === "stone" ? "#f6efd5" : "#ae603c";
     ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
   }
   simulation.state.buildings.forEach((b) => {

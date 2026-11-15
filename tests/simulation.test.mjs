@@ -470,7 +470,7 @@ test("production alerts explain blockers, prioritize full output and clear after
 
 test("depleted extractor alerts clear with a usable deposit and pauses take priority", () => {
   const sim = new Simulation();
-  const seed = sim.state.buildings.find((b) => b.kind === "forester");
+  const seed = sim.state.buildings.find((b) => b.kind === "quarry");
   const b = {
     ...seed,
     kind: "quarry",
@@ -1122,7 +1122,8 @@ test("people have homes and workplaces; cars and walkers take valid road routes"
 });
 test("both factory chains deliver real goods and export tools", () => {
   const sim = new Simulation();
-  advance(sim, 240);
+  // Include the first physical harvesting trips before downstream exports.
+  advance(sim, 360);
   assert.ok(sim.state.delivered > 60);
   assert.ok(sim.state.exported > 0);
   assert.ok(sim.state.buildings.find((b) => b.kind === "bakery").produced > 0);
@@ -1238,7 +1239,7 @@ test("deterministic simulation produces identical results from the same starting
 test("finite deposits stop extraction at depletion", () => {
   const sim = new Simulation();
   sim.state.deposits["19,4"] = 3;
-  advance(sim, 50);
+  advance(sim, 180);
   const quarry = sim.state.buildings.find((b) => b.kind === "quarry");
   assert.equal(quarry.produced, 3);
   assert.equal(sim.state.deposits["19,4"], 0);
@@ -1301,8 +1302,8 @@ test("every building can be placed in every orientation, with rectangular plots 
         planks: 1000,
       });
       const sim = new Simulation(seed),
-        x = kind === "quarry" || kind === "mine" ? 19 : 8,
-        y = kind === "quarry" ? 4 : kind === "mine" ? 7 : 20;
+        x = kind === "quarry" || kind === "mine" ? 16 : 8,
+        y = kind === "quarry" || kind === "mine" ? 7 : 18;
       if (kind === "fishery") {
         sim.state.terrain = Object.fromEntries(
           fisheryCells(x, y, rotation).map((p) => [
@@ -1378,12 +1379,12 @@ test("a compact production plot cannot move onto a road and rejection changes no
   );
   const b = sim.buildingAt(8, 20);
   assert.equal(
-    execute(sim, { type: "place", kind: "road", x: 8, y: 22 }).ok,
+    execute(sim, { type: "place", kind: "road", x: 7, y: 21 }).ok,
     true,
   );
   const before = sim.snapshot();
   assert.equal(
-    execute(sim, { type: "move", id: b.id, x: 8, y: 21, rotation: 1 }).ok,
+    execute(sim, { type: "move", id: b.id, x: 7, y: 21, rotation: 1 }).ok,
     false,
   );
   assert.deepEqual(sim.snapshot(), before);
@@ -2030,11 +2031,9 @@ test("expanded valley preserves every starter terrain tile and offers buildable 
     assert.equal(sim.state.deposits[k], INITIAL_RESERVE);
     const [x, y] = k.split(",").map(Number);
     if (x < 28 && y < 28) continue;
-    assert.equal(
-      sim.canPlace(kind === "stone" ? "quarry" : "mine", x, y),
-      null,
-      `usable ${k}`,
-    );
+    const building=kind==="stone"?"quarry":"mine";
+    assert.ok(sim.canPlace(building,x,y),"the workplace belongs beside exposed rocks");
+    assert.ok([{x:x-3,y},{x,y:y-3},{x:x+2,y},{x,y:y+2}].some(p=>sim.canPlace(building,p.x,p.y)===null),`accessible ${k}`);
   }
   assert.equal(sim.canPlace("house", 61, 61), null);
   assert.match(sim.canPlace("house", 63, 63), /footprint|valley/);
@@ -2116,7 +2115,7 @@ test("an exhausted deposit supports repeated deeper layers with real builders an
   }
   const depth = sim.state.depositDepths[location],
     reserve = sim.state.deposits[location];
-  assert.equal(execute(sim, { type: "move", id: b.id, x: 6, y: 32 }).ok, true);
+  assert.equal(execute(sim, { type: "move", id: b.id, x: 6, y: 29 }).ok, true);
   assert.equal(
     sim.state.depositDepths[location],
     depth,
