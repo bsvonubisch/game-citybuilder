@@ -2653,3 +2653,16 @@ test('rain and mist retain their world coordinates when the camera pans',async()
  for(const p of shared)assert.ok(b.some(q=>q.x===p.x&&q.y===p.y));
  assert.deepEqual(mistPatch(5,20),mistPatch(5,20));
 });
+
+test('pedestrians remain on the correct side of fences and bridge rails along the whole span',async()=>{
+ const {edgeDepth}=await import('../.test-dist/edge-occlusion.js');
+ const bounds={left:-100,right:100,top:-100,bottom:100};
+ for(const axis of ['x','y'])for(const along of [-.45,-.2,.2,.45]){
+  const edge={a:axis==='x'?{x:.5,y:-.5}:{x:-.5,y:.5},b:{x:.5,y:.5},depth:32,...bounds};
+  const near=axis==='x'?{x:.7,y:along}:{x:along,y:.7},far=axis==='x'?{x:.3,y:along}:{x:along,y:.3};
+  assert.ok(edgeDepth(near,bounds,(near.x+near.y)*32+16,[edge])>32);
+  assert.ok(edgeDepth(far,bounds,(far.x+far.y)*32+16,[edge])<32);
+ }
+ const distant={a:{x:9,y:9},b:{x:10,y:9},depth:600,left:1000,right:1100,top:900,bottom:1000};
+ assert.equal(edgeDepth({x:0,y:0},bounds,16,[distant]),16);
+});

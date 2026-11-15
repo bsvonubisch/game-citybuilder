@@ -1,3 +1,4 @@
+import type {EdgeOccluder} from "./edge-occlusion.js";
 import {roadTypeAt} from "./roads.js";
 import {roadSurface} from "./road-art.js";
 import type Phaser from "phaser";
@@ -37,6 +38,7 @@ const CORNERS = [
 /** Textured geometry is cached by connections. Ramps and rail openings follow
  * the actual road graph, while front and rear rails sort separately from traffic. */
 export class BridgeArt {
+  edges:EdgeOccluder[]=[];
   private variants = new Map<
     string,
     { deck: string; supports: string; rails: (string | null)[] }
@@ -390,6 +392,7 @@ export class BridgeArt {
     const result={deck,supports,rails};this.variants.set(id,result);return result;
   }
   redraw(sim: Simulation) {
+    this.edges=[];
     this.images.forEach((image) => image.destroy());
     this.images = [];
     for (const road of sim.roads) {
@@ -408,7 +411,11 @@ export class BridgeArt {
       add(art.supports, -997);
       add(art.deck, -996);
       art.rails.forEach((texture, edge) => {
-        if (texture) add(texture, (x + y) * 32 + (edge < 2 ? 32 : 0));
+        if (texture) {
+          const depth=(x+y)*32+(edge<2?32:0);add(texture,depth);
+          const [a,b]=CORNERS[edge].map(q=>({x:x+q.x,y:y+q.y})),pa=iso(a.x,a.y),pb=iso(b.x,b.y);
+          this.edges.push({a,b,depth,left:Math.min(pa.x,pb.x)-3,right:Math.max(pa.x,pb.x)+3,top:Math.min(pa.y,pb.y)-22,bottom:Math.max(pa.y,pb.y)+1});
+        }
       });
     }
   }

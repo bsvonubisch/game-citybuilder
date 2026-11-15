@@ -1,3 +1,5 @@
+import {edgeDepth,type EdgeOccluder} from "./edge-occlusion.js";
+import {fenceEnds} from "./fences.js";
 import {WeatherArt} from "./weather-art.js";
 import {cameraViewport} from "./rendering.js";
 import {isPark} from "./catalog.js";
@@ -216,6 +218,7 @@ export class TownScene extends Phaser.Scene {
   private cameraKey = "";
   private bridgeArt!: BridgeArt;
   private fenceArt!: FenceArt;
+  private occludingEdges:EdgeOccluder[]=[];
   private waterArt!: WaterArt;
   private routeOverlay!: Phaser.GameObjects.Graphics;
   private logisticsRoutes!: Phaser.GameObjects.Graphics;
@@ -850,6 +853,7 @@ export class TownScene extends Phaser.Scene {
       const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?fenceCenter(decoration):undefined)) as Point|undefined;
       if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots,decoration?.kind==="fence")+(decoration?.kind==="streetlight"&&lampPlacement(this.simulation,decoration).bridge? .3 : -.1));
     }
+    this.occludingEdges=[...this.bridgeArt.edges,...this.trees.filter(t=>t.getData("decoration")?.kind==="fence").map(t=>{const d=t.getData("decoration"),[a,b]=fenceEnds(d,d.side??1);return {a,b,depth:t.depth,left:t.x,right:t.x+t.displayWidth,top:t.y,bottom:t.y+t.displayHeight};})];
     this.drawOverlay();
   }
   private diamond(p: Point, color: number, alpha: number, height?: number) {
@@ -1483,6 +1487,7 @@ export class TownScene extends Phaser.Scene {
           ),
         )
         .setFlipX(a.kind === "person" && walk.flip);
+      s.setDepth(edgeDepth(p,{left:s.x-s.displayWidth*s.originX,right:s.x+s.displayWidth*(1-s.originX),top:s.y-s.displayHeight*s.originY,bottom:s.y+s.displayHeight*(1-s.originY)},s.depth,this.occludingEdges));
       if (site?.construction) {
         const crew = this.simulation.state.agents.filter(
             (a) => a.onsite === site.id,
