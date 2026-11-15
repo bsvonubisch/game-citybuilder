@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
+import { Simulation, parseSave, key } from "./legacy-town.mjs";
 import { BUILDINGS, frontage } from "../.test-dist/catalog.js";
 import { fisheryCells, fisheryLayout } from "../.test-dist/shoreline.js";
 import { builderPosition } from "../.test-dist/construction.js";

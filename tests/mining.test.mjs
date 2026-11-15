@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Simulation,parseSave} from '../.test-dist/simulation.js';
+import {Simulation,parseSave} from './legacy-town.mjs';
 import {DEPOSITS,depositTiles,depositAt,buildingDeposit,nearbyDeposits,INITIAL_RESERVE,exposedDeposit} from '../.test-dist/deposits.js';
 import {miningTargets,stepMining,validMiningTrip} from '../.test-dist/mining.js';
 import {footprint} from '../.test-dist/catalog.js';

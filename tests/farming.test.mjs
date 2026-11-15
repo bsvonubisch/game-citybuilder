@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {Simulation,parseSave} from '../.test-dist/simulation.js';
+import {Simulation,parseSave} from './legacy-town.mjs';
 import {CROPS,farmRectangle,farmPatch,farmPrice,farmJobs,validFarmPlot} from '../.test-dist/farm-layout.js';
 import {ensureField,stepFarm,cropStage,farmSummary,validateField} from '../.test-dist/farming.js';
 import {buildingRecipe,buildingJobs,frontage} from '../.test-dist/catalog.js';

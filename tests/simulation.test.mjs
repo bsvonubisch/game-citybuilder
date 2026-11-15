@@ -33,7 +33,7 @@ import {
   HOUSE_TIERS,
   houseCapacity,
 } from "../.test-dist/catalog.js";
-import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
+import { Simulation, parseSave, key } from "./legacy-town.mjs";
 import { roadStroke, planRoad } from "../.test-dist/road-stroke.js";
 import { ROAD_TYPES, roadTypeAt } from "../.test-dist/roads.js";
 import { forestTargets, forestInside, treeStage, LOGS_PER_TREE, REGROW_TICKS } from "../.test-dist/forestry.js";

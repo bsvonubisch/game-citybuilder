@@ -622,7 +622,7 @@ export class TownScene extends Phaser.Scene {
     this.cameras.main.setZoom(
       Math.min(1.5, Math.max(0.65, this.scale.width / 1000)),
     );
-    const center = iso(13.5, 11);
+    const center = iso(13.5, 15);
     this.cameras.main.centerOn(center.x, center.y - 15);
     this.onCamera();
   }

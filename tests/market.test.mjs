@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {Simulation,parseSave} from '../.test-dist/simulation.js';
+import {Simulation,parseSave} from './legacy-town.mjs';
 import {marketLayout,marketPrice,validMarketPlot,marketRectangle} from '../.test-dist/market-layout.js';
 import {marketVendors,buyAtMarket} from '../.test-dist/market.js';
 import {marketVisit,marketCustomerPose} from '../.test-dist/market-visitors.js';

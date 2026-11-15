@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {Simulation,parseSave} from '../.test-dist/simulation.js';
+import {Simulation,parseSave} from './legacy-town.mjs';
 import {wildOpen,stepWildlife,huntTargets,stepHunting,landHunt} from '../.test-dist/hunting.js';
 import {footprint} from '../.test-dist/catalog.js';
 function fixture(){const sim=new Simulation();sim.state.money=50000;Object.assign(sim.state.buildings.find(b=>b.kind==='warehouse').inventory,{wood:500,stone:500,metal:100});const result=sim.execute({id:'hunt-test',expectedRevision:sim.state.revision,command:{type:'place',kind:'hunter',x:7,y:21,rotation:3}});assert.equal(result.ok,true,result.message);const lodge=sim.buildingAt(7,21);delete lodge.construction;sim.reconnect(true);return{sim,lodge};}

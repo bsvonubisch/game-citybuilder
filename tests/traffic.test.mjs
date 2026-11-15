@@ -7,7 +7,7 @@ import {
   vehiclesOverlap,
   LANE_OFFSET,
 } from "../.test-dist/traffic.js";
-import { Simulation } from "../.test-dist/simulation.js";
+import { Simulation } from "./legacy-town.mjs";
 import { agentDistance } from "../.test-dist/rendering.js";
 import { STEP, AGENT_SPEED } from "../.test-dist/catalog.js";
 import { ROAD_TYPES, roadTravelTime, roadMovement } from "../.test-dist/roads.js";

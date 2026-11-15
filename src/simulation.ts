@@ -1,3 +1,4 @@
+import {seedStarterTown,landscapeStarterTown} from './starter-town.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
 import {ensureField,prepareField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
@@ -308,18 +309,7 @@ export class Simulation {
           food: 100,
           history: [],
         };
-    if (!saved) {
-      this.seed();
-      for (const b of this.state.buildings) {
-        b.plot = FOOTPRINTS[b.kind];
-        const facing = [0, 1, 2, 3].find((r) =>
-          frontage(b.kind, b.x, b.y, r, b.plot).some((p) =>
-            this.state.roads.includes(key(p)),
-          ),
-        );
-        if (facing !== undefined) b.rotation = facing as 0 | 1 | 2 | 3;
-      }
-    }
+    if (!saved) seedStarterTown(this.state);
     if (!saved || !saved.decorations)
       this.state.decorations = initialDecorations(
         new Set(this.state.roads),
@@ -329,6 +319,7 @@ export class Simulation {
           !!depositAt({ x, y }),
         () => this.state.nextId++,
       );
+    if (!saved) landscapeStarterTown(this.state);
     expandValley(this.state);
     expandReserves(this.state);
     lengthenDays(this.state);
@@ -358,69 +349,6 @@ export class Simulation {
     for(const b of this.state.buildings)if(b.kind==='farm')prepareField(b);
     this.reconnect(!!saved);
     ensureWildlife(this);
-  }
-  private seed() {
-    const road = (x: number, y: number) => {
-      if (!this.state.roads.includes(key({ x, y })))
-        this.state.roads.push(key({ x, y }));
-    };
-    for (let x = 4; x <= 25; x++) road(x, 10);
-    for (let x = 4; x <= 23; x++) road(x, 18);
-    for (let y = 3; y <= 23; y++) {
-      road(6, y);
-      road(13, y);
-      road(21, y);
-    }
-    const add = (kind: BuildingKind, x: number, y: number) => {
-      this.state.buildings.push({
-        id: this.state.nextId++,
-        kind,
-        x,
-        y,
-        inventory: {},
-        progress: 0,
-        workers: 0,
-        connected: false,
-        enabled: true,
-        produced: 0,
-        rotation: kind === "house" && x === 7 ? 2 : 0,
-        ...(kind === "house" ? { houseTier: 1 as const } : {}),
-      });
-    };
-    [
-      [7, 3],
-      [7, 5],
-      [7, 7],
-      [11, 3],
-      [11, 5],
-      [11, 7],
-      [4, 4],
-      [4, 6],
-      [4, 8],
-      [7, 11],
-      [7, 13],
-      [7, 15],
-    ].forEach(([x, y]) => add("house", x, y));
-    add("warehouse", 11, 11);
-    add("park", 11, 15);
-    add("park", 4, 13);
-    add("farm", 14, 4);
-    add("mill", 14, 7);
-    add("bakery", 14, 11);
-    add("forester", 14, 14);
-    add("sawmill", 19, 11);
-    add("workshop", 19, 14);
-    add("quarry", 19, 4);
-    add("mine", 19, 7);
-    this.state.buildings.find((b) => b.kind === "warehouse")!.inventory = {
-      bread: 45,
-      wood: 60,
-      stone: 45,
-      metal: 25,
-    };
-    this.state.history = [
-      "Your first settlers have arrived. Welcome to Pinehaven.",
-    ];
   }
   get roads() {
     return this.roadSet;
