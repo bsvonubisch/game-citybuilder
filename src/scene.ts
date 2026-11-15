@@ -840,7 +840,7 @@ export class TownScene extends Phaser.Scene {
     for(const rock of this.trees) {
       const decoration=rock.getData("decoration");
       const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?fenceCenter(decoration):undefined)) as Point|undefined;
-      if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots)-.1);
+      if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots,decoration?.kind==="fence")-.1);
     }
     this.drawOverlay();
   }

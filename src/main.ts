@@ -166,6 +166,7 @@ $("#app").innerHTML = `
    ["bread", "food-stock", "Food in warehouses"],
    ["wood", "wood", "Wood in warehouses"],
    ["planks", "planks", "Planks in warehouses"],
+   ["bricks", "box", "Bricks in warehouses"],
    ["stone", "stone", "Stone in warehouses"],
    ["metal", "metal", "Metal in warehouses"],
    ["people", "population", "Employed / residents"],
@@ -1454,7 +1455,7 @@ function updateUI() {
     "aria-label",
     $(".resource.food-stock").title,
   );
-  for (const r of ["wood", "planks", "stone", "metal"] as const)
+  for (const r of ["wood", "planks", "bricks", "stone", "metal"] as const)
     $("#" + r).textContent = simulation.stored(r).toString();
   $("#population").textContent = `${employed} / ${s.residents.length}`;
   $(".resource.population").title =
@@ -1530,7 +1531,7 @@ function closeModal() {
 }
 function showChains() {
   openModal(
-    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat farm → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per three residents each day.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Workshop → Warehouse</span><small>Wood becomes planks, then tools. Tools sell for 35 gold each.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
+    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat farm → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per three residents each day.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Workshop → Warehouse</span><small>Wood becomes planks, then tools. Tools sell for 35 gold each.</small></div><div class="chain"><b>Brickmaking</b><span>Stone quarry → Brickworks → Warehouse → Brick roads and bridges</span><small>Two stone become four bricks. New brick road tiles use one brick; bridge tiles use four.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
   );
 }
 function showSettings() {

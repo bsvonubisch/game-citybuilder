@@ -24,6 +24,7 @@ export function travellerDepth(
   p: { x: number; y: number },
   bounds: { left: number; right: number; top: number; bottom: number },
   plots: readonly OccludingPlot[],
+  rearWins = false,
 ) {
   const natural = (p.x + p.y) * 32 + 16;
   let lower = -Infinity,
@@ -40,7 +41,9 @@ export function travellerDepth(
       lower = Math.max(lower, b.depth + 1);
     else upper = Math.min(upper, b.depth - 1);
   }
-  return Math.max(lower, Math.min(upper, natural));
+  // Thin fences between staggered plots must disappear behind the nearer wall
+  // when two whole-sprite ordering constraints cannot both be satisfied.
+  return rearWins?Math.min(upper,Math.max(lower,natural)):Math.max(lower, Math.min(upper, natural));
 }
 /** Phaser's default camera zooms about its center, not its top-left corner. */
 export function cameraViewport(c: {

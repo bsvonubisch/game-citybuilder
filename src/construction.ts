@@ -46,6 +46,7 @@ export interface Construction {
   deeperTo?: number;
 }
 const LABOUR: Record<BuildingKind, number> = {
+  brickworks:280,
   house: 120,
   farm: 160,
   fishery: 220,

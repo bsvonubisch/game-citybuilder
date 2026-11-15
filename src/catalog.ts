@@ -1,4 +1,5 @@
 export type Resource =
+  | "bricks"
   | "grain"
   | "flour"
   | "bread"
@@ -9,6 +10,7 @@ export type Resource =
   | "planks"
   | "tools";
 export type BuildingKind =
+  | "brickworks"
   | "house"
   | "farm"
   | "fishery"
@@ -173,6 +175,7 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
+  brickworks:{name:"Village brickworks",cost:260,jobs:2,frame:0,materials:{wood:10,stone:12},category:"production",description:"Fires stone into bricks for faster roads and sturdy bridges.",recipe:{input:"stone",amount:2,output:"bricks",count:4,seconds:10}},
   house: {
     name: "Timber cottage",
     cost: 90,
@@ -327,6 +330,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
   },
 };
 export const RESOURCES: Resource[] = [
+  "bricks",
   "wood",
   "stone",
   "metal",
@@ -338,6 +342,7 @@ export const RESOURCES: Resource[] = [
   "tools",
 ];
 export const RESOURCE_NAMES: Record<Resource, string> = {
+  bricks:"Bricks",
   grain: "Grain",
   flour: "Flour",
   bread: "Bread",
@@ -349,6 +354,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   tools: "Tools",
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
+  brickworks:[2,2],
   house: [2, 2],
   farm: [2, 2],
   fishery: [2, 2],

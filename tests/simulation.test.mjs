@@ -2502,3 +2502,11 @@ test("park visitors remain visible only during actual visits and alternate strol
  assert.equal(parkVisitor({...a,wait:0},park),null);assert.equal(parkVisitor({...a,returning:false},park),null);
  assert.equal(parkVisitor(a,{...park,construction:{required:10,completed:1}}),null);
 });
+
+
+test("a fence between staggered buildings stays behind the nearer wall even with conflicting whole-sprite depths",()=>{
+ const bounds={left:-60,right:60,top:-80,bottom:80},base={width:2,height:2,depth:76,left:-100,right:100,top:-200,bottom:100};
+ const plots=[{...base,x:0,y:0},{...base,x:2,y:-2}];
+ const point={x:1.5,y:-1};
+ assert.ok(travellerDepth(point,bounds,plots,true)<76);
+});

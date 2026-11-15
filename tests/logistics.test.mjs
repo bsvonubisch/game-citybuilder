@@ -317,3 +317,14 @@ test("worker and construction advice accounts for available residents", () => {
   assert.notEqual(advice.action.id, mill.id);
   assert.ok(sim.building(advice.action.id).workers > 0);
 });
+
+
+test("brickworks consumes stone, makes bricks, and sends them to warehouse stock",()=>{
+ const sim=new Simulation(),works=building(sim,'workshop');
+ for(const b of sim.state.buildings)if(BUILDINGS[b.kind].jobs)b.enabled=false;
+ works.kind='brickworks';works.enabled=true;works.inventory={stone:12};works.produced=0;sim.reconnect();
+ for(let i=0;i<240;i++)sim.step();
+ assert.ok(works.produced>=4);assert.equal(works.produced%4,0);
+ assert.equal(12-works.inventory.stone,works.produced/2);
+ assert.ok(sim.stored('bricks')>0);assert.equal(canSupply(works,building(sim,'warehouse')),true);
+});

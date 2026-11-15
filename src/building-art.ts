@@ -21,6 +21,7 @@ const grounds: Record<
   Exclude<BuildingKind, "fishery">,
   readonly PlotCorners[]
 > = {
+  brickworks:[[[40,475],[320,615],[600,475]],[[25,480],[305,620],[585,480]],[[35,472],[315,612],[595,472]],[[35,472],[315,612],[595,472]]],
   tavern: [
     [
       [80, 483],
@@ -487,7 +488,7 @@ export function buildingArt(
           ? [443, 443]
           : [627, 627],
     ground: grounds[kind][rotation],
-    chimney: chimneys[kind]?.[rotation],
+    chimney: kind==="brickworks"?([[458,50],[450,55],[208,52],[173,48]] as const)[rotation]:chimneys[kind]?.[rotation],
     mechanism: mechanisms[kind]?.[rotation],
   };
 }
