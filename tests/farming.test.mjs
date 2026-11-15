@@ -1,13 +1,30 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {Simulation,parseSave} from './legacy-town.mjs';
 import {CROPS,farmRectangle,farmPatch,farmPrice,farmJobs,validFarmPlot} from '../.test-dist/farm-layout.js';
-import {ensureField,stepFarm,cropStage,farmSummary,validateField} from '../.test-dist/farming.js';
-import {buildingRecipe,buildingJobs,frontage} from '../.test-dist/catalog.js';
+import {ensureField,stepFarm,cropStage,farmSummary,validateField,farmTravel,farmPosition} from '../.test-dist/farming.js';
+import {buildingRecipe,buildingJobs,frontage,AGENT_SPEED,STEP} from '../.test-dist/catalog.js';
 import {canSupply} from '../.test-dist/logistics.js';
 import {townNeeds} from '../.test-dist/needs.js';
 import {DAY_TICKS} from '../.test-dist/daylight.js';
 const command=(s,c)=>s.execute({id:'field-'+s.state.revision,actorId:'test',expectedRevision:s.state.revision,command:c});
 function fixture(){const s=new Simulation();s.state.money=100000;Object.assign(s.state.buildings.find(b=>b.kind==='warehouse').inventory,{wood:1000,stone:1000,planks:1000,metal:1000});return s;}
+
+test('farmers walk at pedestrian speed regardless of path spacing, including short entrance steps',()=>{
+  for(const x of [[0,.5,1,1.5,2],[0,.03,.06,.5,1,1.5,2]])for(const phase of ['walking','returning']){
+    const t={path:x.map(x=>({x,y:0})),distance:0,phase};
+    const start=farmPosition(t),interpolated=farmPosition(t,STEP/2);
+    assert.ok(Math.abs(interpolated.x-start.x-AGENT_SPEED.person*STEP/2)<1e-9);
+    for(let i=0;i<4;i++)t.distance=farmTravel(t,STEP).distance;
+    assert.ok(Math.abs(farmPosition(t).x-AGENT_SPEED.person)<1e-9);
+    assert.ok(Math.abs(farmPosition(t).travelled-AGENT_SPEED.person)<1e-9);
+  }
+  const corner={path:[{x:0,y:0},{x:.1,y:0},{x:.1,y:.5}],distance:0,phase:'walking'};
+  assert.ok(Math.abs(farmPosition(corner,STEP).y-(STEP*AGENT_SPEED.person-.1))<1e-9,'A tick carries unused movement around a corner');
+  assert.deepEqual(farmPosition({...corner,phase:'working'},1),farmPosition({...corner,phase:'working'}),'Working farmers stay planted');
+  assert.equal(farmTravel(corner,10).distance,2,'Clamp at the destination');
+  const old={path:[{x:0,y:0},{x:.5,y:0},{x:1,y:0}],distance:1.2,phase:'returning'};
+  assert.ok(Math.abs(farmPosition(old).x-.6)<1e-9,'An existing saved farmer does not jump');
+});
 
 test('inclusive field drag works in all directions and caps each side at ten tiles',()=>{
   assert.deepEqual(farmRectangle({x:10,y:10},{x:10,y:10}),{x:10,y:10,plot:[1,1]});

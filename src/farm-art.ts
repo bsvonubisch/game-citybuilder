@@ -87,7 +87,7 @@ export class FarmArt{
         // A single bend per patch, with a stable foot anchor and body scale.
         const phase=Math.min(.999,(task.work+elapsed)/FARM_WORK_SECONDS),frame=[0,1,2,2,3,0][Math.floor(phase*6)];
         placeActor(s,'farm-workers',direction*4+frame);
-      }else{const pose=walkFrame(direction,0,task.distance+elapsed*.9,false);s.setTexture('walkers',pose.frame).setOrigin(.5,.91).setScale(24/s.frame.height).setFlipX(pose.flip);}
+      }else{const pose=walkFrame(direction,0,local.travelled,false);s.setTexture('walkers',pose.frame).setOrigin(.5,.91).setScale(24/s.frame.height).setFlipX(pose.flip);}
       s.setPosition(v.x,v.y-groundHeight(b.x,b.y,sim.state.terrain)).setVisible(true).setData('sized',false);
       s.setDepth(travellerDepth(p,{left:s.x-s.displayWidth*s.originX,right:s.x+s.displayWidth*(1-s.originX),top:s.y-s.displayHeight*s.originY,bottom:s.y},plots));
       if(task.cargo){

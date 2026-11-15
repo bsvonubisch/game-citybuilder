@@ -1,4 +1,4 @@
-import {STEP,dimensions} from './catalog.js';
+import {STEP,AGENT_SPEED,dimensions} from './catalog.js';
 import {CROPS,farmArea,farmPatch,isCrop,type Crop} from './farm-layout.js';
 import {daylight} from './daylight.js';
 import {outputCapacity,productionRate} from './upgrades.js';
@@ -9,6 +9,20 @@ export interface FarmCell {sownAt?:number}
 export interface FarmTask {resident:number;patch:number;action:'sow'|'harvest';phase:'walking'|'working'|'returning';path:Point[];entry?:Point;distance:number;work:number;cargo:number}
 export interface Field {cells:FarmCell[];tasks:FarmTask[];phase?:'sowing'|'harvesting'}
 export const FARM_WORK_SECONDS=2;
+const pathLengths=new WeakMap<Point[],number[]>();
+/** Saves store fractional path indices. Travel is measured in actual tiles,
+ * including short entrance segments, so spacing never changes walking speed. */
+export function farmTravel(t:FarmTask,elapsed=0){
+  let lengths=pathLengths.get(t.path);
+  if(!lengths){lengths=[0];for(let i=1;i<t.path.length;i++)lengths.push(lengths[i-1]+Math.hypot(t.path[i].x-t.path[i-1].x,t.path[i].y-t.path[i-1].y));pathLengths.set(t.path,lengths);}
+  const end=t.path.length-1;
+  let i=Math.min(Math.floor(t.distance),Math.max(0,end-1));
+  const current=lengths[i]+((lengths[i+1]??lengths[i])-lengths[i])*(t.distance-i);
+  const travelled=Math.min(lengths[end],current+(t.phase==='working'?0:Math.max(0,elapsed)*AGENT_SPEED.person));
+  while(i<end-1&&lengths[i+1]<=travelled)i++;
+  const span=(lengths[i+1]??lengths[i])-lengths[i];
+  return{distance:span>0?i+(travelled-lengths[i])/span:end,travelled};
+}
 export function ensureField(b:Building):Field{const f:Field=b.field??={cells:Array.from({length:farmArea(b.plot)*4},()=>({})),tasks:[]};f.phase??='sowing';return f;}
 /** Old fields may still be waiting for the former area-based construction timer. */
 export function prepareField(b:Building){
@@ -25,9 +39,9 @@ export function cropStage(cell:FarmCell,crop:Crop,tick:number){
   return age<60?'seeded':age<CROPS[crop].grow?'growing':'ripe';
 }
 export function farmPosition(t:FarmTask,elapsed=0){
-  const distance=Math.min(t.path.length-1,t.distance+(t.phase==='working'?0:elapsed*.9)),i=Math.min(Math.floor(distance),Math.max(0,t.path.length-2));
+  const {distance,travelled}=farmTravel(t,elapsed),i=Math.min(Math.floor(distance),Math.max(0,t.path.length-2));
   const a=t.path[i],b=t.path[Math.min(i+1,t.path.length-1)],f=distance-i;
-  return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,dx:b.x-a.x,dy:b.y-a.y};
+  return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,dx:b.x-a.x,dy:b.y-a.y,travelled};
 }
 export function landHarvest(b:Building){
   if(!b.field)return;const r=CROPS[b.crop??'wheat'].output;
@@ -74,7 +88,7 @@ export function stepFarm(sim:Simulation,b:Building){
         else {t.phase='returning';t.path=fieldPath(at,entry);t.entry=entry;t.distance=0;}
       }
     }else{
-      t.distance=Math.min(t.path.length-1,t.distance+STEP*.9);
+      t.distance=farmTravel(t,STEP).distance;
       if(t.distance>=t.path.length-1){
         if(t.phase==='walking'){t.phase='working';t.work=0;}
         else{b.inventory[def.output]=(b.inventory[def.output]??0)+t.cargo;b.produced+=t.cargo;field.tasks=field.tasks.filter(v=>v!==t);}
