@@ -1,3 +1,4 @@
+import {fenceEdgeSet,crossesFence} from "./fences.js";
 import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
 import { DEPOSITS, DEPOSIT_TILES, MINING_RADIUS, buildingDeposit, depositTiles } from "./deposits.js";
 import { groundHeight, terrainCell } from "./terrain.js";
@@ -28,17 +29,18 @@ export function miningTargets(sim:Simulation,b:Building) {
   const targets:{rock:Point;path:Point[]}[]=[],deposit=buildingDeposit(b);
   if(!deposit)return targets;
   const [w,h]=dimensions(b.kind,b.rotation,b.plot),cx=b.x+(w-1)/2,cy=b.y+(h-1)/2;
+  const fences=fenceEdgeSet(sim.state.decorations);
   const blocked=new Set([...Object.keys(DEPOSIT_TILES),...sim.state.buildings.flatMap(c=>footprint(c.kind,c.x,c.y,c.rotation,c.plot).map(key)),...footprint(b.kind,b.x,b.y,b.rotation,b.plot).map(key)]);
-  for(const d of sim.state.decorations)if(d.kind==="fence"||(["oak","pine","birch","blossom"].includes(d.kind)&&treeStage(d,sim.state.tick)==="mature"))blocked.add(key(d));
+  for(const d of sim.state.decorations)if((d.kind==="fence"&&d.side===undefined)||(["oak","pine","birch","blossom"].includes(d.kind)&&treeStage(d,sim.state.tick)==="mature"))blocked.add(key(d));
   // Existing roads across a legacy seam remain usable; exposed rocks do not.
   for(const k of sim.roads)blocked.delete(k);
   const open=(p:Point)=>p.x>=0&&p.y>=0&&p.x<SIZE&&p.y<SIZE&&terrainCell(p.x,p.y,sim.state.terrain).kind==="land"&&!blocked.has(key(p))&&Math.hypot(p.x-cx,p.y-cy)<=MINING_RADIUS+1;
   const queue=sim.adjacent(b).filter(open),parents=new Map<string,Point|null>(queue.map(p=>[key(p),null]));
-  for(let i=0;i<queue.length;i++)for(const d of dirs){const p=queue[i],q={x:p.x+d.x,y:p.y+d.y};if(!parents.has(key(q))&&open(q)&&Math.abs(groundHeight(p.x,p.y,sim.state.terrain)-groundHeight(q.x,q.y,sim.state.terrain))<=8){parents.set(key(q),p);queue.push(q);}}
+  for(let i=0;i<queue.length;i++)for(const d of dirs){const p=queue[i],q={x:p.x+d.x,y:p.y+d.y};if(!parents.has(key(q))&&!crossesFence(p,q,fences)&&open(q)&&Math.abs(groundHeight(p.x,p.y,sim.state.terrain)-groundHeight(q.x,q.y,sim.state.terrain))<=8){parents.set(key(q),p);queue.push(q);}}
   for(const rock of depositTiles(deposit)) {
-    if(sim.buildingAt(rock.x,rock.y)||sim.decorationAt(rock.x,rock.y)||sim.roads.has(key(rock))||terrainCell(rock.x,rock.y,sim.state.terrain).kind!=="land"||Math.hypot(rock.x-cx,rock.y-cy)>MINING_RADIUS)continue;
+    if(sim.buildingAt(rock.x,rock.y)||sim.state.decorations.some(d=>d.x===rock.x&&d.y===rock.y&&d.side===undefined)||sim.roads.has(key(rock))||terrainCell(rock.x,rock.y,sim.state.terrain).kind!=="land"||Math.hypot(rock.x-cx,rock.y-cy)>MINING_RADIUS)continue;
     let best:Point[]|undefined;
-    for(const d of dirs){const stand={x:rock.x+d.x,y:rock.y+d.y};if(!parents.has(key(stand)))continue;const path:Point[]=[];let at:Point|null=stand;while(at){path.push(at);at=parents.get(key(at))??null;}path.reverse();if(!best||path.length<best.length)best=path;}
+    for(const d of dirs){const stand={x:rock.x+d.x,y:rock.y+d.y};if(!parents.has(key(stand))||crossesFence(stand,rock,fences))continue;const path:Point[]=[];let at:Point|null=stand;while(at){path.push(at);at=parents.get(key(at))??null;}path.reverse();if(!best||path.length<best.length)best=path;}
     if(best){const stand=best.at(-1)!;best.push({x:stand.x+(rock.x-stand.x)*.65,y:stand.y+(rock.y-stand.y)*.65});targets.push({rock,path:best});}
   }
   targets.sort((a,b)=>a.path.length-b.path.length||a.rock.x-b.rock.x||a.rock.y-b.rock.y);

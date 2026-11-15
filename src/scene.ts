@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import {planRemoval} from "./removal.js";
+import {nearestFenceSide} from "./fences.js";
 import {lampPoint,nearestRoadEdge} from "./streetlights.js";
 import { NightArt } from "./night-art.js";
 import { ShadowArt } from "./shadow-art.js";
@@ -72,7 +73,6 @@ import { lanePose, lanePoint, LANE_OFFSET } from "./traffic.js";
 import { laneCuts } from "./lanes.js";
 import { BridgeArt } from "./bridge-art.js";
 import { FenceArt } from "./fence-art.js";
-import { fenceMask } from "./fences.js";
 import { roadHeight } from "./bridges.js";
 import {
   TownAnimation,
@@ -275,6 +275,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("forestry", "/forestry-workers.png");
     this.load.image("mining", "/mining-workers.png");
     this.load.image("planter-plants", "/planter-plants.png");
+    this.load.image("fence-pickets", "/fence-pickets.png");
     this.load.image("streetlamp", "/streetlight-copper.png");
     this.load.image("fishing-boats", "/fishing-boats.png");
   }
@@ -393,7 +394,7 @@ export class TownScene extends Phaser.Scene {
         const hit=this.tool==="bulldoze"?over.find(o=>o.getData("buildingId")||o.getData("decoration")):undefined;
         const b=hit?.getData("buildingId")?this.simulation.building(hit.getData("buildingId")):undefined;
         const tile = b?{x:b.x,y:b.y}:hit?.getData("decoration")??this.pickTile(world.x,world.y);
-        if (inside(tile.x,tile.y)) { this.roadDrag = { from: tile, to: tile, pointer: p.id,decoration:hit?.getData("decoration")?.edge!==undefined?hit?.getData("decoration")?.id:undefined }; this.drawOverlay(); }
+        if (inside(tile.x,tile.y)) { this.roadDrag = { from: tile, to: tile, pointer: p.id,decoration:(hit?.getData("decoration")?.edge!==undefined||hit?.getData("decoration")?.side!==undefined)?hit?.getData("decoration")?.id:undefined }; this.drawOverlay(); }
         return;
       }
       if (p.wasTouch) return;
@@ -476,9 +477,10 @@ export class TownScene extends Phaser.Scene {
       }
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       const t = this.pickTile(wp.x, wp.y);
-      if(this.tool==="streetlight"&&this.simulation.roads.has(key(t))) {
+      if(this.tool==="fence"||(this.tool==="streetlight"&&this.simulation.roads.has(key(t)))) {
         const y=wp.y+groundHeight(t.x,t.y,this.simulation.state.terrain);
-        const edge=nearestRoadEdge(this.simulation.roads,t,{x:wp.x/64+y/32,y:y/32-wp.x/64}) as 0|1|2|3;
+        const raw={x:wp.x/64+y/32,y:y/32-wp.x/64};
+        const edge=(this.tool==="fence"?nearestFenceSide(t,raw):nearestRoadEdge(this.simulation.roads,t,raw)) as 0|1|2|3;
         if(edge!==this.rotation){this.rotation=edge;this.drawOverlay();}
       }
       const hover = inside(t.x, t.y) ? t : null;
@@ -495,7 +497,7 @@ export class TownScene extends Phaser.Scene {
         if(!p.wasTouch&&p.button===1&&this.moved<6){
           const hit=over.find(o=>o.getData("buildingId")),b=hit&&this.simulation.building(hit.getData("buildingId"));
           if(b)this.onEyedropper(b.kind,b.rotation);
-          else {const d=over.find(o=>o.getData("decoration"))?.getData("decoration");if(d)this.onEyedropper(d.kind,0);}
+          else {const d=over.find(o=>o.getData("decoration"))?.getData("decoration");if(d)this.onEyedropper(d.kind,d.side??d.edge??0);}
         }
         if (!p.wasTouch && p.button !== 0) {
           this.dragging = false;
@@ -558,9 +560,10 @@ export class TownScene extends Phaser.Scene {
             const wp = this.cameras.main.getWorldPoint(p.x, p.y),
               t = this.pickTile(wp.x, wp.y);
             if (inside(t.x, t.y)) {
-              if(this.tool==="streetlight"&&this.simulation.roads.has(key(t))){
+              if(this.tool==="fence"||(this.tool==="streetlight"&&this.simulation.roads.has(key(t)))){
                 const y=wp.y+groundHeight(t.x,t.y,this.simulation.state.terrain);
-                this.rotation=nearestRoadEdge(this.simulation.roads,t,{x:wp.x/64+y/32,y:y/32-wp.x/64}) as 0|1|2|3;
+                const raw={x:wp.x/64+y/32,y:y/32-wp.x/64};
+                this.rotation=(this.tool==="fence"?nearestFenceSide(t,raw):nearestRoadEdge(this.simulation.roads,t,raw)) as 0|1|2|3;
               }
               this.onTile(t);
             }
@@ -737,7 +740,7 @@ export class TownScene extends Phaser.Scene {
         if (water && !road && h > 0.45) this.waterPoints.push(p);
         if (water || road || (occupied&&!occupied.construction?.clearance)) continue;
         const deposit=depositAt({x,y});
-        if (deposit && exposedDeposit(this.simulation.state,{x,y}) && !this.simulation.decorationAt(x,y)) {
+        if (deposit && exposedDeposit(this.simulation.state,{x,y}) && !this.simulation.state.decorations.some(d=>d.x===x&&d.y===y&&d.side===undefined)) {
           const frame =
             (DEPOSITS[deposit] === "metal" ? 4 : 0) + Math.floor(h * 4);
           const rock = this.add.image(0, 0, "deposits", frame).setOrigin(0, 0);
@@ -765,7 +768,7 @@ export class TownScene extends Phaser.Scene {
       }
     for (const d of this.simulation.state.decorations) {
       const def = DECORATIONS[d.kind],
-        position=d.kind==="streetlight"?lampPoint(d):d,
+        position=d.kind==="streetlight"?lampPoint(d):d.kind==="fence"?lampPoint({...d,edge:d.side??1}):d,
         p = iso(position.x, position.y);
       const sprite = this.add
         .image(p.x, p.y + (d.kind==="streetlight"?0:3), def.texture, def.frame)
@@ -778,9 +781,8 @@ export class TownScene extends Phaser.Scene {
       if (d.kind === "fence")
         this.fenceArt.place(
           sprite,
-          d.x,
-          d.y,
-          fenceMask(d, this.simulation.state.decorations),
+          d,
+          this.simulation.state.decorations,
         );
       sprite.y -= groundHeight(d.x, d.y, this.simulation.state.terrain);
       sprite.setData("streetlight", d.kind === "streetlight");
@@ -831,7 +833,7 @@ export class TownScene extends Phaser.Scene {
     });
     for(const rock of this.trees) {
       const decoration=rock.getData("decoration");
-      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):undefined)) as Point|undefined;
+      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?lampPoint({...decoration,edge:decoration.side??1}):undefined)) as Point|undefined;
       if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots)-.1);
     }
     this.drawOverlay();
@@ -980,7 +982,7 @@ export class TownScene extends Phaser.Scene {
         }
       } else
         for (const p of cells)
-          this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
+          if(this.tool!=="fence")this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
       if (isDecoration(this.tool)) {
         const def = DECORATIONS[this.tool],
           position=this.tool==="streetlight"&&this.simulation.roads.has(key(this.hover))?lampPoint({...this.hover,edge:this.rotation}):this.hover,
@@ -1002,9 +1004,8 @@ export class TownScene extends Phaser.Scene {
         if (this.tool === "fence")
           this.fenceArt.place(
             this.decorationGhost,
-            this.hover.x,
-            this.hover.y,
-            fenceMask(this.hover, this.simulation.state.decorations),
+            {...this.hover,id:-1,side:this.rotation},
+            this.simulation.state.decorations,
           );
         if(this.tool==="planter")this.planterArt.place(this.decorationGhost,this.hover.x,this.hover.y,planterMask(this.hover,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction));
         this.decorationGhost.y -= groundHeight(

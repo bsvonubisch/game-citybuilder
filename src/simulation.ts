@@ -1,3 +1,4 @@
+import {fenceKey,fenceNeighbour} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
 import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
 import { stepMining, miningTargets, landOre, validMiningTrip, type MiningTrip } from "./mining.js";
@@ -306,6 +307,7 @@ export class Simulation {
     lengthenDays(this.state);
     for(const b of this.state.buildings)if(isExtractor(b.kind))b.deposit=buildingDeposit(b);
     this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
+    for(const d of this.state.decorations)if(d.kind==="fence"&&d.side===undefined)d.side=this.state.decorations.some(n=>n.kind==="fence"&&n.x===d.x&&Math.abs(n.y-d.y)===1)?0:1;
     this.reconnect();
   }
   private seed() {
@@ -749,6 +751,18 @@ export class Simulation {
     rotation = 0,
   ): string | null {
     if (!inside(x, y)) return "Choose a tile inside the valley.";
+    if(kind==="fence"){
+      if(!Number.isInteger(rotation)||rotation<0||rotation>3)return "Choose one of the four tile edges.";
+      const side=rotation%4,q=fenceNeighbour({x,y},side);
+      if(!inside(q.x,q.y)||terrain(x,y,this.state.terrain)==="water"||terrain(q.x,q.y,this.state.terrain)==="water")return "Choose an edge on dry land.";
+      if(groundHeight(x,y,this.state.terrain)!==groundHeight(q.x,q.y,this.state.terrain))return "Level both sides of the fence first.";
+      if(this.state.decorations.some(d=>d.kind==="fence"&&fenceKey(d,d.side??1)===fenceKey({x,y},side)))return "This edge already has a fence.";
+      const a=this.buildingAt(x,y),b=this.buildingAt(q.x,q.y);
+      if(a&&b&&a.id===b.id)return "Use the outside edge of the building plot.";
+      if(this.roadSet.has(key({x,y}))&&this.roadSet.has(key(q)))return "Keep the route open. Place fences along its outside edge.";
+      if((a&&frontage(a.kind,a.x,a.y,a.rotation,a.plot).some(p=>key(p)===key(q)))||(b&&frontage(b.kind,b.x,b.y,b.rotation,b.plot).some(p=>p.x===x&&p.y===y)))return "Keep building entrances clear. Choose another side.";
+      return this.state.money<DECORATIONS.fence.cost?"Not enough gold yet.":null;
+    }
     const roadLamp=kind==="streetlight"&&this.roadSet.has(key({x,y}));
     if(roadLamp) {
       if(!roadEdges(this.roadSet,{x,y}).includes(rotation))return "Choose an outside curb, away from the crossing.";
@@ -817,7 +831,7 @@ export class Simulation {
     }
     if (
       isDecoration(kind) &&
-      !roadLamp && (this.decorationAt(x, y) || exposedDeposit(this.state,{x,y}))
+      !roadLamp && (this.state.decorations.some(d=>d.x===x&&d.y===y&&d.side===undefined) || exposedDeposit(this.state,{x,y}))
     )
       return "Choose an empty land tile for this decoration.";
     if (
@@ -964,7 +978,7 @@ export class Simulation {
           delete this.state.roadTypes[key(p)];
         else this.state.roadTypes[key(p)] = roadType;
       }
-      this.state.decorations = this.state.decorations.filter((d) => !added.has(key(d)));
+      this.state.decorations = this.state.decorations.filter((d) => d.side!==undefined?!(this.state.roads.includes(key(d))&&this.state.roads.includes(key(fenceNeighbour(d,d.side)))):!added.has(key(d)));
       this.state.money -= plan.cost;
       message = `${ROAD_TYPES[roadType].name} roads · ${plan.additions.length} new tiles${plan.upgrades.length ? ` · ${plan.upgrades.length} upgraded` : ""}${plan.bridges ? ` · ${plan.bridges} wooden bridge tiles` : ""} · ${plan.cost} gold.`;
     } else if (c.type === "terrain") {
@@ -1046,8 +1060,8 @@ export class Simulation {
       const cells = isBuilding(c.kind)
         ? footprint(c.kind, c.x, c.y, c.rotation)
         : [c];
-      if(!(c.kind==="streetlight"&&this.roadSet.has(key(c))))this.state.decorations = this.state.decorations.filter(
-        (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
+      if(c.kind!=="fence"&&!(c.kind==="streetlight"&&this.roadSet.has(key(c))))this.state.decorations = this.state.decorations.filter(
+        (d) => d.side!==undefined?![d,fenceNeighbour(d,d.side)].every(q=>cells.some(p=>p.x===q.x&&p.y===q.y)):!cells.some((p) => p.x === d.x && p.y === d.y),
       );
       if (c.kind === "road" || c.kind === "bridge")
         this.state.roads.push(key(c));
@@ -1059,6 +1073,7 @@ export class Simulation {
           y: c.y,
           natural: false,
           ...(c.kind==="streetlight"&&this.roadSet.has(key(c))?{edge:c.rotation??0}:{}),
+          ...(c.kind==="fence"?{side:c.rotation??0}:{}),
         });
         networkChanged = false;
       } else
@@ -1156,7 +1171,7 @@ export class Simulation {
       b.rotation = c.rotation ?? b.rotation;
       const cells = footprint(b.kind, b.x, b.y, b.rotation, b.plot);
       this.state.decorations = this.state.decorations.filter(
-        (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
+        (d) => d.side!==undefined?![d,fenceNeighbour(d,d.side)].every(q=>cells.some(p=>p.x===q.x&&p.y===q.y)):!cells.some((p) => p.x === d.x && p.y === d.y),
       );
       message = `${buildingName(b)} moved. Stock and progress preserved.`;
     } else if (c.type === "rotate") {
@@ -1201,7 +1216,7 @@ export class Simulation {
       b.rotation = rotation;
       b.plot = dimensions(b.kind, rotation);
       this.state.decorations = this.state.decorations.filter(
-        (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
+        (d) => d.side!==undefined?![d,fenceNeighbour(d,d.side)].every(q=>cells.some(p=>p.x===q.x&&p.y===q.y)):!cells.some((p) => p.x === d.x && p.y === d.y),
       );
       message = `${buildingName(b)} rotated.`;
     } else if (c.type === "deepen") {
@@ -1984,7 +1999,8 @@ export function parseSave(raw: string): World {
       throw new Error("Invalid decorations.");
     for (const d of s.decorations) {
       const roadLamp=d.kind==="streetlight"&&d.edge!==undefined&&[0,1,2,3].includes(d.edge)&&s.roads.includes(key(d));
-      const occupancyKey=roadLamp?`${key(d)}:lamp:${d.edge}`:key(d);
+      const fence=d.kind==="fence"&&d.side!==undefined&&[0,1,2,3].includes(d.side);
+      const occupancyKey=fence?`fence:${fenceKey(d,d.side!)}`:roadLamp?`${key(d)}:lamp:${d.edge}`:key(d);
       if (
         !Number.isInteger(d.id) ||
         d.id < 1 ||
@@ -1995,8 +2011,10 @@ export function parseSave(raw: string): World {
         typeof d.natural !== "boolean" ||
         (d.cutAt !== undefined && (!harvestable(d) || !Number.isInteger(d.cutAt) || d.cutAt<0 || d.cutAt>s.tick)) ||
         (d.edge!==undefined&&!roadLamp) ||
+        (d.side!==undefined&&!fence) ||
+        (fence&&!inside(fenceNeighbour(d,d.side!).x,fenceNeighbour(d,d.side!).y)) ||
         occupied.has(occupancyKey) ||
-        (!roadLamp&&DEPOSITS[key(d)]&&!s.clearedDeposits?.includes(key(d)))
+        (!fence&&!roadLamp&&DEPOSITS[key(d)]&&!s.clearedDeposits?.includes(key(d)))
       )
         throw new Error("Invalid decoration.");
       ids.add(d.id);

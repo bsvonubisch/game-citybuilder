@@ -1466,7 +1466,7 @@ test("all decoration types can be placed, selected by tile, removed and saved wi
     );
     assert.equal(
       execute(restored, { type: "place", kind, x: 6, y: 20 }).ok,
-      kind === "streetlight",
+      kind === "streetlight" || kind === "fence",
     );
   }
   const sim = new Simulation(),
@@ -2463,4 +2463,22 @@ test("cars take a longer vehicle route while pedestrians can use a pavement shor
   const sim=new Simulation();sim.state.roads=['1,1','2,1','3,1','1,2','2,2','3,2'];sim.state.roadTypes={'2,1':'pavement'};sim.reconnect();
   assert.equal(sim.path({x:1,y:1},{x:3,y:1},"person").length,3);
   const route=sim.path({x:1,y:1},{x:3,y:1},"car");assert.equal(route.length,5);assert.ok(route.every(p=>key(p)!=='2,1'));
+});
+
+
+test("edge fences leave tiles usable, reject duplicate opposite sides and share corner posts",async()=>{
+ const {fenceKey,fencePostMask,fenceEdgeSet,crossesFence}=await import('../.test-dist/fences.js');
+ const sim=new Simulation();sim.state.decorations=sim.state.decorations.filter(d=>!(d.x>=1&&d.x<=4&&d.y>=1&&d.y<=4));
+ assert.equal(execute(sim,{type:'place',kind:'fence',x:2,y:2,rotation:0}).ok,true);
+ assert.equal(execute(sim,{type:'place',kind:'fence',x:2,y:2,rotation:1}).ok,true);
+ assert.equal(execute(sim,{type:'place',kind:'fence',x:3,y:2,rotation:2}).ok,false);
+ assert.equal(execute(sim,{type:'place',kind:'planter',x:2,y:2}).ok,true);
+ const fences=sim.state.decorations.filter(d=>d.kind==='fence'&&d.x===2&&d.y===2);assert.equal(fences.length,2);
+ assert.equal(fenceKey(fences[0],0),fenceKey({x:3,y:2},2));
+ assert.equal(fences.reduce((n,d)=>n+(fencePostMask(d,fences)&1?1:0)+(fencePostMask(d,fences)&2?1:0),0),3);
+ assert.equal(crossesFence({x:2,y:2},{x:3,y:2},fenceEdgeSet(fences)),true);
+ assert.equal(crossesFence({x:2,y:2},{x:1,y:2},fenceEdgeSet(fences)),false);
+ assert.doesNotThrow(()=>parseSave(JSON.stringify(sim.snapshot())));
+ assert.equal(execute(sim,{type:'removeDecoration',id:fences[0].id}).ok,true);
+ assert.ok(sim.state.decorations.some(d=>d.kind==='planter'&&d.x===2&&d.y===2));
 });

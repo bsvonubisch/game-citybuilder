@@ -1,107 +1,27 @@
 import type Phaser from "phaser";
-import { iso } from "./rendering.js";
-import { fenceSpans } from "./fences.js";
-
-const RESOLUTION = 4,
-  WIDTH = 72,
-  HEIGHT = 52,
-  TOP = 32;
-/** Sixteen cached connection variants, in the same timber as the town bridges. */
+import {iso,opaqueBounds} from "./rendering.js";
+import {fenceEnds,fencePostMask} from "./fences.js";
+import type {Decoration} from "./decorations.js";
+export function fenceCrops(image:HTMLImageElement){
+ const c=document.createElement('canvas');c.width=Math.floor(image.width/2);c.height=Math.floor(image.height/2);const ctx=c.getContext('2d')!;
+ return Array.from({length:4},(_,i)=>{ctx.clearRect(0,0,c.width,c.height);ctx.drawImage(image,(i%2)*c.width,Math.floor(i/2)*c.height,c.width,c.height,0,0,c.width,c.height);const b=opaqueBounds(ctx.getImageData(0,0,c.width,c.height).data,c.width,c.height);return{...b,x:b.x+(i%2)*c.width,y:b.y+Math.floor(i/2)*c.height};});
+}
+export function drawPicketFence(ctx:CanvasRenderingContext2D,source:HTMLImageElement,crops:ReturnType<typeof fenceCrops>,side:number,posts=3){
+ const [a,b]=fenceEnds({x:0,y:0},side).map(p=>iso(p.x,p.y)),crop=crops[side<2?0:1];
+ ctx.save();ctx.transform(b.x-a.x,b.y-a.y,0,1,a.x,a.y);ctx.drawImage(source,crop.x,crop.y,crop.width,crop.height,0,-13,1,13);ctx.restore();
+ const post=crops[side<2?2:3],height=14,width=post.width/post.height*height;
+ [a,b].forEach((p,i)=>{if(posts&(1<<i))ctx.drawImage(source,post.x,post.y,post.width,post.height,p.x-width/2,p.y-height,width,height);});
+}
 export class FenceArt {
-  private cache = new Set<number>();
-  constructor(private scene: Phaser.Scene) {}
-  place(sprite: Phaser.GameObjects.Image, x: number, y: number, mask: number) {
-    const name = `fence-${mask}`;
-    if (!this.cache.has(mask)) {
-      const texture = this.scene.textures.createCanvas(
-        name,
-        WIDTH * RESOLUTION,
-        HEIGHT * RESOLUTION,
-      )!;
-      const ctx = texture.context;
-      ctx.scale(RESOLUTION, RESOLUTION);
-      ctx.translate(WIDTH / 2, TOP);
-      const wood = this.scene.textures
-        .get("bridge-wood")
-        .getSourceImage() as HTMLImageElement;
-      const beam = (
-        a: { x: number; y: number },
-        b: { x: number; y: number },
-        thickness: number,
-      ) => {
-        ctx.save();
-        ctx.transform(
-          b.x - a.x,
-          b.y - a.y,
-          0,
-          thickness,
-          a.x,
-          a.y - thickness / 2,
-        );
-        ctx.drawImage(
-          wood,
-          wood.width * 0.35,
-          0,
-          wood.width * 0.5,
-          wood.height * 0.13,
-          0,
-          0,
-          1,
-          1,
-        );
-        ctx.fillStyle = "#49311a33";
-        ctx.fillRect(0, 0, 1, 1);
-        ctx.restore();
-        ctx.strokeStyle = "#c6a66d";
-        ctx.lineWidth = 0.45;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y - thickness / 2);
-        ctx.lineTo(b.x, b.y - thickness / 2);
-        ctx.stroke();
-      };
-      const post = (x: number, y: number) => {
-        ctx.fillStyle = "#66462b";
-        ctx.fillRect(x - 1.5, y - 14, 3, 14);
-        ctx.drawImage(
-          wood,
-          wood.width * 0.55,
-          0,
-          wood.width * 0.04,
-          wood.height,
-          x - 1.5,
-          y - 14,
-          2.1,
-          14,
-        );
-        ctx.fillStyle = "#d6b477";
-        ctx.beginPath();
-        ctx.moveTo(x - 1.9, y - 14);
-        ctx.lineTo(x, y - 15.1);
-        ctx.lineTo(x + 1.9, y - 14);
-        ctx.lineTo(x, y - 12.9);
-        ctx.closePath();
-        ctx.fill();
-      };
-      for (const [a, b] of fenceSpans(mask)) {
-        const p = iso(a.x, a.y),
-          q = iso(b.x, b.y);
-        beam({ x: p.x, y: p.y - 5 }, { x: q.x, y: q.y - 5 }, 2);
-        beam({ x: p.x, y: p.y - 11 }, { x: q.x, y: q.y - 11 }, 2);
-        beam({ x: p.x, y: p.y - 5 }, { x: q.x, y: q.y - 11 }, 1);
-        if (!mask) {
-          post(p.x, p.y);
-          post(q.x, q.y);
-        }
-      }
-      if (mask) post(0, 0);
-      texture.refresh();
-      this.cache.add(mask);
-    }
-    const p = iso(x, y);
-    sprite
-      .setTexture(name)
-      .setOrigin(0, 0)
-      .setScale(1 / RESOLUTION)
-      .setPosition(p.x - WIDTH / 2, p.y - TOP);
+ private crops?:ReturnType<typeof fenceCrops>;
+ constructor(private scene:Phaser.Scene){}
+ place(sprite:Phaser.GameObjects.Image,d:Pick<Decoration,'id'|'x'|'y'|'side'>,decorations:readonly Decoration[]){
+  const side=d.side??1,posts=fencePostMask(d,decorations),name='pickets-'+side+'-'+posts;
+  if(!this.scene.textures.exists(name)){
+   const texture=this.scene.textures.createCanvas(name,76*4,76*4)!,ctx=texture.context;
+   const source=this.scene.textures.get('fence-pickets').getSourceImage() as HTMLImageElement;
+   this.crops??=fenceCrops(source);ctx.scale(4,4);ctx.translate(38,48);drawPicketFence(ctx,source,this.crops,side,posts);texture.refresh();
   }
+  const p=iso(d.x,d.y);sprite.setTexture(name).setOrigin(0).setScale(.25).setPosition(p.x-38,p.y-48);
+ }
 }

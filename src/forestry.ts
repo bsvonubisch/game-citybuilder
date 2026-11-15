@@ -1,3 +1,4 @@
+import {fenceEdgeSet,crossesFence} from "./fences.js";
 import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import { daylight } from "./daylight.js";
@@ -43,24 +44,25 @@ export function forestTargets(sim: Simulation, b: Building) {
   const identity = `${b.id}:${b.x}:${b.y}:${b.rotation}`;
   const cached = cache.entries.get(identity);
   if (cached) return cached;
+  const fences=fenceEdgeSet(sim.state.decorations);
   const blocked = new Set(sim.state.buildings.flatMap(other => footprint(other.kind,other.x,other.y,other.rotation,other.plot).map(key)));
   for (const p of footprint(b.kind,b.x,b.y,b.rotation,b.plot)) blocked.add(key(p));
   for (const k of Object.keys(DEPOSIT_TILES)) blocked.add(k);
   for (const k of sim.roads) blocked.delete(k);
-  for (const d of sim.state.decorations) if (d.kind === "fence" || (["oak","pine","birch","blossom"].includes(d.kind) && treeStage(d,sim.state.tick) === "mature")) blocked.add(key(d));
+  for (const d of sim.state.decorations) if ((d.kind === "fence" && d.side===undefined) || (["oak","pine","birch","blossom"].includes(d.kind) && treeStage(d,sim.state.tick) === "mature")) blocked.add(key(d));
   const start = sim.adjacent(b).find(p => walkable(sim,p,blocked));
   const candidates: {tree:Decoration; path:Point[]}[] = [];
   if (start) {
     const queue = [start], parents = new Map<string, Point|null>([[key(start),null]]);
     for (let i=0;i<queue.length;i++) for (const d of dirs) {
       const p=queue[i], q={x:p.x+d.x,y:p.y+d.y};
-      if (!parents.has(key(q)) && forestInside(b,q) && walkable(sim,q,blocked) && Math.abs(groundHeight(p.x,p.y,sim.state.terrain)-groundHeight(q.x,q.y,sim.state.terrain)) <= 8) {
+      if (!parents.has(key(q)) && !crossesFence(p,q,fences) && forestInside(b,q) && walkable(sim,q,blocked) && Math.abs(groundHeight(p.x,p.y,sim.state.terrain)-groundHeight(q.x,q.y,sim.state.terrain)) <= 8) {
         parents.set(key(q),p); queue.push(q);
       }
     }
     for (const tree of sim.state.decorations) {
       if (!harvestable(tree) || treeStage(tree,sim.state.tick) !== "mature" || !forestInside(b,tree)) continue;
-      const approaches = dirs.map(d => ({x:tree.x+d.x,y:tree.y+d.y})).filter(p => parents.has(key(p)));
+      const approaches = dirs.map(d => ({x:tree.x+d.x,y:tree.y+d.y})).filter(p => parents.has(key(p))&&!crossesFence(p,tree,fences));
       let best: Point[]|undefined;
       for (const p of approaches) {
         const path:Point[]=[]; let at:Point|null=p;

@@ -1,3 +1,4 @@
+import {drawPicketFence,fenceCrops} from "./fence-art.js";
 import { buildingArt } from "./building-art.js";
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
 import { drawPlot, plotBounds } from "./plot-art.js";
@@ -17,6 +18,9 @@ export function artImage(path: string) {
   return promise;
 }
 const previews = new Map<string, Promise<string>>();
+export async function fencePreview(){
+ const image=await artImage('/fence-pickets.png'),c=document.createElement('canvas');c.width=288;c.height=216;const ctx=c.getContext('2d')!;ctx.scale(4,4);ctx.translate(36,28);drawPicketFence(ctx,image,fenceCrops(image),1);return c.toDataURL();
+}
 export function planterPreview() {
   let promise=previews.get("planter");
   if(!promise){promise=(async()=>{

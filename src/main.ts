@@ -61,7 +61,7 @@ import {
 } from "./artwork-scaling.js";
 import { terrainCell, type TerrainMode } from "./terrain.js";
 import { icon } from "./icons.js";
-import { buildingPreview, planterPreview } from "./previews.js";
+import { buildingPreview, planterPreview, fencePreview } from "./previews.js";
 import { alertIcon } from "./building-alerts.js";
 import { buildingGuidance, type GuidanceAction } from "./building-guidance.js";
 import { trafficQueues } from "./traffic-queues.js";
@@ -313,6 +313,7 @@ function setTool(next: Tool) {
             ? `${icon("hammer")} Click or drag to remove a stretch · Release to apply · Half the gold returned <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if(next==="fence")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at a tile edge · Fences join at shared corners · The tile stays usable</span>');
   if(next==="streetlight")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at either road edge to choose the curb · One post per click · 20 gold</span>');
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
   if(isExtractor(next))$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">Build beside the deposit · ${MINING_RADIUS}-tile reach · Green rocks are reachable from the entrance</span>`);
@@ -500,7 +501,7 @@ function renderPanel() {
       ? Object.entries(DECORATIONS)
           .map(
             ([kind, d]) =>
-              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "streetlight" ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' : kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
+              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "fence" ? '<img class="building-icon" data-fence-preview alt="">' : kind === "streetlight" ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' : kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
           )
           .join("")
       : (Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][])
@@ -534,12 +535,13 @@ function renderPanel() {
     );
   } else if (category === "decorations") {
     $("#panel-content .build-note p").textContent =
-      "Place fence pieces side by side to join them. Corners and junctions connect automatically. Use Remove (X) to clear decorations.";
+      "Place picket fences along tile edges. Shared corners join automatically, leaving the tiles free for gardens and buildings.";
   }
   document
     .querySelectorAll<HTMLElement>("[data-building]")
     .forEach((el) => (el.onclick = () => setTool(el.dataset.building as Tool)));
   $("#production-guide").onclick = showChains;
+  if(category==="decorations")void fencePreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-fence-preview]").forEach(image=>image.src=src));
   if(category==="decorations")void planterPreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-planter-preview]").forEach(image=>image.src=src));
 }
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
