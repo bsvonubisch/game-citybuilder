@@ -328,7 +328,8 @@ test("moving or removing a fishery preserves catches aboard, and malformed boats
   assert.equal(b.produced, produced);
   assert.equal(b.fishing, undefined);
   assert.equal(execute(sim, { type: "demolish", x: b.x, y: b.y }).ok, true);
-  assert.equal(sim.stored("fish"), total);
+  assert.equal(b.construction.demolition,true);
+  assert.equal(sim.totals().fish, total, "catch remains on the demolition site until recovered");
 });
 test("boat interpolation follows each water segment smoothly and turns to all four views", () => {
   const frames = new Set();

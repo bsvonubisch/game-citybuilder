@@ -14,7 +14,7 @@ export function ensureField(b:Building):Field{const f:Field=b.field??={cells:Arr
 export function prepareField(b:Building){
   if(b.crop===undefined)b.crop='wheat';
   ensureField(b);const c=b.construction;
-  if(!c||c.upgradeLevel||c.upgradeTo||c.deeperTo!==undefined)return;
+  if(!c||c.demolition||c.upgradeLevel||c.upgradeTo||c.deeperTo!==undefined)return;
   if(!c.clearance){delete b.construction;return;}
   c.required=c.clearance.tiles.length*ROCK_CLEARING_WORK;
   c.completed=c.clearance.work;

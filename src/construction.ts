@@ -14,7 +14,7 @@ export function constructionCrew(sim: Simulation, site: Building) {
       const agent = sim.state.agents.find((a) => a.resident === resident.id);
       const onsite = agent?.onsite === site.id;
       const status = !site.enabled
-        ? "Construction paused"
+        ? site.construction?.demolition ? "Demolition paused" : "Construction paused"
         : !site.connected
           ? "Waiting for road access"
           : onsite
@@ -35,6 +35,8 @@ export function constructionCrew(sim: Simulation, site: Building) {
 }
 
 export interface Construction {
+  /** The occupied site is removed only after its crew finishes. */
+  demolition?: true;
   /** Labour in worker-seconds; only builders who reached the site contribute. */
   required: number;
   completed: number;
@@ -85,6 +87,12 @@ export function builderFrame(
 }
 export function constructionWork(kind: BuildingKind, upgradeTo?: HouseTier) {
   return upgradeTo ? (upgradeTo === 3 ? 600 : 300) : LABOUR[kind];
+}
+export function demolitionWork(b:Building) {
+  const [w,h]=dimensions(b.kind,b.rotation,b.plot);
+  const full=b.kind==='farm'?20+w*h*2:Math.round(constructionWork(b.kind,b.kind==='house'?b.houseTier:undefined)*.4*(b.level??1));
+  const c=b.construction;
+  return Math.max(15,Math.round(full*(c&&!c.upgradeTo&&!c.upgradeLevel&&c.deeperTo===undefined?Math.max(.15,c.completed/c.required):1)));
 }
 export function builderCapacity(b: {
   kind: BuildingKind;

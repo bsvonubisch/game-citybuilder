@@ -103,7 +103,7 @@ test("the displayed day advances at midnight while keeping the 08:00 start", () 
   assert.equal(daylight(240 * 4).day, 2);
 });
 
-test("drag removal protects the last warehouse atomically and recovers building stock once",()=>{
+test("drag removal protects the last warehouse atomically and queues stock recovery",()=>{
   const sim=new Simulation(),warehouse=sim.state.buildings.find(b=>b.kind==="warehouse");
   const before=sim.snapshot();
   assert.equal(execute(sim,{type:"removeStroke",from:warehouse,to:{x:warehouse.x+3,y:warehouse.y}}).ok,false);
@@ -113,9 +113,10 @@ test("drag removal protects the last warehouse atomically and recovers building 
   assert.equal(plan.buildings.size,1);
   const stock=sim.stored("grain"),gold=sim.state.money;
   assert.equal(execute(sim,{type:"removeStroke",from:farm,to:{x:farm.x+1,y:farm.y+1}}).ok,true);
-  assert.equal(sim.building(farm.id),undefined);
-  assert.equal(sim.stored("grain"),stock+17);
-  assert.equal(sim.state.money,gold+Math.floor(BUILDINGS.farm.cost/2));
+  assert.equal(sim.building(farm.id).construction.demolition,true);
+  assert.equal(sim.stored("grain"),stock);
+  assert.equal(farm.inventory.grain,17);
+  assert.equal(sim.state.money,gold);
 });
 
 test("needs distinguish ready meals, staffed workplaces and reachable leisure from stored totals",()=>{
@@ -930,7 +931,8 @@ test("house upgrades charge once, retain families and plots, persist and increas
     execute(restored, { type: "demolish", x: house.x, y: house.y }).ok,
     true,
   );
-  assert.equal(restored.state.money, gold + Math.floor((90 + 180 + 420) / 2));
+  assert.equal(restored.building(house.id).construction.demolition,true);
+  assert.equal(restored.state.money, gold, "refund waits for demolition to finish");
 });
 
 test("unaffordable, disconnected, stale and non-house upgrades change nothing", () => {

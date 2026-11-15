@@ -729,7 +729,7 @@ function renderInspector() {
   const panel = $("#inspector");
   panel.hidden = !b;
   if (!b) return;
-  panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}:${b.crop}:${b.nextCrop}`;
+  panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}:${!!b.construction?.demolition}:${b.crop}:${b.nextCrop}`;
   panel.scrollTop = 0;
   const d = {...BUILDINGS[b.kind],recipe:buildingRecipe(b)};
   panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${isHome(b.kind) ? `HOME · TIER ${b.houseTier ?? b.level ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier,b.crop)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "farm" ? '<section id="farm-growth" aria-label="Crop growth stages"></section>' : ""}${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) || b.kind === "market" ? '<button id="toggle-production" class="primary"></button>' : ""}`;
@@ -846,7 +846,7 @@ function renderInspector() {
       "afterend",
       '<section id="service-detail"></section>',
     );
-  {
+  if (!b.construction?.demolition) {
     panel.insertAdjacentHTML(
       "beforeend",
       '<button id="move-building" class="primary">Move building</button>',
@@ -1125,7 +1125,7 @@ function updateInspector() {
   const alert = simulation.alert(b);
   if (
     $("#inspector").dataset.buildingView !==
-    `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}:${b.crop}:${b.nextCrop}`
+    `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}:${!!b.construction?.demolition}:${b.crop}:${b.nextCrop}`
   ) {
     renderInspector();
     return;
@@ -1318,11 +1318,11 @@ function updateInspector() {
       rosterElement.dataset.roster = roster;
     }
     $("#building-detail").innerHTML =
-      `<h4>${b.construction.clearance ? "Clearing surface rocks" : b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : b.construction.upgradeLevel ? "Building upgrade" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div>${b.construction.clearance ? `<p class="muted">Builders must clear ${b.construction.clearance.tiles.length} rock tiles before foundations begin. Underground reserves remain in place.</p>` : b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
+      `<h4>${b.construction.demolition ? "Demolition site" : b.construction.clearance ? "Clearing surface rocks" : b.construction.deeperTo !== undefined ? "Excavating layer " + (b.construction.deeperTo + 1) : b.construction.upgradeTo ? "Home improvements" : b.construction.upgradeLevel ? "Building upgrade" : "Construction site"}</h4><div class="goal-progress" role="progressbar" aria-label="Construction progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div><div class="detail-row"><span>Progress</span><b>${progress}%</b></div><div class="detail-row"><span>Working on site</span><b>${onsite}</b></div><div class="detail-row"><span>Remaining labor</span><b>${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds</b></div>${b.construction.clearance ? `<p class="muted">Builders must clear ${b.construction.clearance.tiles.length} rock tiles before foundations begin. Underground reserves remain in place.</p>` : b.construction.upgradeTo ? '<p class="muted">The current residents keep their home during the upgrade.</p>' : b.construction.demolition ? '<p class="muted">The plot stays occupied until the crew finishes. Stored goods and half the gold cost are then recovered.</p>' : '<p class="muted">Opens when construction is complete. Only builders on site contribute progress.</p>'}`;
     if (d.recipe) $("#production-logistics").hidden = true;
     $("#toggle-production").textContent = b.enabled
-      ? "Pause construction"
-      : "Resume construction";
+      ? b.construction.demolition ? "Pause demolition" : "Pause construction"
+      : b.construction.demolition ? "Resume demolition" : "Resume construction";
   }
   updateBuildingActions(b);
 }

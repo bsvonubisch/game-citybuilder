@@ -46,7 +46,7 @@ export function buildingGuidance(
     return {
       message:
         "Resume work to assign residents and continue from the saved progress.",
-      label: b.construction ? "Resume construction" : "Resume production",
+      label: b.construction?.demolition ? "Resume demolition" : b.construction ? "Resume construction" : "Resume production",
       action: { type: "toggle" },
     };
   if (!b.connected) {
@@ -127,7 +127,7 @@ export function buildingGuidance(
     return builder
       ? {
           message:
-            "Builders travel to the site and contribute labor after arriving. Follow a builder to check the journey; construction finishes automatically.",
+            b.construction?.demolition ? "Builders remove this building after reaching the site. Keep its road connected. Stored goods and half the gold cost are recovered when the crew finishes." : "Builders travel to the site and contribute labor after arriving. Follow a builder to check the journey; construction finishes automatically.",
           label: "Follow a builder",
           action: { type: "agent", id: builder.id },
         }

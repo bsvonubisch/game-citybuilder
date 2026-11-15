@@ -78,6 +78,7 @@ import {
 import {
   builderCapacity,
   constructionWork,
+  demolitionWork,
   type Construction,
 } from "./construction.js";
 import {
@@ -446,7 +447,7 @@ export class Simulation {
     }
     const homes = this.state.buildings.filter(
       (b) =>
-        isHome(b.kind) && (!b.construction || b.construction.upgradeTo || b.construction.upgradeLevel),
+        isHome(b.kind) && (!b.construction || b.construction.demolition || b.construction.upgradeTo || b.construction.upgradeLevel),
     );
     this.state.residents = this.state.residents.filter((r) =>
       homes.some((h) => h.id === r.home),
@@ -683,6 +684,7 @@ export class Simulation {
   ): string | null {
     const b = this.building(id);
     if (!b) return "Select a building to move.";
+    if (b.construction?.demolition) return "This building is being demolished.";
     if (b.construction?.deeperTo !== undefined && (x !== b.x || y !== b.y))
       return "Finish digging this deposit before moving the building.";
     const facing = rotation ?? b.rotation;
@@ -948,13 +950,7 @@ export class Simulation {
       const plan=planRemoval(this,c.from,c.to);
       if(plan.error)return {ok:false,message:plan.error,revision:this.state.revision};
       networkChanged=plan.buildings.size>0||plan.roads.size>0;
-      const warehouse=this.state.buildings.find(b=>b.kind==="warehouse"&&!plan.buildings.has(b.id))!;
-      for(const b of this.state.buildings.filter(b=>plan.buildings.has(b.id))) {
-        landCatch(b);landTimber(b);landOre(b);landHunt(b);landHarvest(b);
-        for(const r of RESOURCES)warehouse.inventory[r]=(warehouse.inventory[r]??0)+(b.inventory[r]??0);
-        this.state.money+=Math.floor(buildingInvestment(b)/2);
-      }
-      this.state.buildings=this.state.buildings.filter(b=>!plan.buildings.has(b.id));
+      for(const b of this.state.buildings.filter(b=>plan.buildings.has(b.id))) this.startDemolition(b);
       for(const k of plan.roads) {
         const [x,y]=k.split(",").map(Number);
         this.state.money+=terrain(x,y,this.state.terrain)==="water"?Math.floor(BRIDGE_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2):Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2);
@@ -965,7 +961,7 @@ export class Simulation {
         if(!plan.decorations.has(d.id)&&!(d.edge!==undefined&&plan.roads.has(key(d))))return true;
         this.state.money+=d.natural?0:Math.floor(DECORATIONS[d.kind].cost/2);return false;
       });
-      message=`Removed ${plan.buildings.size} buildings, ${plan.roads.size} road tiles and ${plan.decorations.size} decorations. Stock recovered; half the build cost returned.`;
+      message=`${plan.buildings.size} buildings marked for demolition. Removed ${plan.roads.size} road tiles and ${plan.decorations.size} decorations. Keep roads connected until crews finish.`;
     } else if (c.type === "roadStroke") {
       const roadType = c.roadType ?? "stone";
       const plan = planRoad(this, c.from, c.to, roadType);
@@ -1124,21 +1120,7 @@ export class Simulation {
           revision: this.state.revision,
         };
       if (b) {
-        landCatch(b);
-        landTimber(b);
-        landOre(b);landHunt(b);landHarvest(b);
-        const depot = this.state.buildings.find(
-          (w) => w.kind === "warehouse" && w.id !== b.id,
-        );
-        for (const resource of RESOURCES) {
-          if (depot)
-            depot.inventory[resource] =
-              (depot.inventory[resource] ?? 0) + (b.inventory[resource] ?? 0);
-        }
-        this.state.buildings = this.state.buildings.filter(
-          (x) => x.id !== b.id,
-        );
-        this.state.money += Math.floor(buildingInvestment(b) / 2);
+        this.startDemolition(b);
       } else if (this.roadSet.has(key(c))) {
         this.state.decorations=this.state.decorations.filter(d=>{if(d.edge===undefined||key(d)!==key(c))return true;this.state.money+=Math.floor(DECORATIONS[d.kind].cost/2);return false;});
         this.state.roads = this.state.roads.filter((k) => k !== key(c));
@@ -1159,7 +1141,7 @@ export class Simulation {
           message: "There is nothing to remove here.",
           revision: this.state.revision,
         };
-      message = decoration?.natural
+      message = b ? "Marked for demolition. Builders will clear the plot; stock and half the gold cost are recovered when finished." : decoration?.natural
         ? "Decoration removed."
         : "Removed. Half the build cost returned.";
     } else if (c.type === "move") {
@@ -1301,6 +1283,22 @@ export class Simulation {
       this.processed.delete(this.processed.keys().next().value!);
     return result;
   }
+  private startDemolition(b:Building) {
+    if(b.construction?.demolition)return;
+    const required=demolitionWork(b);
+    landCatch(b);landTimber(b);landOre(b);landHunt(b);landHarvest(b);
+    b.construction={demolition:true,required,completed:0};b.enabled=true;
+  }
+  private finishDemolition(b:Building) {
+    const depot=this.state.buildings.find(w=>w.id!==b.id&&warehouseReady(w));
+    if(!depot)return false;
+    landCatch(b);landTimber(b);landOre(b);landHunt(b);landHarvest(b);
+    for(const r of RESOURCES)depot.inventory[r]=(depot.inventory[r]??0)+(b.inventory[r]??0);
+    this.state.money+=Math.floor(buildingInvestment(b)/2);
+    this.state.buildings=this.state.buildings.filter(other=>other.id!==b.id);
+    this.state.history.unshift(`${buildingName(b)} removed. Stored goods recovered and half the gold cost returned.`);
+    return true;
+  }
   step() {
     this.state.tick++;
     const day = daylight(this.state.tick);
@@ -1331,6 +1329,7 @@ export class Simulation {
         if(!clearance.tiles.length){delete b.construction.clearance;this.state.revision++;}
       }
       if (b.construction.completed >= b.construction.required) {
+        if (b.construction.demolition) { completed=this.finishDemolition(b)||completed; continue; }
         if (b.construction.upgradeTo) b.houseTier = b.construction.upgradeTo;
         if (b.construction.upgradeLevel) b.level = b.construction.upgradeLevel;
         if (b.construction.deeperTo !== undefined) {
@@ -1682,9 +1681,9 @@ export class Simulation {
     if (b.construction)
       return {
         kind: "construction",
-        title: `${b.construction.clearance ? "Clearing rocks" : b.construction.deeperTo !== undefined ? "Digging deeper" : b.construction.upgradeTo || b.construction.upgradeLevel ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
+        title: `${b.construction.demolition ? "Demolishing" : b.construction.clearance ? "Clearing rocks" : b.construction.deeperTo !== undefined ? "Digging deeper" : b.construction.upgradeTo || b.construction.upgradeLevel ? "Upgrading" : "Under construction"} · ${Math.floor((b.construction.completed / b.construction.required) * 100)}%`,
         message: !b.enabled
-          ? "Construction is paused. Resume it to assign builders."
+          ? b.construction.demolition ? "Demolition is paused. Resume it to assign builders." : "Construction is paused. Resume it to assign builders."
           : !b.connected
             ? "Connect the front entrance to a warehouse road so builders can reach the site."
             : !b.workers
@@ -1944,6 +1943,7 @@ export function parseSave(raw: string): World {
           b.construction.required <= 0 ||
           b.construction.required > 10000 ||
           b.construction.completed > b.construction.required ||
+          (b.construction.demolition !== undefined && (b.construction.demolition !== true || b.construction.upgradeTo !== undefined || b.construction.upgradeLevel !== undefined || b.construction.deeperTo !== undefined || b.construction.clearance !== undefined)) ||
           (b.construction.upgradeLevel !== undefined &&
             (b.kind === "house" ||
               ![2, 3].includes(b.construction.upgradeLevel) ||

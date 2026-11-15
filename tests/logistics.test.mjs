@@ -134,7 +134,8 @@ test("cached routes survive simulation ticks, invalidate after road changes, and
   );
   assert.equal(cache.get(sim, null), null);
   execute(sim, { type: "demolish", x: mill.x, y: mill.y });
-  assert.equal(cache.get(sim, mill.id), null);
+  assert.deepEqual(cache.get(sim, mill.id).inputs, []);
+  assert.deepEqual(cache.get(sim, mill.id).outputs, []);
 });
 
 test("goods highlights track actual cargo and assigned workers without including unrelated traffic", () => {

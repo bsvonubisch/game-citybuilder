@@ -81,7 +81,8 @@ test('building on rocks queues real clearance labour, persists it and preserves 
   assert.deepEqual(restored.clearedDeposits,sim.state.clearedDeposits);
   assert.equal(command(sim,{type:'demolish',x:6,y:31}).ok,true);
   assert.ok(tiles.every(p=>!exposedDeposit(sim.state,p)),'rocks stay cleared after demolition');
-  assert.equal(sim.canPlace('road',6,32),null);
+  assert.equal(site.construction.demolition,true);
+  assert.match(sim.canPlace('road',6,32),/overlaps/, 'demolition occupies the footprint until its crew finishes');
 });
 
 test('save rejects forged mining cargo and invalid clearing cells',()=>{
