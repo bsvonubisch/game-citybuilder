@@ -1,3 +1,5 @@
+import {roadTypeAt} from "./roads.js";
+import {roadSurface} from "./road-art.js";
 import type Phaser from "phaser";
 import {
   bridgeRails,
@@ -66,6 +68,7 @@ export class BridgeArt {
     sy: number,
     sw: number,
     sh: number,
+    material:CanvasImageSource=this.wood,
   ) {
     const [a, b, c, d] = points;
     for (const [end, side, triangle] of [
@@ -84,7 +87,7 @@ export class BridgeArt {
       ctx.closePath();
       ctx.clip();
       ctx.transform(end.x - a.x, end.y - a.y, side.x, side.y, a.x, a.y);
-      ctx.drawImage(this.wood, sx, sy, sw, sh, 0, 0, 1, 1);
+      ctx.drawImage(material, sx, sy, sw, sh, 0, 0, 1, 1);
       ctx.restore();
     }
   }
@@ -101,7 +104,8 @@ export class BridgeArt {
       sim.state.buildings,
       sim.state.terrain,
     );
-    const id = open.map(Number).join("") + land.map(Number).join("");
+    const kind=roadTypeAt(sim.state.roadTypes,tile);
+    const id = kind+open.map(Number).join("") + land.map(Number).join("");
     const existing = this.variants.get(id);
     if (existing) return existing;
     const point = (u: number, v: number): Vec => {
@@ -120,6 +124,7 @@ export class BridgeArt {
           ),
       };
     };
+    if(kind==="stone"||kind==="brick")return this.masonry(id,open,point,kind);
     const line = (
       ctx: CanvasRenderingContext2D,
       a: Vec,
@@ -318,6 +323,38 @@ export class BridgeArt {
     const result = { deck, supports, rails };
     this.variants.set(id, result);
     return result;
+  }
+  private masonry(id:string,open:boolean[],point:(u:number,v:number)=>Vec,kind:'stone'|'brick') {
+    const surface=roadSurface(this.scene,kind,0,0),wall=kind==='brick'?surface:this.scene.textures.get('foundation-stone').getSourceImage() as HTMLImageElement;
+    const tint=kind==='brick'?{cap:'#e5af86',edge:'#734d3e'}:{cap:'#dfd7bf',edge:'#656864'};
+    const deck=this.canvas('bridge-deck-'+id,ctx=>{
+      for(let y=0;y<4;y++)for(let x=0;x<4;x++){
+        const u=x/4-.5,v=y/4-.5;
+        this.quad(ctx,[point(u,v),point(u+.25,v),point(u+.25,v+.25),point(u,v+.25)],x*surface.width/4,y*surface.height/4,surface.width/4,surface.height/4,surface);
+      }
+      for(let e=0;e<2;e++){const[a,b]=CORNERS[e],p=point(a.x,a.y),q=point(b.x,b.y);this.quad(ctx,[p,q,{x:q.x,y:q.y+3},{x:p.x,y:p.y+3}],0,0,wall.width,wall.height*.18,wall);}
+    });
+    const supports=this.canvas('bridge-supports-'+id,ctx=>{
+      for(let e=0;e<4;e++)if(open[e]){
+        const[a,b]=CORNERS[e],p=point(a.x,a.y),q=point(b.x,b.y);
+        ctx.save();ctx.transform(q.x-p.x,q.y-p.y,0,1,p.x,p.y);
+        ctx.beginPath();ctx.rect(0,2,1,13);
+        ctx.moveTo(.13,15);ctx.lineTo(.13,12);ctx.quadraticCurveTo(.5,-1,.87,12);ctx.lineTo(.87,15);ctx.closePath();ctx.clip('evenodd');
+        ctx.drawImage(wall,0,0,wall.width,wall.height,0,2,1,13);ctx.fillStyle='#20242224';ctx.fillRect(0,2,1,13);ctx.restore();
+        // Raised arch voussoirs follow the opening, rather than wooden pilings.
+        ctx.strokeStyle=tint.cap;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(p.x+(q.x-p.x)*.13,p.y+(q.y-p.y)*.13+12);ctx.quadraticCurveTo((p.x+q.x)/2,(p.y+q.y)/2-1,p.x+(q.x-p.x)*.87,p.y+(q.y-p.y)*.87+12);ctx.stroke();
+      }
+    });
+    const rails=open.map((closed,e)=>!closed?null:this.canvas('bridge-rail-'+id+'-'+e,ctx=>{
+      const[a,b]=CORNERS[e];
+      for(let i=0;i<2;i++){
+        const p=point(a.x+(b.x-a.x)*i/2,a.y+(b.y-a.y)*i/2),q=point(a.x+(b.x-a.x)*(i+1)/2,a.y+(b.y-a.y)*(i+1)/2);
+        this.quad(ctx,[{x:p.x,y:p.y-8},{x:q.x,y:q.y-8},q,p],i*wall.width/2,0,wall.width/2,wall.height*.3,wall);
+        ctx.strokeStyle=tint.edge;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y-7);ctx.lineTo(q.x,q.y-7);ctx.stroke();
+        ctx.strokeStyle=tint.cap;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(p.x,p.y-9);ctx.lineTo(q.x,q.y-9);ctx.stroke();
+      }
+    }));
+    const result={deck,supports,rails};this.variants.set(id,result);return result;
   }
   redraw(sim: Simulation) {
     this.images.forEach((image) => image.destroy());

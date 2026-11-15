@@ -1,7 +1,7 @@
-import { SIZE } from "./catalog.js";
+import { SIZE,RESOURCE_NAMES,type Resource } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import type { Point, Simulation } from "./simulation.js";
-import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType } from "./roads.js";
+import { ROAD_TYPES, BRIDGE_TYPES, isRoadType, roadTypeAt, type RoadType } from "./roads.js";
 
 export interface RoadPlan {
   tiles: Point[];
@@ -9,6 +9,7 @@ export interface RoadPlan {
   upgrades: Point[];
   cost: number;
   bridges: number;
+  materials:Partial<Record<Resource,number>>;
   blocked?: Point;
   error?: string;
 }
@@ -30,13 +31,15 @@ export function roadStroke(from: Point, to: Point): Point[] {
 /** Read-only preview and command validation use precisely the same plan. */
 export function planRoad(sim: Simulation, from: Point, to: Point, roadType: RoadType = "stone"): RoadPlan {
   const tiles = roadStroke(from, to);
-  const plan: RoadPlan = { tiles, additions: tiles.filter((p) => !sim.roads.has(tileKey(p))), upgrades: [], cost: 0, bridges: 0 };
+  const plan: RoadPlan = { tiles, additions: tiles.filter((p) => !sim.roads.has(tileKey(p))), upgrades: [], cost: 0, bridges: 0, materials:{} };
   if (!isRoadType(roadType)) return { ...plan, error: "Choose a road surface or pedestrian pavement." };
   if (!tiles.length) return { ...plan, error: "Keep both ends of the road inside the valley." };
+  const chargeMaterials=(water:boolean)=>{if(water){const b=BRIDGE_TYPES[roadType];plan.materials[b.material]=(plan.materials[b.material]??0)+b.amount;}else if(roadType==="brick")plan.materials.bricks=(plan.materials.bricks??0)+1;};
   const planned = new Set(tiles.map(tileKey));
   for (const p of plan.additions) {
     const water = terrainCell(p.x, p.y, sim.state.terrain).kind === "water";
-    plan.cost += water ? 35 : ROAD_TYPES[roadType].cost;
+    plan.cost += water ? BRIDGE_TYPES[roadType].cost : ROAD_TYPES[roadType].cost;
+    chargeMaterials(water);
     if (water) plan.bridges++;
     const error = sim.canPlace("road", p.x, p.y);
     if (error && error !== "Not enough gold yet." && !plan.error) {
@@ -57,13 +60,14 @@ export function planRoad(sim: Simulation, from: Point, to: Point, roadType: Road
   for (const p of tiles) {
     if (!sim.roads.has(tileKey(p))) continue;
     const previous=roadTypeAt(sim.state.roadTypes,p),conversion=(previous==="pavement")!==(roadType==="pavement");
-    if(terrainCell(p.x,p.y,sim.state.terrain).kind==="water"&&!conversion)continue;
-    const current = ROAD_TYPES[roadTypeAt(sim.state.roadTypes, p)];
-    if (conversion || ROAD_TYPES[roadType].cost > current.cost) {
+    const water=terrainCell(p.x,p.y,sim.state.terrain).kind==="water",current=(water?BRIDGE_TYPES:ROAD_TYPES)[previous],next=(water?BRIDGE_TYPES:ROAD_TYPES)[roadType];
+    if (conversion || next.cost > current.cost) {
       plan.upgrades.push(p);
-      plan.cost += conversion?Math.max(6,ROAD_TYPES[roadType].cost-current.cost):ROAD_TYPES[roadType].cost-current.cost;
+      plan.cost += conversion?Math.max(6,next.cost-current.cost):next.cost-current.cost;
+      chargeMaterials(water);
     }
   }
+  for(const [r,n] of Object.entries(plan.materials))if(!plan.error&&sim.stored(r as Resource)<n)plan.error=`Need ${n-sim.stored(r as Resource)} more ${RESOURCE_NAMES[r as Resource].toLowerCase()} in warehouses.${r==="bricks"?" Build a brickworks and let its deliveries arrive.":" Wait for deliveries or shorten the stretch."}`;
   if (!plan.error && plan.cost > sim.state.money) plan.error = `Need ${Math.ceil(plan.cost-sim.state.money)} more gold. Shorten the stretch or wait for taxes and exports.`;
   if (!plan.error && !plan.additions.length && !plan.upgrades.length) plan.error = "This stretch already has roads of this quality or better. Choose a better surface or drag farther.";
   return plan;

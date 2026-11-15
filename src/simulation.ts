@@ -7,7 +7,7 @@ import { depositAt, exposedDeposit, nearbyDeposit, buildingDeposit, expandReserv
 import { ROCK_CLEARING_WORK } from "./construction.js";
 import {planRemoval} from "./removal.js";
 import {roadEdges,reconcileRoadLamps} from "./streetlights.js";
-import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType, type RoadTypes } from "./roads.js";
+import { ROAD_TYPES, BRIDGE_TYPES, isRoadType, roadTypeAt, type RoadType, type RoadTypes } from "./roads.js";
 import {
   BUILDINGS,
   RESOURCES,
@@ -125,8 +125,10 @@ export interface Agent {
   trafficWait?: boolean;
   queuedTicks?: number;
   onsite?: number;
+  parkSlot?:number;
 }
 export interface World {
+  bridgeVersion?:1;
   version: 3;
   tick: number;
   revision: number;
@@ -306,6 +308,7 @@ export class Simulation {
     expandValley(this.state);
     expandReserves(this.state);
     lengthenDays(this.state);
+    if(this.state.bridgeVersion!==1){this.state.roadTypes??={};for(const k of this.state.roads){const [x,y]=k.split(",").map(Number);if(terrain(x,y,this.state.terrain)==="water"&&!this.state.roadTypes[k])this.state.roadTypes[k]="dirt";}this.state.bridgeVersion=1;}
     for(const b of this.state.buildings)if(isExtractor(b.kind))b.deposit=buildingDeposit(b);
     this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
     for(const d of this.state.decorations)if(d.kind==="fence"&&d.side===undefined)d.side=this.state.decorations.some(n=>n.kind==="fence"&&n.x===d.x&&Math.abs(n.y-d.y)===1)?0:1;
@@ -641,7 +644,7 @@ export class Simulation {
   private residentDestination(r: Resident) {
     const hour = daylight(this.state.tick).hour;
     const leisure = (this.leisureByResident.get(r.id) ?? []).filter((b) =>
-      serviceOpen(b.kind, hour),
+      serviceOpen(b.kind, hour)&&(b.kind!=="park"||this.state.agents.filter(a=>a.target===b.id&&a.parkSlot!==undefined&&a.returning&&a.wait>0).length<4),
     );
     leisure.sort(
       (a, b) =>
@@ -915,7 +918,7 @@ export class Simulation {
         message: "The town changed. Please try again.",
         revision: this.state.revision,
       };
-    const c = envelope.command;
+    let c = envelope.command;
     if (
       !c ||
       ![
@@ -938,6 +941,11 @@ export class Simulation {
         message: "Unknown action.",
         revision: this.state.revision,
       };
+    if(c.type==="place"&&(c.kind==="road"||c.kind==="bridge")){
+      const water=terrain(c.x,c.y,this.state.terrain)==="water";
+      if(c.kind==="bridge"&&!water)return{ok:false,message:"Bridges need water. Choose a road on land.",revision:this.state.revision};
+      c={type:"roadStroke",from:{x:c.x,y:c.y},to:{x:c.x,y:c.y},roadType:water?"dirt":"stone"};
+    }
     let message = "",
       networkChanged = true;
     if(c.type==="removeDecoration") {
@@ -959,7 +967,7 @@ export class Simulation {
       this.state.buildings=this.state.buildings.filter(b=>!plan.buildings.has(b.id));
       for(const k of plan.roads) {
         const [x,y]=k.split(",").map(Number);
-        this.state.money+=terrain(x,y,this.state.terrain)==="water"?17:Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2);
+        this.state.money+=terrain(x,y,this.state.terrain)==="water"?Math.floor(BRIDGE_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2):Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2);
         if(this.state.roadTypes)delete this.state.roadTypes[k];
       }
       this.state.roads=this.state.roads.filter(k=>!plan.roads.has(k));
@@ -976,13 +984,14 @@ export class Simulation {
       this.state.roads.push(...added);
       this.state.roadTypes ??= {};
       for (const p of [...plan.additions, ...plan.upgrades]) {
-        if ((terrain(p.x, p.y, this.state.terrain) === "water" && roadType!=="pavement") || roadType === "stone")
+        if (roadType === "stone")
           delete this.state.roadTypes[key(p)];
         else this.state.roadTypes[key(p)] = roadType;
       }
       this.state.decorations = this.state.decorations.filter((d) => d.side!==undefined?!(this.state.roads.includes(key(d))&&this.state.roads.includes(key(fenceNeighbour(d,d.side)))):!added.has(key(d)));
       this.state.money -= plan.cost;
-      message = `${ROAD_TYPES[roadType].name} roads · ${plan.additions.length} new tiles${plan.upgrades.length ? ` · ${plan.upgrades.length} upgraded` : ""}${plan.bridges ? ` · ${plan.bridges} wooden bridge tiles` : ""} · ${plan.cost} gold.`;
+      for(const [r,n] of Object.entries(plan.materials))this.consume(r as Resource,n);
+      message = `${ROAD_TYPES[roadType].name} roads · ${plan.additions.length} new tiles${plan.upgrades.length ? ` · ${plan.upgrades.length} upgraded` : ""}${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""} · ${plan.cost} gold.`;
     } else if (c.type === "terrain") {
       const plan = planTerrain(this.state, c);
       if (plan.error)
@@ -1139,7 +1148,7 @@ export class Simulation {
         this.state.decorations=this.state.decorations.filter(d=>{if(d.edge===undefined||key(d)!==key(c))return true;this.state.money+=Math.floor(DECORATIONS[d.kind].cost/2);return false;});
         this.state.roads = this.state.roads.filter((k) => k !== key(c));
         this.state.money +=
-          terrain(c.x, c.y, this.state.terrain) === "water" ? 17 : Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes, c)].cost / 2);
+          terrain(c.x, c.y, this.state.terrain) === "water" ? Math.floor(BRIDGE_TYPES[roadTypeAt(this.state.roadTypes,c)].cost/2) : Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes, c)].cost / 2);
         if (this.state.roadTypes) delete this.state.roadTypes[key(c)];
       } else if (decoration) {
         this.state.decorations = this.state.decorations.filter(
@@ -1390,6 +1399,7 @@ export class Simulation {
         }
         if (!destination) a.wait = Math.max(a.wait, STEP * 2);
       }
+      if(a.wait<=0)delete a.parkSlot;
       // Finish journeys already on the road; most residents stay home at night.
       if (
         day.night &&
@@ -1442,8 +1452,11 @@ export class Simulation {
         } else {
           const arrival = this.building(a.target),
             resident = this.state.residents.find((r) => r.id === a.resident);
+          let parkSlot:number|undefined;
+          if(!a.returning&&arrival?.kind==="park"){const used=new Set(this.state.agents.filter(v=>v.id!==a.id&&v.target===arrival.id&&v.returning&&v.wait>0).map(v=>v.parkSlot));parkSlot=[0,1,2,3].find(slot=>!used.has(slot));}
           if (
             !a.returning &&
+            (arrival?.kind!=="park"||parkSlot!==undefined) &&
             resident &&
             arrival &&
             isLeisure(arrival.kind) &&
@@ -1470,7 +1483,8 @@ export class Simulation {
           a.segment = 0;
           a.progress = 0;
           a.returning = !a.returning;
-          a.wait = a.returning&&arrival?.kind==="park"?parkVisitDuration(a.id):4+(a.id%8);
+          a.parkSlot=parkSlot;
+          a.wait = a.returning&&arrival?.kind==="park"?(parkSlot!==undefined?parkVisitDuration(a.id):0):4+(a.id%8);
           a.active = false;
           if (
             a.returning &&
@@ -1786,7 +1800,7 @@ export function parseSave(raw: string): World {
     !s.roadTypes || typeof s.roadTypes !== "object" || Array.isArray(s.roadTypes) ||
     Object.entries(s.roadTypes).some(([k, type]) => {
       const [x, y] = k.split(",").map(Number);
-      return !occupied.has(k) || !isRoadType(type) || (terrain(x, y, s.terrain) === "water" && type!=="pavement");
+      return !occupied.has(k) || !isRoadType(type);
     })
   )) throw new Error("Invalid road surfaces.");
   for (const b of s.buildings) {

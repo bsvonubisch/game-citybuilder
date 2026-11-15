@@ -166,7 +166,7 @@ $("#app").innerHTML = `
    ["bread", "food-stock", "Food in warehouses"],
    ["wood", "wood", "Wood in warehouses"],
    ["planks", "planks", "Planks in warehouses"],
-   ["bricks", "box", "Bricks in warehouses"],
+   ["box", "bricks", "Bricks in warehouses"],
    ["stone", "stone", "Stone in warehouses"],
    ["metal", "metal", "Metal in warehouses"],
    ["people", "population", "Employed / residents"],
@@ -308,7 +308,7 @@ function setTool(next: Tool) {
     : decoration
       ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
       : next === "road"
-        ? `<div class="road-surfaces" role="group" aria-label="Road surface">${Object.entries(ROAD_TYPES).map(([kind, d]) => `<button type="button" data-road-type="${kind}" aria-pressed="${scene.roadType === kind}"><span class="road-swatch road-${kind}" aria-hidden="true"></span><b>${d.name}</b><span>${d.cost} gold / tile</span><small>${d.description}</small></button>`).join("")}</div><span class="road-instructions">Drag to lay roads or footpaths · Converting access costs at least 6 gold/tile</span><span id="road-stroke-cost" aria-live="polite"></span><small>Wooden bridges: 35 gold · Pavement keeps them pedestrian-only<br>Two fingers to pan/zoom · Space-drag to pan · Esc to cancel</small>`
+        ? `<div class="road-surfaces" role="group" aria-label="Road surface">${Object.entries(ROAD_TYPES).map(([kind, d]) => `<button type="button" data-road-type="${kind}" aria-pressed="${scene.roadType === kind}"><span class="road-swatch road-${kind}" aria-hidden="true"></span><b>${d.name}</b><span>${d.cost} gold${kind==="brick"?" + 1 brick":""} / tile</span><small>${d.description}</small></button>`).join("")}</div><span class="road-instructions">Drag to lay roads or footpaths · Converting access costs at least 6 gold/tile</span><span id="road-stroke-cost" aria-live="polite"></span><small>Bridges match the road material; costs appear as you drag. Pavements use timber footbridges.<br>Two fingers to pan/zoom · Space-drag to pan · Esc to cancel</small>`
         : next === "bridge"
           ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
           : next === "bulldoze"
@@ -604,7 +604,7 @@ scene.onTile = async (p: Point) => {
 scene.onRoadPreview = (plan) => {
   const label = document.querySelector<HTMLElement>("#road-stroke-cost");
   if (!label) return;
-  label.textContent = plan ? `${plan.additions.length} new · ${plan.upgrades.length} upgrades · ${plan.cost} gold${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""}${plan.error ? ` — ${plan.error}` : ""}` : "";
+  label.textContent = plan ? `${plan.additions.length} new · ${plan.upgrades.length} upgrades · ${plan.cost} gold${Object.entries(plan.materials).map(([r,n])=>` · ${n} ${r}`).join("")}${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""}${plan.error ? ` — ${plan.error}` : ""}` : "";
   label.classList.toggle("invalid", !!plan?.error);
 };
 scene.onRoadApply = async (from, to) => {

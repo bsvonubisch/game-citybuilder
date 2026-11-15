@@ -7,6 +7,7 @@ export const ROAD_TYPES = {
   stone: { name: "Stone", cost: 12, speed: 1, description: "Standard speed", color: "#a3a49f" },
   brick: { name: "Brick", cost: 24, speed: 1.35, description: "35% faster", color: "#bc7860" },
 } as const;
+export const BRIDGE_TYPES={dirt:{name:"Timber",cost:35,material:"wood",amount:2},pavement:{name:"Timber footbridge",cost:35,material:"wood",amount:2},stone:{name:"Stone",cost:55,material:"stone",amount:2},brick:{name:"Brick",cost:75,material:"bricks",amount:4}} as const;
 export type RoadType = keyof typeof ROAD_TYPES;
 export type RoadTypes = Record<string, RoadType>;
 export const isRoadType = (value: unknown): value is RoadType =>

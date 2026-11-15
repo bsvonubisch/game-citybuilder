@@ -1,9 +1,11 @@
 import type {Agent,Building} from './simulation.js';
-export const parkVisitDuration=(id:number)=>24+id%5*2;
+export const parkVisitDuration=(id:number)=>18+id%5*2;
 export function parkVisitor(a:Agent,b:Building|undefined,acc=0){
- if(!b||b.kind!=='park'||b.construction||!b.enabled||!a.returning||a.active!==false||a.wait<=0||a.resident===null)return null;
- const elapsed=Math.max(0,parkVisitDuration(a.id)-a.wait+acc),walk=elapsed%10<5;
- const base=a.id%8*Math.PI/4,angle=base+Math.floor(elapsed/10)*.7+Math.min(elapsed%10,5)*.14;
- const r=.52+.08*Math.abs(Math.sin(angle*2)),p={x:b.x+.5+Math.cos(angle)*r,y:b.y+.5+Math.sin(angle)*r};
- return{...p,dx:walk?-Math.sin(angle):b.x+.5-p.x,dy:walk?Math.cos(angle):b.y+.5-p.y,walking:walk,elapsed};
+ if(!b||b.kind!=='park'||b.construction||!b.enabled||!a.returning||a.active!==false||a.wait<=0||a.resident===null||a.parkSlot===undefined)return null;
+ const elapsed=Math.max(0,parkVisitDuration(a.id)-a.wait+acc),walking=elapsed<1;
+ let [x,y]=[[.5,-.06],[.5,1.06],[-.06,.5],[1.06,.5]][a.parkSlot%4];
+ for(let i=0;i<b.rotation;i++)[x,y]=[y,1-x];
+ const outward={x:x-.5,y:y-.5},length=Math.hypot(outward.x,outward.y);
+ const dx=-outward.x/length,dy=-outward.y/length,offset=walking?(1-elapsed)*.3:0;
+ return{x:b.x+x-dx*offset,y:b.y+y-dy*offset,dx,dy,walking,elapsed};
 }

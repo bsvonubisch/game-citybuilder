@@ -568,6 +568,7 @@ test("bridges connect people and deliveries across an inlet and survive a save r
       rotation: 1,
     },
   ];
+  seed.roadTypes={};
   seed.roads = [
     "20,10",
     ...Array.from({ length: 7 }, (_, i) => `21,${10 + i}`),
@@ -1335,7 +1336,8 @@ test("every building can be placed in every orientation, with rectangular plots 
     for (let rotation = 0; rotation < 4; rotation++) {
       const seed = new Simulation().snapshot();
       seed.buildings = seed.buildings.filter((b) => b.kind === "warehouse");
-      seed.roads = [];
+      seed.roadTypes={};
+  seed.roads = [];
       seed.decorations = [];
       seed.residents = [];
       seed.agents = [];
@@ -1555,7 +1557,7 @@ test("one road drag builds roads and bridges together, charges only new tiles, a
   assert.equal(plan.error, undefined);
   assert.equal(plan.additions.length, 4);
   assert.equal(plan.bridges, 1);
-  assert.equal(plan.cost, 12 * 3 + 35);
+  assert.equal(plan.cost, 12 * 3 + 55);
   assert.deepEqual(sim.snapshot(), before, "preview does not modify the town");
   const command = { type: "roadStroke", from, to };
   const result = execute(sim, command, "whole-road-once");
@@ -1631,6 +1633,7 @@ test("a whole road stretch accepts gentle slopes but rejects a changed town revi
 test("road surfaces build cheaply, upgrade for the difference, persist and refund their own cost", () => {
   const sim = new Simulation();
   const from = { x: 1, y: 1 }, to = { x: 4, y: 1 };
+  sim.state.buildings.find(b=>b.kind==="warehouse").inventory.bricks=20;
   const initialMoney = sim.state.money;
   for (const [roadType, price, upgrades] of [["dirt", 24, 0], ["stone", 24, 4], ["brick", 48, 4]]) {
     const before = sim.snapshot();
@@ -1642,7 +1645,8 @@ test("road surfaces build cheaply, upgrade for the difference, persist and refun
     for (const p of roadStroke(from, to)) assert.equal(roadTypeAt(sim.state.roadTypes, p), roadType);
     for (const b of sim.state.buildings) {
       const previous = before.buildings.find((old) => old.id === b.id);
-      assert.deepEqual(b.inventory, previous.inventory);
+      const expected={...previous.inventory};if(b.kind==="warehouse"&&roadType==="brick")expected.bricks-=4;
+      assert.deepEqual(b.inventory, expected);
       assert.equal(b.progress, previous.progress);
     }
     const loaded = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
@@ -1662,13 +1666,14 @@ test("road surfaces build cheaply, upgrade for the difference, persist and refun
   assert.equal(roadTypeAt(sim.state.roadTypes, from), "stone", "removed metadata cannot change a replacement road");
 });
 
-test("mixed upgrades and additions are atomic and bridge speeds remain unchanged", () => {
+test("mixed upgrades and additions are atomic and bridge surfaces follow the chosen material", () => {
   const sim = new Simulation();
   const from = { x: 1, y: 1 }, to = { x: 5, y: 1 };
   sim.state.terrain = { "3,1": { kind: "water", height: 0 } };
   assert.equal(execute(sim, { type: "roadStroke", from, to: { x: 2, y: 1 }, roadType: "dirt" }).ok, true);
+  sim.state.buildings.find(b=>b.kind==="warehouse").inventory.bricks=20;
   const plan = planRoad(sim, from, to, "brick");
-  assert.equal(plan.cost, 2 * (24 - 6) + 2 * 24 + 35);
+  assert.equal(plan.cost, 2 * (24 - 6) + 2 * 24 + 75);
   assert.equal(plan.additions.length, 3);
   assert.equal(plan.upgrades.length, 2);
   assert.equal(plan.bridges, 1);
@@ -1679,7 +1684,7 @@ test("mixed upgrades and additions are atomic and bridge speeds remain unchanged
   sim.state.money++;
   assert.equal(execute(sim, { type: "roadStroke", from, to, roadType: "brick" }).ok, true);
   assert.equal(sim.state.money, 0);
-  assert.equal(roadTypeAt(sim.state.roadTypes, { x: 3, y: 1 }), "stone");
+  assert.equal(roadTypeAt(sim.state.roadTypes, { x: 3, y: 1 }), "brick");
   assert.equal(planRoad(sim, { x: 3, y: 1 }, { x: 3, y: 1 }, "brick").cost, 0);
 });
 
@@ -2001,7 +2006,7 @@ test("compact industry lots migrate inside the old footprint while keeping front
         save.residents = [];
         save.agents = [];
         const front = frontage(kind, 8, 20, rotation, plot);
-        save.roads = [key(front.at(-1))];
+        save.roadTypes={};save.roads = [key(front.at(-1))];
         const oldCells = new Set(
           footprint(kind, 8, 20, rotation, plot).map(key),
         );
@@ -2496,7 +2501,7 @@ test("both sides of the same fence edge have identical artwork anchors and front
 
 test("park visitors remain visible only during actual visits and alternate strolling with fountain watching",async()=>{
  const {parkVisitor,parkVisitDuration}=await import('../.test-dist/park-visitors.js');
- const sim=new Simulation(),park=sim.state.buildings.find(b=>b.kind==='park'),a={id:2,resident:1,returning:true,active:false,wait:parkVisitDuration(2)};
+ const sim=new Simulation(),park=sim.state.buildings.find(b=>b.kind==='park'),a={id:2,resident:1,parkSlot:0,returning:true,active:false,wait:parkVisitDuration(2)};
  const walking=parkVisitor(a,park);assert.ok(walking.walking);assert.ok(walking.x>=park.x-.5&&walking.x<=park.x+1.5);
  const watching=parkVisitor({...a,wait:a.wait-7},park);assert.equal(watching.walking,false);
  assert.equal(parkVisitor({...a,wait:0},park),null);assert.equal(parkVisitor({...a,returning:false},park),null);
@@ -2509,4 +2514,27 @@ test("a fence between staggered buildings stays behind the nearer wall even with
  const plots=[{...base,x:0,y:0},{...base,x:2,y:-2}];
  const point={x:1.5,y:-1};
  assert.ok(travellerDepth(point,bounds,plots,true)<76);
+});
+
+
+test("brick roads and bridges consume warehouse bricks atomically and timber bridges upgrade in place",()=>{
+ const sim=new Simulation(),w=sim.state.buildings.find(b=>b.kind==='warehouse');sim.state.terrain={'2,1':{kind:'water',height:0}};
+ const command={type:'roadStroke',from:{x:1,y:1},to:{x:3,y:1},roadType:'brick'};
+ const before=sim.snapshot();assert.equal(execute(sim,command).ok,false);assert.deepEqual(sim.snapshot(),before);
+ w.inventory.bricks=12;const money=sim.state.money;assert.equal(execute(sim,command,'brick-stretch').ok,true);
+ assert.equal(w.inventory.bricks,6);assert.equal(sim.state.money,money-123);assert.equal(roadTypeAt(sim.state.roadTypes,{x:2,y:1}),'brick');
+ const after=sim.snapshot();execute(sim,command,'brick-stretch');assert.deepEqual(sim.snapshot(),after);assert.doesNotThrow(()=>parseSave(JSON.stringify(after)));
+ const old=sim.snapshot();delete old.bridgeVersion;delete old.roadTypes;
+ const restored=new Simulation(parseSave(JSON.stringify(old)));assert.equal(roadTypeAt(restored.state.roadTypes,{x:2,y:1}),'dirt');
+ const cost=restored.state.money;assert.equal(execute(restored,{type:'roadStroke',from:{x:2,y:1},to:{x:2,y:1},roadType:'stone'}).ok,true);assert.equal(restored.state.money,cost-20);assert.equal(roadTypeAt(restored.state.roadTypes,{x:2,y:1}),'stone');
+});
+test("a small fountain admits at most four simultaneous visitors with unique places",()=>{
+ const sim=new Simulation(),park=sim.state.buildings.find(b=>b.kind==='park');
+ for(const a of sim.state.agents.filter(a=>a.resident!==null)){
+  const home=sim.building(a.source),path=sim.route(home,park);if(!path)continue;
+  a.kind='person';a.target=park.id;a.path=path;a.segment=path.length-1;a.progress=0;a.returning=false;a.wait=0;a.active=true;a.move=1;
+ }
+ sim.step();
+ const visitors=sim.state.agents.filter(a=>a.target===park.id&&a.parkSlot!==undefined&&a.returning&&a.wait>0);
+ assert.equal(visitors.length,4);assert.equal(new Set(visitors.map(a=>a.parkSlot)).size,4);
 });

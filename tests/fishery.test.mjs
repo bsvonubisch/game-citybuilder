@@ -40,6 +40,7 @@ function fixture() {
     inventory: { wood: 100, planks: 100, stone: 100 },
   };
   seed.buildings = [house, warehouse];
+  seed.roadTypes = {};
   seed.roads = Array.from({ length: 10 }, (_, i) => `${4 + i},10`);
   seed.agents = [];
   seed.residents = [];
