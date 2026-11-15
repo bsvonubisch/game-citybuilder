@@ -1,3 +1,4 @@
+import {TownAudio} from './audio.js';
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 import {farmSummary} from './farming.js';
@@ -80,6 +81,7 @@ import { productionActivity, type GoodsConnection } from "./logistics.js";
 import { CloudSaves, cloudError } from "./cloud.js";
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
+const townAudio = new TownAudio();
 const SAVE_KEY =
   "little-works.pinehaven.v1" +
   (new URLSearchParams(location.search).has("qa")
@@ -610,6 +612,7 @@ scene.onTile = async (p: Point) => {
     scene.selectedAgent = null;
     selectedDecoration = simulation.decorationAt(p.x, p.y)?.id ?? null;
     const b = simulation.buildingAt(p.x, p.y);
+    if(b)townAudio.building(b.kind,!!b.construction);
     selected = b?.id ?? null;
     scene.selected = selected;
     scene.drawOverlay();
@@ -635,6 +638,7 @@ scene.onTile = async (p: Point) => {
   );
   toast(result.message);
   if (result.ok) {
+    if(tool!=="bulldoze")townAudio.place();
     if (tool === "move") {
       const id = scene.movingBuilding!;
       setTool("inspect");
@@ -659,7 +663,7 @@ scene.onRoadPreview = (plan) => {
 scene.onRoadApply = async (from, to) => {
   const result = await gateway.command({ type: "roadStroke", from, to, roadType: scene.roadType });
   toast(result.message);
-  if (result.ok) { scene.redraw(); save(false); updateUI(); }
+  if (result.ok) { townAudio.place(); scene.redraw(); save(false); updateUI(); }
 };
 scene.onTerrainPreview = (plan) => {
   const label = document.querySelector("#terrain-cost"),
@@ -694,6 +698,8 @@ scene.onHover = (p) => {
     : "";
 };
 scene.onSelectAgent = (id) => {
+  const agent=simulation.state.agents.find(a=>a.id===id);
+  if(agent?.kind==="person")townAudio.person(agent.resident??agent.id);else if(agent)townAudio.vehicle();
   selectedTraffic = null;
   selected = null;
   selectedDecoration = null;
@@ -704,6 +710,8 @@ scene.onSelectAgent = (id) => {
   renderAgentInspector();
 };
 scene.onSelect = (id) => {
+  const building=id!==null?simulation.building(id):undefined;
+  if(building)townAudio.building(building.kind,!!building.construction);
   selectedTraffic = null;
   selectedAgent = null;
   selectedDecoration = null;
@@ -1651,6 +1659,12 @@ function showSettings() {
       (event.target as HTMLSelectElement).value as ArtworkMode,
       scene.cameras.main.zoom,
     );
+  $("#dialog-content .modal-actions").insertAdjacentHTML("beforebegin",`<section class="audio-settings" aria-label="Sound settings"><h3>Sounds of Pinehaven</h3><label class="audio-mute"><input id="audio-mute" type="checkbox" ${townAudio.settings.muted?'checked':''}> Mute all audio</label><label for="music-volume">Cozy music <output id="music-value">${Math.round(townAudio.settings.music*100)}%</output></label><input id="music-volume" type="range" min="0" max="100" value="${Math.round(townAudio.settings.music*100)}"><label for="effects-volume">Sound effects & voices <output id="effects-value">${Math.round(townAudio.settings.effects*100)}%</output></label><input id="effects-volume" type="range" min="0" max="100" value="${Math.round(townAudio.settings.effects*100)}"><small>Sound starts with your first tap and pauses while the game is in the background.</small></section>`);
+  $<HTMLInputElement>("#audio-mute").onchange=event=>townAudio.setSettings({muted:(event.target as HTMLInputElement).checked});
+  for(const [id,key] of [["music","music"],["effects","effects"]] as const){
+    $<HTMLInputElement>(`#${id}-volume`).oninput=event=>{const value=Number((event.target as HTMLInputElement).value);townAudio.setSettings({[key]:value/100});$(`#${id}-value`).textContent=`${value}%`;};
+  }
+  $<HTMLInputElement>("#effects-volume").onchange=()=>townAudio.place();
   $("#modal-save").onclick = () => save();
   $("#export").onclick = () => {
     const url = URL.createObjectURL(

@@ -3559,3 +3559,5 @@ dialog p.muted {
 #farm-crop .crop-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}#farm-crop .crop-choices button{padding:9px 4px;font-size:12px;min-width:0}
 
 :is(.building-alert, .building-status.warning)[data-operation="demolition"] { color:#984c27; border-color:#d49362; background:#fff0db; }
+
+.audio-settings{display:grid;grid-template-columns:1fr;gap:9px;padding:16px 0;margin:4px 0 18px;border-block:1px solid #dce0cf}.audio-settings h3{margin:0 0 3px}.audio-settings label{display:flex;align-items:center;justify-content:space-between;font-size:13px}.audio-settings .audio-mute{justify-content:flex-start;gap:8px;min-height:32px}.audio-settings input[type=range]{width:100%;min-width:0;accent-color:#587857;cursor:pointer;min-height:28px}.audio-settings input[type=checkbox]{accent-color:#587857;width:18px;height:18px}.audio-settings small{font-size:11px;color:#7b8672}.audio-settings output{font-variant-numeric:tabular-nums}
