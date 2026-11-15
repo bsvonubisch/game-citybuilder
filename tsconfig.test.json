@@ -8,6 +8,7 @@
     "outDir": ".test-dist"
   },
   "include": [
+    "src/lighting.ts",
     "src/catalog.ts",
     "src/building-guidance.ts",
     "src/traffic-queues.ts",

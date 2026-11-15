@@ -41,6 +41,11 @@ import {
 import { baseTerrain } from "../.test-dist/terrain.js";
 import { daylight, warmEmission, shiftChange } from "../.test-dist/daylight.js";
 import {
+  NIGHT_AMBIENT,
+  windowGround,
+  castShadow,
+} from "../.test-dist/lighting.js";
+import {
   serviceCoverage,
   servicePreview,
   serviceOpen,
@@ -90,6 +95,29 @@ test("the displayed day advances at midnight while keeping the 08:00 start", () 
   assert.equal(daylight(160).day, 2);
   assert.equal(daylight(160).hour, 0);
   assert.equal(daylight(240).day, 2);
+});
+test("night light pools follow each rotated foundation and shadows point away from nearby lamps", () => {
+  assert.ok(NIGHT_AMBIENT.every((value, i) => value < [122, 138, 177][i]));
+  for (let rotation = 0; rotation < 4; rotation++) {
+    const b = { kind: "warehouse", x: 10, y: 12, rotation, plot: [2, 3] };
+    const [w, h] = dimensions(b.kind, rotation, b.plot);
+    const frontX = (b.x + w - b.y - h) * 32;
+    assert.equal(
+      windowGround(b, frontX, 8).y,
+      (b.x + w + b.y + h - 1) * 16 - 8,
+    );
+    assert.ok(Number.isFinite(windowGround(b, -999, 0).y));
+    assert.ok(Number.isFinite(windowGround(b, 999, 0).y));
+  }
+  const lamp = { x: 0, y: -25, groundX: 0, groundY: 0, power: 1, radius: 60 };
+  assert.ok(castShadow(20, 10, [lamp], true).x > 0);
+  assert.ok(castShadow(-20, -10, [lamp], true).x < 0);
+  assert.ok(castShadow(20, 10, [lamp], true).y > 0);
+  assert.ok(castShadow(-20, -10, [lamp], true).y < 0);
+  assert.ok(
+    castShadow(400, 400, [lamp], true).alpha <
+      castShadow(20, 10, [lamp], true).alpha,
+  );
 });
 test("shift notices match work-rate boundaries and ignore loading, pauses and time resets", () => {
   assert.equal(shiftChange(119, 120), "night");

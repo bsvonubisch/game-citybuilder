@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { NightArt } from "./night-art.js";
+import { ShadowArt } from "./shadow-art.js";
 import { isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
 import {
   setupArtworkScaling,
@@ -192,6 +193,7 @@ export class TownScene extends Phaser.Scene {
   private waterPoints: Point[] = [];
   private animation!: TownAnimation;
   private nightArt!: NightArt;
+  private shadowArt!: ShadowArt;
   private lightSources: Phaser.GameObjects.Image[] = [];
   private travellerScales = new Map<string, number>();
   private ghost?: Phaser.GameObjects.Image;
@@ -240,6 +242,7 @@ export class TownScene extends Phaser.Scene {
   create() {
     setupArtworkScaling(this.game);
     this.nightArt = new NightArt(this);
+    this.shadowArt = new ShadowArt(this);
     this.plotArt = new PlotArt(this);
     this.constructionArt = new ConstructionArt(this);
     const builderTexture = this.textures.get("construction-workers"),
@@ -1396,6 +1399,12 @@ export class TownScene extends Phaser.Scene {
     );
     this.waterArt.update(time);
     this.nightArt.update(this.simulation, time, this.lightSources);
+    this.shadowArt.update(
+      this.simulation,
+      time,
+      [...this.buildings.values(), ...this.trees],
+      this.nightArt.lamps,
+    );
     this.drawAgentRoute();
     this.animation.update(
       this.simulation,
@@ -1426,6 +1435,7 @@ export class TownScene extends Phaser.Scene {
     this.buildingAlerts.clear();
     this.animation.clear();
     this.nightArt.clear();
+    this.shadowArt.clear();
     this.fishingArt.clear();
     this.trafficAlerts.clear();
     this.acc = 0;
