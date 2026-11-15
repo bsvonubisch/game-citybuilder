@@ -5,7 +5,7 @@ import type { Building, Simulation } from "./simulation.js";
 export const MAX_COMMUTE = 28;
 export const isLeisure = (kind: string) => kind === "park" || kind === "garden" || kind === "tavern";
 export const isService=(kind:string)=>isLeisure(kind)||kind==="church";
-export const serviceRange = (kind: string) => (kind === "market" ? 18 : kind === "church" ? 20 : kind === "tavern" ? 14 : kind === "garden" ? 18 : 10);
+export const serviceRange = (kind: string) => (kind === "market" ? 18 : kind === "church" ? 32 : kind === "tavern" ? 24 : kind === "garden" ? 28 : 16);
 export const serviceCapacity = (b: Building) =>
   (b.kind === "market" ? 2400 : b.kind === "church" ? 40 : b.kind === "tavern" ? 18 : b.kind === "garden" ? 40 : 12) * (b.level ?? 1);
 export const serviceOpen = (kind: string, hour: number) =>

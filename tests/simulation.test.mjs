@@ -2261,7 +2261,7 @@ test("leisure coverage follows roads, capacity and reach rather than straight-li
   assert.ok(first.residents > 0 && first.residents <= 12);
   assert.ok(
     first.homes.every(
-      (h) => h.tiles <= 10 && h.seconds === h.tiles / AGENT_SPEED.person,
+      (h) => h.tiles <= 16 && Math.abs(h.seconds - h.tiles / AGENT_SPEED.person) < 1e-8,
     ),
   );
   park.level = 3;
@@ -2605,7 +2605,7 @@ test("church rotation keeps a six-tile plot and the large park admits eight spac
  const {parkVisitor,parkVisitorLimit}=await import('../.test-dist/park-visitors.js');
  for(let r=0;r<4;r++){assert.equal(footprint('church',10,10,r).length,6);assert.deepEqual([...dimensions('church',r)].sort(),[2,3]);assert.equal(footprint('garden',10,10,r).length,16);assert.equal(frontage('garden',10,10,r).length,16);assert.equal(plazaLayout(r,4).filter(p=>p.kind==='bench').length,4);}
  const sim=serviceTown(),park=sim.state.buildings.find(b=>b.kind==='garden');
- assert.equal(parkVisitorLimit(park),8);assert.equal(serviceCoverage(sim,park).capacity,40);assert.equal(serviceCoverage(sim,park).range,18);
+ assert.equal(parkVisitorLimit(park),8);assert.equal(serviceCoverage(sim,park).capacity,40);assert.equal(serviceCoverage(sim,park).range,28);
  for(const a of sim.state.agents.filter(a=>a.resident!==null)){
   const path=sim.route(sim.building(a.source),park);if(!path)continue;
   Object.assign(a,{kind:'person',target:park.id,path,segment:path.length-1,progress:0,returning:false,wait:0,active:true,move:1});
