@@ -17,9 +17,9 @@ export function seedStarterTown(world:World) {
   const along=(x:number,from:number,to:number,type:RoadType='stone')=>{for(let y=from;y<=to;y++)road(x,y,type);};
   along(6,3,32); along(13,3,32); along(21,3,32);
   across(10,3,32); across(18,3,32,'brick'); across(25,3,21); across(32,3,32,'dirt');
-  // A pedestrian garden loop and cottage lane, linked to the main streets.
-  across(3,6,13,'pavement'); across(11,6,13,'pavement'); across(16,6,13,'pavement');
-  along(7,11,16,'pavement'); along(12,11,16,'pavement');
+  // A stone-road garden loop and cottage lane, linked to the main streets.
+  across(3,6,13,'stone'); across(11,6,13,'stone'); across(16,6,13,'stone');
+  along(7,11,16,'stone'); along(12,11,16,'stone');
   across(21,13,21); across(29,13,21,'dirt'); along(32,10,32,'dirt');
   const add=(kind:BuildingKind,x:number,y:number,rotation:Building['rotation'],extras:Partial<Building>={})=>{
     const b:Building={id:world.nextId++,kind,x,y,rotation,plot:dimensions(kind,rotation),inventory:{},progress:0,workers:0,connected:false,enabled:true,produced:0,...extras};
