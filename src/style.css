@@ -3558,4 +3558,4 @@ dialog p.muted {
 .crop-choices button small{display:block;font-size:10px;opacity:.8;margin-top:3px}.building-alert[data-kind=crop],.building-status[data-kind=crop]{background:#fff0c4;color:#815f21;border-color:#c89c48}
 #farm-crop .crop-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}#farm-crop .crop-choices button{padding:9px 4px;font-size:12px;min-width:0}
 
-.building-alert[data-operation="demolition"] { color:#984c27; border-color:#d49362; background:#fff0db; }
+:is(.building-alert, .building-status.warning)[data-operation="demolition"] { color:#984c27; border-color:#d49362; background:#fff0db; }

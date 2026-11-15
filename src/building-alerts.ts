@@ -84,7 +84,7 @@ export class BuildingAlerts {
                 (b.construction.completed / b.construction.required) * 100,
               )
             : 0;
-          badge.button.innerHTML = `${icon(b.construction?.demolition ? "hammer" : alertIcon[alert.kind])}${b.construction ? `<span class="construction-meter" role="progressbar" aria-label="${b.construction?.demolition ? "Demolition" : "Construction"} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></span><span class="construction-percent">${progress}%</span>` : ""}<span class="building-alert-tip" role="tooltip" id="building-alert-tip-${b.id}"><strong></strong><span></span></span>`;
+          badge.button.innerHTML = `${icon(b.construction?.demolition ? "demolition" : alertIcon[alert.kind])}${b.construction ? `<span class="construction-meter" role="progressbar" aria-label="${b.construction?.demolition ? "Demolition" : "Construction"} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></span><span class="construction-percent">${progress}%</span>` : ""}<span class="building-alert-tip" role="tooltip" id="building-alert-tip-${b.id}"><strong></strong><span></span></span>`;
           badge.button.querySelector("strong")!.textContent = label;
           badge.button.querySelector(
             ".building-alert-tip > span",

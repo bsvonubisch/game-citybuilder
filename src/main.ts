@@ -1131,12 +1131,13 @@ function updateInspector() {
     return;
   }
   $("#building-status").innerHTML = alert
-    ? `<div class="status-heading">${icon(alertIcon[alert.kind])}<b>${escapeHtml(alert.title)}</b></div>`
+    ? `<div class="status-heading">${icon(b.construction?.demolition ? "demolition" : alertIcon[alert.kind])}<b>${escapeHtml(alert.title)}</b></div>`
     : escapeHtml(simulation.status(b));
   const rows=buildingNeeds(simulation,b);
   $("#building-needs").innerHTML=`<div class="needs-heading"><b>Needs & stock</b><span>Have</span><span>Need</span></div>${rows.map(row=>`<div class="building-need ${row.ok?"met":"short"}"><span>${escapeHtml(row.label)}</span><b>${escapeHtml(row.have)}</b><small>${escapeHtml(row.need)}</small></div>`).join("")}${b.construction?`<div class="goal-progress"><span style="width:${Math.floor(b.construction.completed/b.construction.required*100)}%"></span></div>`:""}`;
   $("#building-status").classList.toggle("warning", !!alert);
   $("#building-status").dataset.kind = alert?.kind ?? "ready";
+  $("#building-status").dataset.operation = b.construction?.demolition ? "demolition" : "";
   $("#building-detail").innerHTML =
     `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${buildingJobs(b)}</b></div>` : ""}${
       d.recipe

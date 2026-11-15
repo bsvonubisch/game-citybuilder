@@ -64,6 +64,7 @@ import {
 } from "./deposits.js";
 export { DEPOSITS } from "./deposits.js";
 import { Traffic } from "./traffic.js";
+import {StoppedVehicles} from './vehicle-recovery.js';
 import { canSupply } from "./logistics.js";
 import { fisherySiteError } from "./shoreline.js";
 import {
@@ -272,6 +273,7 @@ const NAMES = [
 export class Simulation {
   state: World;
   private traffic = new Traffic();
+  private stoppedVehicles = new StoppedVehicles();
   private leisureByResident = new Map<number, Building[]>();
   private roadSet = new Set<string>();
   private processed = new Map<string, Result>();
@@ -1299,6 +1301,23 @@ export class Simulation {
     this.state.history.unshift(`${buildingName(b)} removed. Stored goods recovered and half the gold cost returned.`);
     return true;
   }
+  private recoverVehicle(a:Agent) {
+    this.traffic.release(a.id);
+    const origin=this.building(a.returning?a.target:a.source),destination=this.building(a.returning?a.source:a.target);
+    const path=origin&&destination?this.route(origin,destination,a.kind):null;
+    if(!path) {
+      // A removed road or workplace can invalidate the trip. Recover the load
+      // once; normal dispatch will arrange delivery when the route is restored.
+      const depot=origin??this.state.buildings.find(warehouseReady);
+      if(a.cargo&&depot)depot.inventory[a.cargo]=(depot.inventory[a.cargo]??0)+a.amount;
+      this.state.agents=this.state.agents.filter(other=>other.id!==a.id);
+      return;
+    }
+    a.path=path;a.segment=0;a.progress=0;a.active=false;a.move=0;
+    a.wait=1+(a.id%5)*.25;a.trafficWait=false;a.queuedTicks=0;
+    // Keep the same passenger, shipment and destination. The traffic planner
+    // admits the retry from its driveway only after a safe gap becomes available.
+  }
   step() {
     this.state.tick++;
     const day = daylight(this.state.tick);
@@ -1517,6 +1536,8 @@ export class Simulation {
     }
     if (this.state.tick % (day.night ? 48 : 12) === 0) this.dispatch();
     this.traffic.plan(this.state.agents);
+    const stalled=this.stoppedVehicles.update(this.state.agents);
+    if(stalled)this.recoverVehicle(stalled);
     if (this.state.tick % DAY_TICKS === 0) {
       this.earn(this.state.residents.length * 6,"tax");
       let demand = Math.ceil(this.state.residents.length / 3);

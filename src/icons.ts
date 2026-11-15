@@ -1,4 +1,5 @@
 const paths: Record<string, string> = {
+  demolition: "m3 11 9-8 9 8M5 10v11h14V10M9 12l6 6m0-6-6 6",
   rain:"M4 14a4 4 0 0 1 0-8 6 6 0 0 1 11-1 4 4 0 0 1 5 7H4M7 17l-1 4m7-4-1 4m7-4-1 4",
   mist:"M3 7h18M6 12h15M3 17h14M3 12h.1M21 17h.1",
   moon: "M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11ZM17 3v4m-2-2h4M21 8v2m-1-1h2",

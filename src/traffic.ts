@@ -172,6 +172,9 @@ export class Traffic {
   private junctionGroups = new Map<string, string>();
   private groupTiles = new Map<string, Point[]>();
   private roadTypes?: RoadTypes;
+  release(id:number) {
+    for(const [junction,owners] of this.junctions){owners.delete(id);if(!owners.size)this.junctions.delete(junction);}
+  }
   configure(roads: ReadonlySet<string>, roadTypes?: RoadTypes) {
     this.roadTypes = roadTypes;
     roads=new Set([...roads].filter(k=>roadTypes?.[k]!=="pavement"));
