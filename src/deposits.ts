@@ -1,5 +1,6 @@
 import { SIZE, dimensions, type Resource } from "./catalog.js";
 import type { Building, Point, World } from "./simulation.js";
+import {sourceObject,sourcePoint} from './view-space.js';
 
 /** Permanent geology. Extraction removes a layer, never the deposit location. */
 export const DEPOSITS: Record<string, "stone" | "metal"> = {
@@ -48,7 +49,7 @@ for (const [anchor] of Object.entries(DEPOSITS)) {
   }
 }
 export const depositAt=(p:Point)=>DEPOSIT_TILES[`${p.x},${p.y}`];
-export const exposedDeposit=(world:Pick<World,"clearedDeposits">,p:Point)=>depositAt(p)&&!world.clearedDeposits?.includes(`${p.x},${p.y}`);
+export const exposedDeposit=(world:Pick<World,"clearedDeposits">,p:Point)=>depositAt(sourcePoint(world,p))&&!world.clearedDeposits?.includes(`${p.x},${p.y}`);
 // Geology never changes: clearing/extraction live separately in the world state.
 const tilesByDeposit=new Map<string,Point[]>();
 for(const [tile,anchor] of Object.entries(DEPOSIT_TILES)){
@@ -57,6 +58,7 @@ for(const [tile,anchor] of Object.entries(DEPOSIT_TILES)){
 }
 export const depositTiles=(anchor:string):readonly Point[]=>tilesByDeposit.get(anchor)??[];
 export function nearbyDeposits(b:Pick<Building,"kind"|"x"|"y"|"plot"> & {rotation:number}) {
+  b=sourceObject(b);
   if(!isExtractor(b.kind))return [];
   const [w,h]=dimensions(b.kind,b.rotation,b.plot),x=b.x+(w-1)/2,y=b.y+(h-1)/2;
   return Object.entries(DEPOSITS).filter(([,kind])=>kind===(b.kind==="quarry"?"stone":"metal"))
@@ -65,6 +67,7 @@ export function nearbyDeposits(b:Pick<Building,"kind"|"x"|"y"|"plot"> & {rotatio
 }
 export const nearbyDeposit=(b:Parameters<typeof nearbyDeposits>[0])=>nearbyDeposits(b)[0];
 export function buildingDeposit(b:Building) {
+  b=sourceObject(b);
   return b.deposit ?? (DEPOSITS[`${b.x},${b.y}`]===(b.kind==="quarry"?"stone":"metal")?`${b.x},${b.y}`:nearbyDeposit(b));
 }
 export function expandReserves(world:World) {

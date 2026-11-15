@@ -3574,3 +3574,5 @@ dialog p.muted {
 @media(max-width:700px){.town-log{right:12px;bottom:calc(105px + env(safe-area-inset-bottom,0px));width:min(280px,calc(100% - 24px))}.town-log-list{max-height:min(30vh,220px)}}
 
 .town-log-item[data-kind=shortage] .town-log-symbol{background:#fae4cc;color:#a15d25}.town-log-item[data-kind=leisure] .town-log-symbol{background:#ede1f1;color:#866098}.town-log-item[data-kind=recovery] .town-log-symbol{background:#dff1df;color:#46754a}
+.map-rotation{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #d4dac7;color:#627658;font-size:10px}.map-rotation button{border:0;background:transparent;color:#526c49;min-width:40px;min-height:32px;font-size:22px;cursor:pointer}.map-rotation button:hover{background:#e4eadb;border-radius:7px}.map-rotation button:focus-visible{outline:2px solid #698254;outline-offset:-2px}
+@media(pointer:coarse){.map-rotation button{min-width:44px;min-height:44px}}

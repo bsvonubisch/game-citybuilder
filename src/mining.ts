@@ -6,6 +6,7 @@ import { daylight } from "./daylight.js";
 import { outputCapacity, productionRate } from "./upgrades.js";
 import { treeStage, validForestTrip } from "./forestry.js";
 import type { Building, Point, Simulation } from "./simulation.js";
+import {sourceObject,sourceBuilding,turnPoint,viewTurn} from './view-space.js';
 
 export interface MiningTrip {
   resident:number;
@@ -22,7 +23,8 @@ const key=(p:Point)=>`${p.x},${p.y}`;
 const dirs=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}];
 type MiningTarget={deposit:string;rock:Point;path:Point[]};
 const cache=new WeakMap<Simulation,{stamp:string;targets:Map<string,MiningTarget[]>}>();
-export function miningTargets(sim:Simulation,b:Building) {
+export function miningTargets(sim:Simulation,b:Building):MiningTarget[] {
+  const source=sourceObject(sim);if(source!==sim){const map=(p:Point)=>turnPoint(p,viewTurn(sim));return miningTargets(source,sourceBuilding(b,viewTurn(sim))).map(t=>({...t,rock:map(t.rock),path:t.path.map(map)}));}
   const stamp=`${sim.state.revision}:${sim.state.clearedDeposits?.length??0}:${Math.floor(sim.state.tick/80)}`, identity=`${b.id}:${b.x}:${b.y}:${b.rotation}`;
   let entry=cache.get(sim);
   if(!entry||entry.stamp!==stamp){entry={stamp,targets:new Map()};cache.set(sim,entry);}

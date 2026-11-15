@@ -1,4 +1,6 @@
 import {RoadWorkAlerts} from './roadwork-alerts.js';
+import {ViewWorld} from './view-world.js';
+import {quarter} from './view-space.js';
 import type {RoadWorkSite} from './roadwork-sites.js';
 import {roadWorkerPosition,roadVisualState} from './roadworks.js';
 import {retainSourceImages} from "./source-images.js";
@@ -136,7 +138,18 @@ const poly = (
   );
 };
 export class TownScene extends Phaser.Scene {
-  simulation: Simulation;
+  readonly view:ViewWorld;
+  get simulation(){return this.view.simulation;}
+  rotateView(delta:number){
+    if(!this.ready)return;
+    const c=this.cameras.main,p=this.view.from({x:c.midPoint.x/64+c.midPoint.y/32,y:c.midPoint.y/32-c.midPoint.x/64});
+    this.cancelPlacement();this.clearBuildingHover();this.hover=null;
+    this.view.setTurn(this.view.turn+delta);this.rotation=quarter(this.rotation+delta);
+    this.animation.clear();this.nightArt.clear();this.shadowArt.clear();this.fishingArt.clear();this.huntingArt.clear();this.roadWorkAlerts.clear();this.trafficAlerts.clear();this.buildingAlerts.clear();
+    this.logisticsView=null;this.logisticsDrawKey='';this.deliveryDrawKey='';this.cameraKey='';
+    const center=this.view.to(p),v=iso(center.x,center.y);c.centerOn(v.x,v.y);this.redraw();this.onCamera();
+    try{localStorage.setItem('littleworks-view-turn',String(this.view.turn));}catch{}
+  }
   tool: Tool = "inspect";
   movingBuilding: number | null = null;
   selected: number | null = null;
@@ -284,7 +297,8 @@ export class TownScene extends Phaser.Scene {
   ready = false;
   constructor(simulation: Simulation) {
     super("Town");
-    this.simulation = simulation;
+    this.view = new ViewWorld(simulation);
+    const saved=Number(localStorage.getItem('littleworks-view-turn')??0);this.view.setTurn(Number.isInteger(saved)?saved:0);
   }
   preload() {
     retainSourceImages(this);
@@ -636,7 +650,7 @@ export class TownScene extends Phaser.Scene {
     this.cameras.main.setZoom(
       Math.min(1.5, Math.max(0.65, this.scale.width / 1000)),
     );
-    const center = iso(13.5, 15);
+    const p=this.view.to({x:13.5,y:15}),center = iso(p.x,p.y);
     this.cameras.main.centerOn(center.x, center.y - 15);
     this.onCamera();
   }
@@ -656,7 +670,7 @@ export class TownScene extends Phaser.Scene {
     c.scrollY += Phaser.Math.Clamp(y, -80, SIZE * 32 + 80) - y;
   }
   focusTile(x: number, y: number) {
-    const p = iso(x, y);
+    const v=this.view.to({x,y}),p = iso(v.x,v.y);
     this.cameras.main.centerOn(p.x, p.y);
     this.onCamera();
   }
@@ -780,7 +794,7 @@ export class TownScene extends Phaser.Scene {
         }
         if (water && !road && h > 0.45) this.waterPoints.push(p);
         if (water || road || (occupied&&!occupied.construction?.clearance)) continue;
-        const deposit=depositAt({x,y});
+        const deposit=depositAt(this.view.from({x,y}));
         if (deposit && exposedDeposit(this.simulation.state,{x,y}) && !this.simulation.state.decorations.some(d=>d.x===x&&d.y===y&&d.side===undefined)) {
           const frame =
             (DEPOSITS[deposit] === "metal" ? 4 : 0) + Math.floor(h * 4);
@@ -1713,10 +1727,10 @@ export class TownScene extends Phaser.Scene {
     for(let i=0;i<=64;i++){const angle=i/64*Math.PI*2,p=iso(center.x+Math.cos(angle)*MINING_RADIUS,center.y+Math.sin(angle)*MINING_RADIUS);points.push({x:p.x,y:p.y-groundHeight(b.x,b.y,this.simulation.state.terrain)});}
     const reachable=new Set(miningTargets(this.simulation,b).map(t=>key(t.rock)));
     this.overlay.lineStyle(1.4,b.kind==="quarry"?0xbecfdb:0xe8ac78,.9).strokePoints(points,false);
-    for(const deposit of nearbyDeposits(b))for(const p of depositTiles(deposit))if(exposedDeposit(this.simulation.state,p)&&!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.roads.has(key(p)))this.diamond(p,reachable.has(key(p))?0x93d993:0xe6c17d,.3);
+    for(const deposit of nearbyDeposits(this.view.original(b)))for(const original of depositTiles(deposit)){const p=this.view.to(original);if(exposedDeposit(this.simulation.state,p)&&!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.roads.has(key(p)))this.diamond(p,reachable.has(key(p))?0x93d993:0xe6c17d,.3);}
   }
   replace(simulation: Simulation) {
-    this.simulation = simulation;
+    this.view.replace(simulation);
     this.deliveryDrawKey = "";
     this.deliveryRoutes.clear();
     this.buildingAlerts.clear();

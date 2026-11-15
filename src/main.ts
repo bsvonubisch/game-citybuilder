@@ -1,4 +1,4 @@
-import {roadWorkCrew,type RoadWorkSite} from './roadwork-sites.js';
+import {roadWorkSites,roadWorkCrew,type RoadWorkSite} from './roadwork-sites.js';
 import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
@@ -42,6 +42,7 @@ import {
   parseSave,
   DEPOSITS,
   key,
+  type Command,
   type Point,
   type Building,
 } from "./simulation.js";
@@ -121,6 +122,7 @@ try {
 }
 const gateway = new LocalGateway(simulation);
 const scene = new TownScene(simulation);
+function sendCommand(command:Command){return gateway.command(scene.view.command(command));}
 const cloud = new CloudSaves();
 const catalogGroups={homes:"Homes",food:"Food & farms",gather:"Gathering",industry:"Workshops",town:"Services",parks:"Parks",trees:"Trees",decorations:"Street furniture"};
 const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom"],decorations:["bench","streetlight","planter","fence"]};
@@ -204,7 +206,7 @@ $("#app").innerHTML = `
  <main>
  <section class="world" aria-label="Interactive town map"><div id="game"></div><div id="building-alerts" role="group" aria-label="Building alerts"></div>
  <div id="inspector" class="inspector" hidden></div><details id="town-log" class="town-log" aria-label="Town event log"></details>
- <div class="map-corner"><canvas id="minimap" width="168" height="102" aria-label="Town minimap"></canvas><div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><button id="center" title="Center town">${icon("map")}<span id="zoom-level">100%</span></button><button id="zoom-in" aria-label="Zoom in">+</button></div></div>
+ <div class="map-corner"><canvas id="minimap" width="168" height="102" aria-label="Town minimap"></canvas><div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><button id="center" title="Center town">${icon("map")}<span id="zoom-level">100%</span></button><button id="zoom-in" aria-label="Zoom in">+</button></div><div class="map-rotation"><button id="rotate-view-left" aria-label="Rotate town view left 90 degrees" title="Rotate town view left">↶</button><span id="view-direction" aria-live="polite">View 1</span><button id="rotate-view-right" aria-label="Rotate town view right 90 degrees" title="Rotate town view right">↷</button></div></div>
  <div class="bottom-area"><section id="build-drawer" class="build-drawer" aria-label="Build and town menu" hidden><button id="close-panel" class="icon-button" aria-label="Close town menu">${icon("close")}</button><div id="panel-content"></div></section><div id="placement-hint" class="placement-hint" hidden></div><nav class="toolbar" aria-label="Town tools"><div class="tool-group">${[
    ["inspect", "inspect", "Explore", "V"],
    ["build", "hammer", "Build", "B"],
@@ -452,6 +454,7 @@ $("#app").addEventListener("contextmenu", (e) => {
   cancelTool();
 });
 function updateEntranceHint() {
+  const simulation=scene.simulation;
   const el = document.querySelector<HTMLElement>("#front-access");
   const moving =
     tool === "move" ? simulation.building(scene.movingBuilding!) : undefined;
@@ -534,7 +537,7 @@ function renderPanel() {
     $("#use-terrain").onclick = () => setPanelOpen(false);
     $("#terrain-back").onclick = () => togglePanel("build");
     $("#undo-terrain").onclick = async () => {
-      const result = await gateway.command({ type: "undoTerrain" });
+      const result = await sendCommand({ type: "undoTerrain" });
       toast(result.message);
       if (result.ok) {
         scene.redraw();
@@ -616,9 +619,10 @@ const hoverLabel=document.createElement("div");hoverLabel.className="building-ho
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
 scene.onEyedropper=(kind,rotation,plot)=>{scene.rotation=rotation;if(isLivestock(kind)&&plot)scene.penPlot=[...plot];if(kind==='farm'&&plot)scene.farmPlot=[...plot];if(kind==="market"&&plot)scene.marketPlot=[...plot];setTool(kind,true);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
 scene.onSelectDecoration=(id)=>{selectedDecoration=id;selected=null;scene.selected=null;selectedAgent=null;scene.selectedAgent=null;scene.drawOverlay();renderDecorationInspector();};
-scene.onDecorationRemove=async(id)=>{const result=await gateway.command({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
-scene.onRemoveApply=async(from,to)=>{const result=await gateway.command({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
+scene.onDecorationRemove=async(id)=>{const result=await sendCommand({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
+scene.onRemoveApply=async(from,to)=>{const result=await sendCommand({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onTile = async (p: Point) => {
+  const simulation=scene.simulation,deposit=depositAt(scene.view.from(p));
   if (tool === "terrain") {
     scene.previewTerrain(p);
     return;
@@ -634,13 +638,13 @@ scene.onTile = async (p: Point) => {
     scene.drawOverlay();
     if (selectedDecoration) renderDecorationInspector();
     else renderInspector();
-    if (!b && depositAt(p))
+    if (!b && deposit)
       toast(
-        `${DEPOSITS[depositAt(p)!] === "stone" ? "Stone" : "Metal"} deposit · ${simulation.state.deposits[depositAt(p)!].toLocaleString()} remaining · build beside it`,
+        `${DEPOSITS[deposit!] === "stone" ? "Stone" : "Metal"} deposit · ${simulation.state.deposits[deposit!].toLocaleString()} remaining · build beside it`,
       );
     return;
   }
-  const result = await gateway.command(
+  const result = await sendCommand(
     tool === "move"
       ? {
           type: "move",
@@ -677,7 +681,7 @@ scene.onRoadPreview = (plan) => {
   label.classList.toggle("invalid", !!plan?.error);
 };
 scene.onRoadApply = async (from, to) => {
-  const result = await gateway.command({ type: "roadStroke", from, to, roadType: scene.roadType });
+  const result = await sendCommand({ type: "roadStroke", from, to, roadType: scene.roadType });
   toast(result.message);
   if (result.ok) { townAudio.place(); scene.redraw(); save(false); updateUI(); }
 };
@@ -692,7 +696,7 @@ scene.onTerrainPreview = (plan) => {
   if (button) button.disabled = !plan || !!plan.error;
 };
 scene.onTerrainApply = async (command) => {
-  const result = await gateway.command(command);
+  const result = await sendCommand(command);
   toast(result.message);
   if (result.ok) {
     scene.redraw();
@@ -702,6 +706,7 @@ scene.onTerrainApply = async (command) => {
   }
 };
 scene.onHover = (p) => {
+  const simulation=scene.simulation,original=p&&scene.view.from(p),deposit=original&&depositAt(original);
   hovered = p;
   updateEntranceHint();
   const work=p&&roadWorkAt(simulation.state,p);
@@ -711,7 +716,7 @@ scene.onHover = (p) => {
       : `${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].name} road · ${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].description.toLowerCase()}`
     : "";
   $("#tile-label").textContent = p
-    ? `${p.x}, ${p.y}${surface ? " · " + surface : depositAt(p) ? " · " + DEPOSITS[depositAt(p)!] + " deposit" : ""}`
+    ? `${original!.x}, ${original!.y}${surface ? " · " + surface : deposit ? " · " + DEPOSITS[deposit] + " deposit" : ""}`
     : "";
 };
 scene.onSelectAgent = (id) => {
@@ -763,7 +768,7 @@ function renderInspector() {
   panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${isHome(b.kind) ? `HOME · TIER ${b.houseTier ?? b.level ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier,b.crop)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "farm" ? '<section id="farm-growth" aria-label="Crop growth stages"></section>' : ""}${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) || b.kind === "market" ? '<button id="toggle-production" class="primary"></button>' : ""}`;
   if(b.kind==='farm'){
     $('#building-status').insertAdjacentHTML('afterend','<section id="farm-crop" aria-label="Choose farm crop"><h4>Crop</h4><div class="crop-choices" role="group" aria-label="Farm crop">'+Object.entries(CROPS).map(([id,c])=>'<button data-farm-crop="'+id+'" aria-pressed="'+((b.nextCrop??b.crop)===id)+'">'+(id==='wheat'?'Wheat → Grain':c.name)+'<small>'+Math.floor(c.grow/60)+'m '+c.grow%60+'s</small></button>').join('')+'</div><p class="muted">'+(b.nextCrop?'Growing '+CROPS[b.crop??'wheat'].name.toLowerCase()+' now. '+CROPS[b.nextCrop].name+' next, after this harvest is collected.':b.crop?'Plant the whole field, then harvest. Changing crops applies after the current harvest.':'Choose what to grow. Farmers will start once the land is clear and connected.')+'</p></section>');
-    $('#farm-crop').onclick=async event=>{const choice=(event.target as Element).closest<HTMLButtonElement>('[data-farm-crop]');if(!choice)return;const result=await gateway.command({type:'crop',id:b.id,crop:choice.dataset.farmCrop as Crop});toast(result.message);if(result.ok){scene.redraw();save(false);renderInspector();updateUI();}};
+    $('#farm-crop').onclick=async event=>{const choice=(event.target as Element).closest<HTMLButtonElement>('[data-farm-crop]');if(!choice)return;const result=await sendCommand({type:'crop',id:b.id,crop:choice.dataset.farmCrop as Crop});toast(result.message);if(result.ok){scene.redraw();save(false);renderInspector();updateUI();}};
   }
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
@@ -818,7 +823,7 @@ function renderInspector() {
       $("#house-upgrade").innerHTML =
         `<div class="upgrade-heading">${frame("house", "upgrade-art", b.rotation, nextTier)}<div><span class="eyebrow">NEXT · TIER ${nextTier}</span><b>${next.name}</b><small>${houseCapacity(b)} → ${next.capacity} residents · same plot</small></div></div><div id="upgrade-costs" class="upgrade-costs"></div><button id="upgrade-house" class="primary">Upgrade to ${next.name.toLowerCase()}</button><p id="upgrade-reason" class="upgrade-reason" aria-live="polite"></p>`;
       $("#upgrade-house").onclick = async () => {
-        const result = await gateway.command({ type: "upgrade", id: b.id });
+        const result = await sendCommand({ type: "upgrade", id: b.id });
         toast(result.message);
         if (result.ok) {
           scene.redraw();
@@ -838,7 +843,7 @@ function renderInspector() {
     );
     $(".building-actions").after($("#deposit-upgrade"));
     $("#deepen-deposit").onclick = async () => {
-      const result = await gateway.command({ type: "deepen", id: b.id });
+      const result = await sendCommand({ type: "deepen", id: b.id });
       toast(result.message);
       if (result.ok) {
         scene.redraw();
@@ -859,7 +864,7 @@ function renderInspector() {
       `<button id="upgrade-building">Upgrade to level ${next.level}</button>`,
     );
     $("#upgrade-building").onclick = async () => {
-      const result = await gateway.command({ type: "upgrade", id: b.id });
+      const result = await sendCommand({ type: "upgrade", id: b.id });
       toast(result.message);
       if (result.ok) {
         scene.redraw();
@@ -881,7 +886,7 @@ function renderInspector() {
     );
     $("#move-building").onclick = () => {
       scene.movingBuilding = b.id;
-      scene.rotation = b.rotation;
+      scene.rotation = scene.view.facing(b.rotation);
       setTool("move");
     };
   }
@@ -893,7 +898,7 @@ function renderInspector() {
   };
   if (d.recipe || isLeisure(b.kind) || b.kind === "market" || b.construction)
     $("#toggle-production").onclick = async () => {
-      const result = await gateway.command({ type: "toggle", id: b.id });
+      const result = await sendCommand({ type: "toggle", id: b.id });
       toast(result.message);
       scene.redraw();
       save(false);
@@ -1026,7 +1031,7 @@ function renderDecorationInspector() {
     `<button id="close-inspector" class="icon-button close" aria-label="Close decoration details">${icon("close")}</button><span class="eyebrow">GARDENS & STREETS</span><h3>${title}</h3><p>${detail}</p><button id="remove-decoration" class="primary">Remove ${growth==="mature"?"decoration":"stump permanently"}</button>`;
   $("#close-inspector").onclick = closeInspection;
   $("#remove-decoration").onclick = async () => {
-    const result = await gateway.command({ type: "removeDecoration", id:d.id });
+    const result = await sendCommand({ type: "removeDecoration", id:d.id });
     toast(result.message);
     if (result.ok) {
       scene.redraw();
@@ -1146,6 +1151,7 @@ function updateAgentInspector() {
     `<div class="detail-row"><span>From</span><b>${escapeHtml(label(from))}</b></div><div class="detail-row"><span>Headed to</span><b>${escapeHtml(label(to))}</b></div>${a.cargo ? `<div class="detail-row"><span>Carrying</span><b>${a.amount} ${RESOURCE_NAMES[a.cargo]}</b></div>` : ""}<p class="muted">The gold line shows this journey on the map.</p>`;
 }
 scene.onSelectRoadWork=(site)=>{
+  site=roadWorkSites(simulation.state).find(s=>s.id===site.id)??site;
   setTool('inspect');setPanelOpen(false);closeInspection();
   selectedRoadWork=structuredClone(site);scene.selectedRoadWorks=site.works.map(w=>w.id);
   $('#inspector').hidden=false;
@@ -1521,15 +1527,13 @@ function updateUpgrade(b: Building) {
   );
 }
 function drawMinimap() {
+  $('#view-direction').textContent='View '+(scene.view.turn+1);
   const ctx = $<HTMLCanvasElement>("#minimap").getContext("2d")!;
   ctx.fillStyle = "#d5dfc9";
   ctx.fillRect(0, 0, 168, 102);
   const sx = 76 / SIZE,
     sy = 44 / SIZE;
-  const map = (x: number, y: number) => ({
-    x: 84 + (x - y) * sx,
-    y: 6 + (x + y) * sy,
-  });
+  const map = (x: number, y: number) => {const p=scene.view.to({x,y});return{x:84+(p.x-p.y)*sx,y:6+(p.x+p.y)*sy};};
   for (let y = 0; y < SIZE; y++)
     for (let x = 0; x < SIZE; x++) {
       const p = map(x, y);
@@ -1574,6 +1578,7 @@ function drawMinimap() {
     ctx.strokeRect(x, y, w, h);
   }
 }
+for(const [id,turn] of [['rotate-view-left',-1],['rotate-view-right',1]] as const)$('#'+id).onclick=()=>{cancelTool();scene.rotateView(turn);drawMinimap();};
 $("#minimap").title =
   "Tap to explore the valley · pale deposits: stone · copper deposits: metal";
 $("#minimap").onclick = (event) => {
@@ -1582,10 +1587,7 @@ $("#minimap").onclick = (event) => {
     (((event.clientX - rect.left) * 168) / rect.width - 84) / (76 / SIZE);
   const v =
     (((event.clientY - rect.top) * 102) / rect.height - 6) / (44 / SIZE);
-  scene.focusTile(
-    Math.max(0, Math.min(SIZE - 1, (u + v) / 2)),
-    Math.max(0, Math.min(SIZE - 1, (v - u) / 2)),
-  );
+  const p=scene.view.from({x:Math.max(0,Math.min(SIZE-1,(u+v)/2)),y:Math.max(0,Math.min(SIZE-1,(v-u)/2))});scene.focusTile(p.x,p.y);
 };
 function updateUI() {
   const s = simulation.state;

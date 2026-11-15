@@ -1,6 +1,7 @@
 import { SIZE, STARTING_SIZE, footprint } from "./catalog.js";
 import { depositAt } from "./deposits.js";
 import type { World, Point } from "./simulation.js";
+import {sourceObject,sourceBrush,turnPoint,viewTurn} from './view-space.js';
 
 export type TerrainCell = { kind: "land" | "water"; height: number };
 export type TerrainMap = Record<string, TerrainCell>;
@@ -60,6 +61,7 @@ export function planTerrain(
   world: World,
   command: TerrainCommand,
 ): TerrainPlan {
+  const source=sourceObject(world);if(source!==world){const plan=planTerrain(source,sourceBrush(world,command));return{...plan,changes:plan.changes.map(p=>({...p,...turnPoint(p,viewTurn(world))}))};}
   const fail = (error: string): TerrainPlan => ({
     changes: [],
     cost: 0,

@@ -1,4 +1,5 @@
 import {roadWorkAt} from './roadworks.js';
+import {sourceObject,sourcePoint,turnPoint,viewTurn} from './view-space.js';
 import { SIZE,RESOURCE_NAMES,type Resource } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import type { Point, Simulation } from "./simulation.js";
@@ -31,6 +32,7 @@ export function roadStroke(from: Point, to: Point): Point[] {
 
 /** Read-only preview and command validation use precisely the same plan. */
 export function planRoad(sim: Simulation, from: Point, to: Point, roadType: RoadType = "stone"): RoadPlan {
+  const source=sourceObject(sim);if(source!==sim){const plan=planRoad(source,sourcePoint(sim,from),sourcePoint(sim,to),roadType),map=(p:Point)=>turnPoint(p,viewTurn(sim));return{...plan,tiles:plan.tiles.map(map),additions:plan.additions.map(map),upgrades:plan.upgrades.map(map),blocked:plan.blocked&&map(plan.blocked)};}
   const tiles = roadStroke(from, to);
   const plan: RoadPlan = { tiles, additions: tiles.filter((p) => !sim.roads.has(tileKey(p))), upgrades: [], cost: 0, bridges: 0, materials:{} };
   if (!isRoadType(roadType)) return { ...plan, error: "Choose a road surface or pedestrian pavement." };
