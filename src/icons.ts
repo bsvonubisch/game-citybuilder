@@ -1,4 +1,7 @@
 const paths: Record<string, string> = {
+  moon: "M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11ZM17 3v4m-2-2h4M21 8v2m-1-1h2",
+  sunset:
+    "M3 17h18M5 21h14M7 17a5 5 0 0 1 10 0M12 2v8m-3-3 3 3 3-3M2 11l3 2m17-2-3 2",
   traffic: "M3 12h18v7H3v-7Zm2 0 2-6h10l2 6M6 15h1m10 0h1M6 19v2m12-2v2M9 2h6",
   fish: "M3 12c4-8 12-8 16 0-4 8-12 8-16 0Zm0 0L1 7v10l2-5Zm11-2h.1M10 5l2-3 3 4M10 19l2 3 3-4",
   tree: "M12 2 5 12h4l-5 6h6v4h4v-4h6l-5-6h4L12 2Z",

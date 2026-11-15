@@ -29,6 +29,7 @@ import {
 } from "./simulation.js";
 import { LocalGateway } from "./gateway.js";
 import { daylight } from "./daylight.js";
+import { DaylightUI } from "./daylight-ui.js";
 import { nextUpgrade, productionRate, outputCapacity } from "./upgrades.js";
 import {
   isLeisure,
@@ -194,6 +195,7 @@ $("#building-alerts").insertAdjacentHTML(
   "afterend",
   '<div id="traffic-alerts" role="group" aria-label="Traffic warnings"></div>',
 );
+const daylightUI = new DaylightUI($(".town-season"));
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
@@ -1340,12 +1342,7 @@ function updateUI() {
   $("#leisure").textContent = simulation.leisure() + "%";
   $(".resource.happiness").title =
     `Food ${s.food}% · leisure ${simulation.leisure()}% · actual nearby visits improve leisure`;
-  const light = daylight(s.tick),
-    clock = `${String(Math.floor(light.hour)).padStart(2, "0")}:${String(Math.floor((light.hour % 1) * 60)).padStart(2, "0")}`;
-  $("#day").textContent = `Day ${light.day} · ${clock} · ${light.phase}`;
-  $("#day").title = light.night
-    ? "Night shift: 25% work pace, fewer deliveries; most residents stay home."
-    : "Day shift: full work pace.";
+  daylightUI.update(s.tick);
   $("#goal-progress").style.width =
     Math.min(100, (s.delivered / 30) * 100) + "%";
   $("#goal-count").textContent =
@@ -1381,6 +1378,7 @@ function save(showToast = true) {
   }
 }
 function replaceTown(next: Simulation) {
+  daylightUI.reset();
   simulation = next;
   gateway.simulation = next;
   scene.replace(next);

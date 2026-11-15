@@ -39,7 +39,7 @@ import {
   deeperLayer,
 } from "../.test-dist/deposits.js";
 import { baseTerrain } from "../.test-dist/terrain.js";
-import { daylight, warmEmission } from "../.test-dist/daylight.js";
+import { daylight, warmEmission, shiftChange } from "../.test-dist/daylight.js";
 import {
   serviceCoverage,
   servicePreview,
@@ -90,17 +90,50 @@ test("the displayed day advances at midnight while keeping the 08:00 start", () 
   assert.equal(daylight(160).hour, 0);
   assert.equal(daylight(240).day, 2);
 });
+test("shift notices match work-rate boundaries and ignore loading, pauses and time resets", () => {
+  assert.equal(shiftChange(119, 120), "night");
+  assert.equal(daylight(120).workRate, 0.25);
+  assert.equal(shiftChange(219, 220), "morning");
+  assert.equal(daylight(220).workRate, 1);
+  assert.equal(
+    shiftChange(116, 124),
+    "night",
+    "accelerated play may skip the exact boundary",
+  );
+  for (const [before, after] of [
+    [undefined, 150],
+    [120, 120],
+    [160, 161],
+    [120, 50],
+    [0, 360],
+    [99, 100],
+  ]) {
+    assert.equal(shiftChange(before, after), null);
+  }
+});
 test("construction roster follows assigned residents through travel and work, and clears on completion", () => {
   const sim = new Simulation();
-  const house = sim.state.buildings.find((b) => b.kind === "house" && b.connected);
+  const house = sim.state.buildings.find(
+    (b) => b.kind === "house" && b.connected,
+  );
   sim.state.money = 10000;
-  Object.assign(sim.state.buildings.find((b) => b.kind === "warehouse").inventory, { planks: 100, stone: 100 });
+  Object.assign(
+    sim.state.buildings.find((b) => b.kind === "warehouse").inventory,
+    { planks: 100, stone: 100 },
+  );
   assert.equal(execute(sim, { type: "upgrade", id: house.id }).ok, true);
   const crew = constructionCrew(sim, house);
   assert.equal(crew.length, house.workers);
   assert.equal(crew.length, builderCapacity(house));
-  assert.ok(crew.every((c) => c.agent?.resident === c.resident.id && !c.onsite));
-  for (let tick = 0; tick < 400 && !constructionCrew(sim, house).some((c) => c.onsite); tick++) sim.step();
+  assert.ok(
+    crew.every((c) => c.agent?.resident === c.resident.id && !c.onsite),
+  );
+  for (
+    let tick = 0;
+    tick < 400 && !constructionCrew(sim, house).some((c) => c.onsite);
+    tick++
+  )
+    sim.step();
   const working = constructionCrew(sim, house).find((c) => c.onsite);
   assert.ok(working, "a real assigned builder reaches the plot");
   assert.match(working.status, /Working on site/);

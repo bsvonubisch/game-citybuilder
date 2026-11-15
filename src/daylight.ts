@@ -25,6 +25,15 @@ export function daylight(tick: number) {
   };
 }
 
+/** Only announce a live shift transition, never loading a save or a paused tick. */
+export function shiftChange(previous: number | undefined, tick: number) {
+  if (previous === undefined || tick <= previous || tick - previous >= 240)
+    return null;
+  const now = daylight(tick);
+  if (daylight(previous).night === now.night) return null;
+  return now.night ? "night" : "morning";
+}
+
 /** Bright amber details in the existing art emit light; green roofs and grey
  * stone do not. This is a runtime light mask, never a changed source sprite. */
 export function warmEmission(r: number, g: number, b: number, a: number) {
