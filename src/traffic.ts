@@ -138,8 +138,11 @@ function corridorsOverlap(
     }
     return parts;
   };
-  for (const sa of segments(a, a0, a1))
-    for (const sb of segments(b, b0, b1)) {
+  // Each curved corridor has many slices. Build both once, rather than
+  // rebuilding every slice of B for each slice of A.
+  const aSegments=segments(a,a0,a1),bSegments=segments(b,b0,b1);
+  for (const sa of aSegments)
+    for (const sb of bSegments) {
       const axes = [
         { x: 1, y: 0 },
         { x: 0, y: 1 },

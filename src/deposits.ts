@@ -49,7 +49,13 @@ for (const [anchor] of Object.entries(DEPOSITS)) {
 }
 export const depositAt=(p:Point)=>DEPOSIT_TILES[`${p.x},${p.y}`];
 export const exposedDeposit=(world:Pick<World,"clearedDeposits">,p:Point)=>depositAt(p)&&!world.clearedDeposits?.includes(`${p.x},${p.y}`);
-export const depositTiles=(anchor:string):Point[]=>Object.entries(DEPOSIT_TILES).filter(([,a])=>a===anchor).map(([k])=>{const[x,y]=k.split(",").map(Number);return{x,y};});
+// Geology never changes: clearing/extraction live separately in the world state.
+const tilesByDeposit=new Map<string,Point[]>();
+for(const [tile,anchor] of Object.entries(DEPOSIT_TILES)){
+ const [x,y]=tile.split(',').map(Number),tiles=tilesByDeposit.get(anchor)??[];
+ tiles.push({x,y});tilesByDeposit.set(anchor,tiles);
+}
+export const depositTiles=(anchor:string):readonly Point[]=>tilesByDeposit.get(anchor)??[];
 export function nearbyDeposits(b:Pick<Building,"kind"|"x"|"y"|"plot"> & {rotation:number}) {
   if(!isExtractor(b.kind))return [];
   const [w,h]=dimensions(b.kind,b.rotation,b.plot),x=b.x+(w-1)/2,y=b.y+(h-1)/2;

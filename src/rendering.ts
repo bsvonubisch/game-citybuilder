@@ -128,6 +128,7 @@ export const plotOutline = (width: number, height: number) => [
 /** Uniformly fit the ground outline into BOTH tile axes. A screen-space width
  * cannot describe an isometric plot, particularly a rectangular one.
  * Returned offsets refer to the original atlas cell, before alpha trimming. */
+const contactBounds=new WeakMap<readonly GroundPoint[],{minX:number;maxX:number;minY:number;maxY:number}>();
 export function fitGround(
   ground: readonly GroundPoint[],
   width: number,
@@ -135,11 +136,15 @@ export function fitGround(
   inset = 0.08,
   scaleLimit = Infinity,
 ) {
-  const projected = ground.map(([x, y]) => groundCoordinates(x, y));
-  const minX = Math.min(...projected.map((p) => p.x));
-  const maxX = Math.max(...projected.map((p) => p.x));
-  const minY = Math.min(...projected.map((p) => p.y));
-  const maxY = Math.max(...projected.map((p) => p.y));
+  // Source contacts are immutable. Smoke, mechanisms and lighting reuse the
+  // same measured outline; scanning hundreds of pixels every frame is wasted work.
+  let bounds=contactBounds.get(ground);
+  if(!bounds){
+    bounds={minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity};
+    for(const [x,y] of ground){const p=groundCoordinates(x,y);bounds.minX=Math.min(bounds.minX,p.x);bounds.maxX=Math.max(bounds.maxX,p.x);bounds.minY=Math.min(bounds.minY,p.y);bounds.maxY=Math.max(bounds.maxY,p.y);}
+    contactBounds.set(ground,bounds);
+  }
+  const {minX,maxX,minY,maxY}=bounds;
   const scale = Math.min(
     scaleLimit,
     (width - 2 * inset) / (maxX - minX),
