@@ -1,3 +1,4 @@
+import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
@@ -198,7 +199,7 @@ $("#app").innerHTML = `
  <div class="townbar"><div class="town-identity"><span class="eyebrow">THE EMERALD VALLEY</span><h1>Pinehaven <span class="town-star">✦</span></h1><span class="town-motto">A little industry. A lovely life.</span></div><button id="town-needs-button" class="quiet town-needs-button">Town needs</button><div class="town-season">${icon("sun")}<b id="day">Day 1</b><span>Spring · Year 1</span></div><details class="town-progress"><summary>${icon("flag")}<span>Town progress</span></summary><div class="town-progress-content"><h3>Small town. Big possibilities.</h3><p id="goal-copy">Let your first deliveries find their way home.</p><div class="goal-progress"><span id="goal-progress"></span></div><small id="goal-count">0 / 30 goods delivered</small></div></details><div class="save-indicator"><span class="status-dot"></span><span id="save-status">Saved on this device</span><button id="save-now" title="Save now" aria-label="Save town">${icon("save")}</button></div></div>
  <main>
  <section class="world" aria-label="Interactive town map"><div id="game"></div><div id="building-alerts" role="group" aria-label="Building alerts"></div>
- <div id="inspector" class="inspector" hidden></div>
+ <div id="inspector" class="inspector" hidden></div><details id="town-log" class="town-log" aria-label="Town event log"></details>
  <div class="map-corner"><canvas id="minimap" width="168" height="102" aria-label="Town minimap"></canvas><div class="zoom-controls"><button id="zoom-out" aria-label="Zoom out">−</button><button id="center" title="Center town">${icon("map")}<span id="zoom-level">100%</span></button><button id="zoom-in" aria-label="Zoom in">+</button></div></div>
  <div class="bottom-area"><section id="build-drawer" class="build-drawer" aria-label="Build and town menu" hidden><button id="close-panel" class="icon-button" aria-label="Close town menu">${icon("close")}</button><div id="panel-content"></div></section><div id="placement-hint" class="placement-hint" hidden></div><nav class="toolbar" aria-label="Town tools"><div class="tool-group">${[
    ["inspect", "inspect", "Explore", "V"],
@@ -221,6 +222,12 @@ $("#building-alerts").insertAdjacentHTML(
   "afterend",
   '<div id="traffic-alerts" role="group" aria-label="Traffic warnings"></div>',
 );
+const townLog=new TownLog($<HTMLDetailsElement>("#town-log"),event=>{
+  setTool("inspect");closeInspection();
+  const building=event.buildingId?simulation.building(event.buildingId):undefined;
+  if(building){scene.onSelect(building.id);scene.focusBuilding(building.id);}
+  else if(event.tile)scene.focusTile(event.tile.x,event.tile.y);
+});
 $("#town-needs-button").onclick=()=>{setTool("inspect");closeInspection();tab="town";renderPanel();setPanelOpen(true);};
 $("#panel-content").addEventListener("wheel",(event)=>{
   const target=event.target as Element;
@@ -1524,6 +1531,7 @@ $("#minimap").onclick = (event) => {
 };
 function updateUI() {
   const s = simulation.state;
+  townLog.update(s);
   const employed = s.residents.filter((r) => r.job !== null).length;
   const sites = s.buildings.filter((b) => b.construction && b.enabled);
   const buildersNeeded = sites.reduce(

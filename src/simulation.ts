@@ -1,3 +1,4 @@
+import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown,landscapeStarterTown} from './starter-town.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
@@ -148,6 +149,7 @@ export interface Agent {
   marketSlot?:number;
 }
 export interface World {
+  events?:TownEvent[];
   wildlife?:Animal[];
   marketMeals?:number;
   income?: import("./economy.js").IncomeEntry[];
@@ -274,6 +276,7 @@ export class Simulation {
   state: World;
   private traffic = new Traffic();
   private stoppedVehicles = new StoppedVehicles();
+  private initializing = true;
   private leisureByResident = new Map<number, Building[]>();
   private roadSet = new Set<string>();
   private processed = new Map<string, Result>();
@@ -312,6 +315,7 @@ export class Simulation {
           food: 100,
           history: [],
         };
+    if(saved)restoreTownEvents(this.state);else this.state.events=[];
     if (!saved) seedStarterTown(this.state);
     if (!saved || !saved.decorations)
       this.state.decorations = initialDecorations(
@@ -352,6 +356,8 @@ export class Simulation {
     for(const b of this.state.buildings)if(b.kind==='farm')prepareField(b);
     this.reconnect(!!saved);
     ensureWildlife(this);
+    this.initializing=false;
+    if(!saved)recordTownEvent(this.state,"notice",`Pinehaven is ready. ${this.state.residents.length} residents call it home.`);
   }
   get roads() {
     return this.roadSet;
@@ -455,6 +461,7 @@ export class Simulation {
       homes.some((h) => h.id === r.home),
     );
     for (const h of homes.filter((h) => h.connected)) {
+      const arrived:Resident[]=[];
       while (
         this.state.residents.filter((r) => r.home === h.id).length <
         houseCapacity(h)
@@ -466,7 +473,9 @@ export class Simulation {
           job: null,
           name: NAMES[id % NAMES.length],
         });
+        arrived.push(this.state.residents[this.state.residents.length-1]);
       }
+      if(arrived.length&&!this.initializing)recordTownEvent(this.state,"arrival",`${arrived.length===1?arrived[0].name:arrived.length+" residents"} moved into ${buildingName(h)}.`,{buildingId:h.id,tile:h});
     }
     const jobs = this.state.buildings.filter(
       (b) =>
@@ -1279,6 +1288,11 @@ export class Simulation {
         " Connect the front entrance to the warehouse road network to resume work.";
     this.state.history.unshift(message);
     this.state.history = this.state.history.slice(0, 20);
+    const tile="from" in c?c.from:"x" in c?{x:c.x,y:c.y}:undefined;
+    const target="id" in c&&typeof c.id==="number"?this.building(c.id):tile?this.buildingAt(tile.x,tile.y):undefined;
+    const kind:TownEventKind=c.type==="upgrade"||c.type==="deepen"?"upgrade":c.type==="demolish"||c.type==="removeStroke"?"demolition":c.type==="roadStroke"?"road":c.type==="crop"?"farm":c.type==="terrain"||c.type==="undoTerrain"||c.type==="removeDecoration"?"landscape":c.type==="place"&&isDecoration(c.kind)?"landscape":c.type==="place"&&target?.construction?"construction":"building";
+    const brief=message.replace(/^0 buildings marked for demolition\. /,"").split(". ")[0];
+    recordTownEvent(this.state,kind,`${c.type==="toggle"&&target?buildingName(target)+": ":""}${brief}${brief.endsWith(".")?"":"."}`,{buildingId:target?.id,tile:target??tile});
     const result = { ok: true, message, revision: this.state.revision };
     this.processed.set(envelope.id, result);
     if (this.processed.size > 1000)
@@ -1299,6 +1313,9 @@ export class Simulation {
     this.state.money+=Math.floor(buildingInvestment(b)/2);
     this.state.buildings=this.state.buildings.filter(other=>other.id!==b.id);
     this.state.history.unshift(`${buildingName(b)} removed. Stored goods recovered and half the gold cost returned.`);
+    const residents=this.state.residents.filter(r=>r.home===b.id);
+    if(residents.length)recordTownEvent(this.state,"departure",`${residents.length===1?residents[0].name:residents.length+" residents"} moved away after their home was removed.`,{tile:b});
+    recordTownEvent(this.state,"demolition",`${buildingName(b)} demolished. Stored goods recovered.`,{tile:b});
     return true;
   }
   private recoverVehicle(a:Agent) {
@@ -1357,6 +1374,8 @@ export class Simulation {
           this.state.depositDepths[buildingDeposit(b)!] = depth;
           this.state.deposits[buildingDeposit(b)!] += deeperLayer(depth - 1).reserve;
         }
+        const upgraded=b.construction.upgradeTo||b.construction.upgradeLevel||b.construction.deeperTo!==undefined;
+        recordTownEvent(this.state,upgraded?"upgrade":"construction",`${buildingName(b)} ${b.construction.deeperTo!==undefined?"excavation completed":upgraded?"upgrade completed":"construction completed"}.`,{buildingId:b.id,tile:b});
         delete b.construction;
         this.state.history.unshift(`${buildingName(b)} construction finished.`);
         completed = true;
@@ -2158,6 +2177,7 @@ export function parseSave(raw: string): World {
       s.buildings.some((b) => b.id === r.home && isHome(b.kind)),
   );
   s.history = s.history.filter((x) => typeof x === "string").slice(0, 20);
+  restoreTownEvents(s);
   for (const r of s.residents){
     r.leisure = finite(r.leisure) ? Math.min(100, r.leisure!) : 60;
     r.faith=finite(r.faith)?Math.min(100,r.faith!):70;
