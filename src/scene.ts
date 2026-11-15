@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { NightArt } from "./night-art.js";
 import { ShadowArt } from "./shadow-art.js";
+import { planRoad, type RoadPlan } from "./road-stroke.js";
 import { isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
 import {
   setupArtworkScaling,
@@ -160,7 +161,15 @@ export class TownScene extends Phaser.Scene {
     this.drawOverlay();
   }
   onCancel: () => void = () => {};
+  private roadDrag: { from: Point; to: Point; pointer: number } | null = null;
+  onRoadPreview: (plan: RoadPlan | null) => void = () => {};
+  onRoadApply: (from: Point, to: Point) => void = () => {};
+  cancelRoad() {
+    this.roadDrag = null;
+    this.onRoadPreview(null);
+  }
   cancelPlacement() {
+    this.cancelRoad();
     this.terrainDrag = null;
     this.terrainTarget = null;
     this.movingBuilding = null;
@@ -339,8 +348,14 @@ export class TownScene extends Phaser.Scene {
       }
       if (p.wasTouch) {
         this.touches.start(p.id, { x: p.x, y: p.y });
+        if (this.touches.count > 1) { this.cancelRoad(); this.drawOverlay(); return; }
+      }
+      if (this.tool === "road" && (p.wasTouch || p.button === 0) && !this.keys.SPACE.isDown) {
+        const world = this.cameras.main.getWorldPoint(p.x,p.y), tile = this.pickTile(world.x,world.y);
+        if (inside(tile.x,tile.y)) { this.roadDrag = { from: tile, to: tile, pointer: p.id }; this.drawOverlay(); }
         return;
       }
+      if (p.wasTouch) return;
       if (
         this.tool === "terrain" &&
         p.button === 0 &&
@@ -373,6 +388,14 @@ export class TownScene extends Phaser.Scene {
       this.lastPointer = { x: p.x, y: p.y };
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      if (p.isDown && this.roadDrag?.pointer === p.id && this.tool === "road") {
+        if (p.wasTouch) this.touches.move(p.id, {x:p.x,y:p.y});
+        const world = this.cameras.main.getWorldPoint(p.x,p.y), tile = this.pickTile(world.x,world.y);
+        if (tile.x !== this.roadDrag.to.x || tile.y !== this.roadDrag.to.y) {
+          this.roadDrag.to = tile; this.hover = tile; this.drawOverlay();
+        }
+        return;
+      }
       if (p.wasTouch && p.isDown) {
         const gesture = this.touches.move(p.id, { x: p.x, y: p.y });
         if (gesture) {
@@ -426,6 +449,18 @@ export class TownScene extends Phaser.Scene {
           this.dragging = false;
           return;
         }
+        if (this.roadDrag?.pointer === p.id && this.tool === "road") {
+          const draft = this.roadDrag;
+          this.roadDrag = null;
+          if (p.wasTouch) this.touches.end(p.id);
+          this.onRoadPreview(null);
+          if (p.event.type !== "touchcancel") {
+            const world = this.cameras.main.getWorldPoint(p.x, p.y);
+            this.onRoadApply(draft.from, this.pickTile(world.x, world.y));
+          }
+          this.drawOverlay();
+          return;
+        }
         if (this.terrainDrag && !p.wasTouch) {
           const command = this.terrainDrag.command;
           this.terrainDrag = null;
@@ -439,7 +474,9 @@ export class TownScene extends Phaser.Scene {
         const tap = p.wasTouch
           ? this.touches.end(p.id)
           : this.moved < 6 && p.button === 0 && !this.keys.SPACE.isDown;
-        if (tap) {
+        // Road releases are handled only by the live draft above. A cancelled
+        // drag or a pinch must never fall through to single-tile placement.
+        if (tap && this.tool !== "road") {
           const boatHit =
             this.tool === "inspect"
               ? over.find((o) => o.getData("boatId"))
@@ -471,12 +508,14 @@ export class TownScene extends Phaser.Scene {
       },
     );
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => {
+      this.cancelRoad();
       this.terrainDrag = null;
       if (p.wasTouch) this.touches.end(p.id);
       this.dragging = false;
     });
-    this.game.events.on("blur", () => this.touches.cancel());
+    this.game.events.on("blur", () => { this.touches.cancel(); this.cancelRoad(); this.drawOverlay(); });
     this.input.on("gameout", () => {
+      this.cancelRoad();
       this.hover = null;
       this.drawOverlay();
     });
@@ -799,6 +838,17 @@ export class TownScene extends Phaser.Scene {
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
         if (isLeisure(b.kind)) this.drawCoverage(b);
       }
+    }
+    if (this.tool === "road") {
+      const end = this.roadDrag?.to ?? this.hover;
+      const plan = end ? planRoad(this.simulation, this.roadDrag?.from ?? end, end) : null;
+      this.onRoadPreview(plan);
+      if (plan) for (const p of plan.tiles) {
+        const existing = this.simulation.roads.has(key(p));
+        const water = terrainCell(p.x,p.y,this.simulation.state.terrain).kind === "water";
+        this.diamond(p, plan.error ? 0xe3947f : existing ? 0xbac9bc : water ? 0x72c8dd : 0x86d4a5, existing ? .14 : .4);
+      }
+      return;
     }
     if (this.hover && this.tool !== "inspect") {
       const moving = this.movingBuilding

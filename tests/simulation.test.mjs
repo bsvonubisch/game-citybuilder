@@ -33,6 +33,7 @@ import {
   houseCapacity,
 } from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
+import { roadStroke, planRoad } from "../.test-dist/road-stroke.js";
 import {
   DEPOSITS,
   INITIAL_RESERVE,
@@ -1387,6 +1388,121 @@ test("version two towns retain occupied plots, stocks, residents and front-conne
 });
 
 import { MapTouches, gestureCamera } from "../.test-dist/gestures.js";
+test("road drags form connected tile paths in every direction, including single clicks", () => {
+  const from = { x: 8, y: 8 };
+  for (const to of [
+    { x: 8, y: 8 }, { x: 2, y: 8 }, { x: 14, y: 8 },
+    { x: 8, y: 2 }, { x: 8, y: 14 }, { x: 2, y: 5 },
+    { x: 5, y: 14 }, { x: 14, y: 5 }, { x: 12, y: 14 },
+  ]) {
+    const path = roadStroke(from, to);
+    assert.deepEqual(path[0], from);
+    assert.deepEqual(path.at(-1), to);
+    assert.equal(path.length, Math.abs(to.x - from.x) + Math.abs(to.y - from.y) + 1);
+    assert.equal(new Set(path.map(key)).size, path.length);
+    for (let i = 1; i < path.length; i++) {
+      assert.equal(Math.abs(path[i].x - path[i - 1].x) + Math.abs(path[i].y - path[i - 1].y), 1);
+    }
+  }
+  for (const invalid of [undefined, null, { x: -1, y: 1 }, { x: SIZE, y: 1 }, { x: 1.5, y: 1 }, { x: Infinity, y: 1 }]) {
+    assert.deepEqual(roadStroke(from, invalid), []);
+    assert.deepEqual(roadStroke(invalid, from), []);
+  }
+});
+
+test("one road drag builds roads and bridges together, charges only new tiles, and persists", () => {
+  const sim = new Simulation();
+  const from = { x: 1, y: 1 }, to = { x: 5, y: 1 };
+  sim.state.terrain = { "3,1": { kind: "water", height: 0 } };
+  assert.equal(execute(sim, { type: "place", kind: "road", ...from }).ok, true);
+  sim.state.decorations = sim.state.decorations.filter((d) => ![
+    "2,1", "2,2", "3,1",
+  ].includes(key(d)));
+  sim.state.decorations.push(
+    { id: sim.state.nextId++, kind: "bench", x: 2, y: 1, natural: false },
+    { id: sim.state.nextId++, kind: "bench", x: 2, y: 2, natural: false },
+  );
+  advance(sim, 3);
+  const before = sim.snapshot();
+  const travellers = before.agents.filter((a) => a.path.length > 1);
+  assert.ok(travellers.length > 0);
+  const plan = planRoad(sim, from, to);
+  assert.equal(plan.error, undefined);
+  assert.equal(plan.additions.length, 4);
+  assert.equal(plan.bridges, 1);
+  assert.equal(plan.cost, 12 * 3 + 35);
+  assert.deepEqual(sim.snapshot(), before, "preview does not modify the town");
+  const command = { type: "roadStroke", from, to };
+  const result = execute(sim, command, "whole-road-once");
+  assert.equal(result.ok, true, result.message);
+  assert.equal(sim.state.revision, before.revision + 1);
+  assert.equal(sim.state.money, before.money - plan.cost);
+  for (const p of plan.tiles) assert.ok(sim.roads.has(key(p)));
+  assert.equal(isBridge(sim.roads, 3, 1, sim.state.terrain), true);
+  assert.ok(!sim.decorationAt(2, 1));
+  assert.ok(sim.decorationAt(2, 2));
+  for (const old of travellers) {
+    const current = sim.state.agents.find((a) => a.id === old.id);
+    assert.ok(current, "building roads keeps existing travellers");
+    assert.deepEqual(current.path, old.path);
+    assert.equal(current.progress, old.progress);
+  }
+  const after = sim.snapshot();
+  assert.deepEqual(execute(sim, command, "whole-road-once"), result);
+  assert.deepEqual(sim.snapshot(), after, "repeating the command never charges twice");
+  assert.equal(execute(sim, command).ok, false, "an existing stretch needs no new construction");
+  assert.deepEqual(sim.snapshot(), after);
+  const restored = new Simulation(parseSave(JSON.stringify(after)));
+  assert.deepEqual(restored.state.roads, after.roads);
+  assert.equal(isBridge(restored.roads, 3, 1, restored.state.terrain), true);
+});
+
+test("blocked or unaffordable road stretches reject atomically without clearing scenery or spending gold", () => {
+  for (const problem of ["money", "building", "cliff", "bank", "boat", "bounds", "missing"]) {
+    const sim = new Simulation();
+    let from = { x: 1, y: 1 }, to = { x: 5, y: 1 };
+    if (problem === "money") sim.state.money = 50; // Every tile is individually affordable.
+    if (problem === "building") {
+      const b = sim.state.buildings.find((b) => b.kind === "warehouse");
+      from = { x: b.x - 1, y: b.y };
+      to = { x: b.x + 2, y: b.y };
+    }
+    if (problem === "cliff") sim.state.terrain = { "3,1": { kind: "land", height: 2 } };
+    if (problem === "bank") sim.state.terrain = {
+      "2,1": { kind: "land", height: 1 }, "3,1": { kind: "water", height: 0 },
+    };
+    if (problem === "boat") sim.state.buildings[0].fishing = { path: [{ x: 3, y: 1 }] };
+    if (problem === "bounds") to = { x: SIZE, y: 1 };
+    if (problem === "missing") to = undefined;
+    const before = sim.snapshot();
+    const preview = planRoad(sim, from, to);
+    assert.ok(preview.error, problem);
+    const result = execute(sim, { type: "roadStroke", from, to });
+    assert.equal(result.ok, false, problem);
+    assert.equal(result.message, preview.error);
+    assert.deepEqual(sim.snapshot(), before, problem);
+  }
+});
+
+test("a whole road stretch accepts gentle slopes but rejects a changed town revision", () => {
+  const sim = new Simulation();
+  const command = { type: "roadStroke", from: { x: 1, y: 1 }, to: { x: 3, y: 1 } };
+  sim.state.terrain = {
+    "1,1": { kind: "land", height: 0 },
+    "2,1": { kind: "land", height: 1 },
+    "3,1": { kind: "land", height: 2 },
+  };
+  const before = sim.snapshot();
+  assert.equal(sim.execute({ id: "old-road", actorId: "test", expectedRevision: before.revision - 1, command }).ok, false);
+  assert.deepEqual(sim.snapshot(), before);
+  assert.equal(execute(sim, command).ok, true);
+  assert.equal(sim.state.money, before.money - 36);
+  for (const x of [1.5, 2.5]) assert.ok(Math.abs(
+    roadHeight(sim.roads, x - 1e-7, 1, [], sim.state.terrain) -
+    roadHeight(sim.roads, x + 1e-7, 1, [], sim.state.terrain),
+  ) < 1e-4);
+});
+
 test("touch drags and pinches never place buildings on release", () => {
   const t = new MapTouches();
   t.start(1, { x: 100, y: 100 });
@@ -1397,10 +1513,12 @@ test("touch drags and pinches never place buildings on release", () => {
   assert.equal(t.end(1), false);
   t.start(1, { x: 100, y: 100 });
   t.start(2, { x: 200, y: 100 });
+  assert.equal(t.count, 2, "two touches cancel a road draft before panning");
   assert.equal(t.move(2, { x: 250, y: 100 }).scale, 1.5);
   assert.equal(t.end(2), false);
   t.move(1, { x: 105, y: 100 });
   assert.equal(t.end(1), false);
+  assert.equal(t.count, 0);
   t.start(1, { x: 20, y: 20 });
   t.cancel();
   assert.equal(t.end(1), false);

@@ -575,46 +575,46 @@ main {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-:is(.building-alert, .building-status)[data-kind="construction"] {
+:is(.building-alert, .building-status.warning)[data-kind="construction"] {
   background: #def4eb;
   color: #22665a;
   border-color: #6ca18e;
 }
-:is(.building-alert, .building-status)[data-kind="input"] {
+:is(.building-alert, .building-status.warning)[data-kind="input"] {
   background: #fff4cf;
   color: #7e560c;
   border-color: #c7a147;
 }
-:is(.building-alert, .building-status)[data-kind="output"] {
+:is(.building-alert, .building-status.warning)[data-kind="output"] {
   background: #f2e4ff;
   color: #755083;
   border-color: #a782bc;
 }
-:is(.building-alert, .building-status)[data-kind="workers"] {
+:is(.building-alert, .building-status.warning)[data-kind="workers"] {
   background: #e3f2ff;
   color: #2f6387;
   border-color: #7ba9c3;
 }
-:is(.building-alert, .building-status)[data-kind="leisure"] {
+:is(.building-alert, .building-status.warning)[data-kind="leisure"] {
   background: #fce6f0;
   color: #8a4769;
   border-color: #bf81a0;
 }
-:is(.building-alert, .building-status)[data-kind="depleted"] {
+:is(.building-alert, .building-status.warning)[data-kind="depleted"] {
   background: #f2dfd7;
   color: #8a4c3f;
   border-color: #ba8a79;
 }
 .building-alert[data-kind="road"],
 .building-alert[data-kind="warehouse"],
-.building-status[data-kind="road"],
-.building-status[data-kind="warehouse"] {
+.building-status.warning[data-kind="road"],
+.building-status.warning[data-kind="warehouse"] {
   background: #ffeadb;
   color: #a95339;
   border-color: #b9694b;
 }
 .building-alert[data-kind="paused"],
-.building-status[data-kind="paused"] {
+.building-status.warning[data-kind="paused"] {
   background: #e9eddf;
   color: #617163;
   border-color: #8b9880;
@@ -2731,6 +2731,28 @@ dialog p.muted {
 .placement-hint {
   max-width: 100%;
   white-space: normal;
+}
+.placement-hint:has(#road-stroke-cost) {
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(560px, 100%);
+  gap: 5px 7px;
+  text-align: center;
+}
+#road-stroke-cost,
+.placement-hint:has(#road-stroke-cost) > small {
+  flex-basis: 100%;
+}
+#road-stroke-cost {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #32684e;
+}
+#road-stroke-cost:empty {
+  display: none;
+}
+#road-stroke-cost.invalid {
+  color: #a04631;
 }
 .build-drawer {
   width: 100%;

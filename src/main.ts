@@ -261,6 +261,7 @@ function toast(message: string) {
   );
 }
 function setTool(next: Tool) {
+  scene.cancelRoad();
   scene.guidanceBuilding = null;
   if (next !== "move") scene.movingBuilding = null;
   const wasTerrain = tool === "terrain";
@@ -292,7 +293,7 @@ function setTool(next: Tool) {
     : decoration
       ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
       : next === "road"
-        ? `${icon("road")} Click to lay roads · 12 gold · Bridges 35 gold <kbd>Esc</kbd>`
+        ? `${icon("road")} Drag a road and release to build · 12 gold/tile · Bridges 35 gold <span id="road-stroke-cost" aria-live="polite"></span><small>Two fingers to pan/zoom · Space-drag to pan · Esc to cancel</small>`
         : next === "bridge"
           ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
           : next === "bulldoze"
@@ -562,6 +563,17 @@ scene.onTile = async (p: Point) => {
     save(false);
     updateUI();
   }
+};
+scene.onRoadPreview = (plan) => {
+  const label = document.querySelector<HTMLElement>("#road-stroke-cost");
+  if (!label) return;
+  label.textContent = plan ? `${plan.additions.length} new tiles · ${plan.cost} gold${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""}${plan.error ? ` — ${plan.error}` : ""}` : "";
+  label.classList.toggle("invalid", !!plan?.error);
+};
+scene.onRoadApply = async (from, to) => {
+  const result = await gateway.command({ type: "roadStroke", from, to });
+  toast(result.message);
+  if (result.ok) { scene.redraw(); save(false); updateUI(); }
 };
 scene.onTerrainPreview = (plan) => {
   const label = document.querySelector("#terrain-cost"),

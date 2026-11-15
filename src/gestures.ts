@@ -7,6 +7,7 @@ export interface MapGesture {
 /** Touch state is independent of the current build tool. A drag or a multi-touch
  * session can never become a placement tap when the last finger is released. */
 export class MapTouches {
+  get count() { return this.contacts.size; }
   private contacts = new Map<number, Contact>();
   private previous: Contact[] = [];
   private travelled = false;

@@ -1,3 +1,4 @@
+import { planRoad } from "./road-stroke.js";
 import {
   BUILDINGS,
   RESOURCES,
@@ -134,6 +135,7 @@ export interface World {
   depositDepths?: Record<string, number>;
 }
 export type Command =
+  | { type: "roadStroke"; from: Point; to: Point }
   | TerrainCommand
   | { type: "undoTerrain" }
   | {
@@ -864,6 +866,7 @@ export class Simulation {
       !c ||
       ![
         "place",
+        "roadStroke",
         "demolish",
         "toggle",
         "rotate",
@@ -881,7 +884,15 @@ export class Simulation {
       };
     let message = "",
       networkChanged = true;
-    if (c.type === "terrain") {
+    if (c.type === "roadStroke") {
+      const plan = planRoad(this, c.from, c.to);
+      if (plan.error) return { ok: false, message: plan.error, revision: this.state.revision };
+      const added = new Set(plan.additions.map(key));
+      this.state.roads.push(...added);
+      this.state.decorations = this.state.decorations.filter((d) => !added.has(key(d)));
+      this.state.money -= plan.cost;
+      message = `Built ${plan.additions.length} road ${plan.additions.length === 1 ? "tile" : "tiles"}${plan.bridges ? ` · ${plan.bridges} bridge ${plan.bridges === 1 ? "tile" : "tiles"}` : ""} · ${plan.cost} gold.`;
+    } else if (c.type === "terrain") {
       const plan = planTerrain(this.state, c);
       if (plan.error)
         return {
@@ -1151,7 +1162,7 @@ export class Simulation {
     }
     this.state.revision++;
     if (networkChanged)
-      this.reconnect(["move", "place", "upgrade", "deepen"].includes(c.type));
+      this.reconnect(["move", "place", "roadStroke", "upgrade", "deepen"].includes(c.type));
     if (c.type === "move" && !this.building(c.id)?.connected)
       message +=
         " Connect the front entrance to the warehouse road network to resume work.";
