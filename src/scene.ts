@@ -1,3 +1,5 @@
+import {MarketArt,prepareVendorFrames} from "./market-art.js";
+import {marketActor} from "./market.js";
 import {edgeDepth,type EdgeOccluder} from "./edge-occlusion.js";
 import {fenceEnds} from "./fences.js";
 import {WeatherArt} from "./weather-art.js";
@@ -182,7 +184,7 @@ export class TownScene extends Phaser.Scene {
   onRemoveApply:(from:Point,to:Point)=>void=()=>{};
   onSelectDecoration:(id:number)=>void=()=>{};
   onDecorationRemove:(id:number)=>void=()=>{};
-  onEyedropper:(kind:Tool,rotation:0|1|2|3)=>void=()=>{};
+  onEyedropper:(kind:Tool,rotation:0|1|2|3,plot?:readonly[number,number])=>void=()=>{};
   onBuildingHover:(id:number|null,x:number,y:number)=>void=()=>{};
   private hoverArt?:Phaser.GameObjects.Image;
   clearBuildingHover(){this.hoverArt?.setVisible(false);this.onBuildingHover(null,0,0);}
@@ -211,6 +213,8 @@ export class TownScene extends Phaser.Scene {
   }
   private plotArt!: PlotArt;
   private plazaArt!:PlazaArt;
+  private marketArt!:MarketArt;
+  marketPlot: [number,number]=[2,2];
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
   private planterArt!: PlanterArt;
@@ -263,6 +267,8 @@ export class TownScene extends Phaser.Scene {
     for (const texture of new Set((Object.keys(BUILDINGS) as BuildingKind[]).map(kind=>buildingArt(kind).texture)))this.load.image(texture,`/${texture}.png`);
     this.load.image("building-house-2", "/building-house-2.png");
     this.load.image("building-house-3", "/building-house-3.png");
+    this.load.image("market-produce","/market-produce.png");
+    this.load.image("market-vendors","/market-vendors.png");
     this.load.image("park-benches", "/park-benches.png");
     this.load.image("foundation-stone", "/foundation-stone.png");
     this.load.image("garden", "/garden-sprites.png");
@@ -302,6 +308,7 @@ export class TownScene extends Phaser.Scene {
     this.plotArt = new PlotArt(this);
     this.constructionArt = new ConstructionArt(this);
     this.plazaArt=new PlazaArt(this);
+    this.marketArt=new MarketArt(this);prepareVendorFrames(this);
     const builderTexture = this.textures.get("construction-workers"),
       builderSource = builderTexture.getSourceImage() as HTMLImageElement;
     for (let frame = 0; frame < 16; frame++)
@@ -507,7 +514,7 @@ export class TownScene extends Phaser.Scene {
       (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
         if(!p.wasTouch&&p.button===1&&this.moved<6){
           const hit=over.find(o=>o.getData("buildingId")),b=hit&&this.simulation.building(hit.getData("buildingId"));
-          if(b)this.onEyedropper(b.kind,b.rotation);
+          if(b)this.onEyedropper(b.kind,b.rotation,b.plot);
           else {const d=over.find(o=>o.getData("decoration"))?.getData("decoration");if(d)this.onEyedropper(d.kind,d.side??d.edge??0);}
         }
         if (!p.wasTouch && p.button !== 0) {
@@ -828,6 +835,7 @@ export class TownScene extends Phaser.Scene {
       return {id:b.id,x:b.x,y:b.y,width,height,depth:s.depth,left:s.x,right:s.x+s.displayWidth,top:s.y,bottom:s.y+s.displayHeight};
     }));
     for(const [id,depth] of ordered)this.buildings.get(id)!.setDepth(depth);
+    this.marketArt.sync(this.simulation,ordered);
     this.lightSources = [
       ...[...this.buildings.values()].filter(s=>!isPark(this.simulation.building(s.getData("buildingId"))?.kind??"")),
       ...this.plazaArt.sync(this.simulation,ordered),
@@ -957,7 +965,7 @@ export class TownScene extends Phaser.Scene {
       if (!kind) return;
       const plot = moving
         ? this.simulation.relocationPlot(moving, this.rotation)
-        : undefined;
+        : kind==="market"?this.marketPlot:undefined;
       const valid =
         this.tool === "bulldoze" ||
         !(this.tool === "move"
@@ -975,6 +983,7 @@ export class TownScene extends Phaser.Scene {
               this.hover.x,
               this.hover.y,
               this.rotation,
+              plot,
             ));
       const b = this.simulation.buildingAt(this.hover.x, this.hover.y);
       const cells =
@@ -1029,6 +1038,7 @@ export class TownScene extends Phaser.Scene {
         if(this.tool==="streetlight"){const p=lampPlacement(this.simulation,{...this.hover,edge:this.simulation.roads.has(key(this.hover))?this.rotation:undefined}).screen;this.decorationGhost.setPosition(p.x,p.y);}else this.decorationGhost.y -= groundHeight(this.hover.x,this.hover.y,this.simulation.state.terrain);
       }
       if (isBuilding(kind)) {
+        if(kind==="market")this.drawCoverage({...servicePreview(kind,this.hover.x,this.hover.y,this.rotation),plot});
         if(kind==="forester")this.drawForestRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if(isExtractor(kind))this.drawMiningRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if (isLeisure(kind))
@@ -1092,7 +1102,7 @@ export class TownScene extends Phaser.Scene {
     plot?: readonly [number, number],
     oneEdge = false,
   ) {
-    if (isPark(kind) && !oneEdge) {
+    if ((isPark(kind)||kind==="market") && !oneEdge) {
       for (let edge = 0; edge < 4; edge++)
         this.drawFront(kind, x, y, edge, plot, true);
       return;
@@ -1101,7 +1111,7 @@ export class TownScene extends Phaser.Scene {
     const [w, h] = dimensions(kind, rotation, plot),
       d = FRONT_DIRECTIONS[rotation];
     const connected = frontage(
-      isPark(kind) ? "house" : kind,
+      (isPark(kind)||kind==="market") ? "house" : kind,
       x,
       y,
       rotation,
@@ -1523,7 +1533,11 @@ export class TownScene extends Phaser.Scene {
           .setPosition(v.x,v.y-groundHeight(visiting.x,visiting.y,this.simulation.state.terrain)-FOUNDATION_HEIGHT)
           .setDepth((this.buildings.get(visiting.id)?.depth??((visiting.x+visiting.y+(visiting.kind==="garden"?6:2))*32+12))+.1+(visit.x-visiting.x+visit.y-visiting.y)*.08).setVisible(true).setData('sized',false);
       }
-      if (a.kind !== "person"&&!visit)
+      const shopping=marketActor(this.simulation,a,this.acc);
+      if(shopping){const {b,p,vendor,serving}=shopping,v=iso(p.x,p.y),pose=walkFrame((b.rotation+1)%4,a.id%2,0,true,false),frame=b.rotation*4+(serving?[0,1,2,3,2,0][Math.floor(shopping.elapsed*2)%6]:0);
+        s.setTexture(vendor?"market-vendors":"walkers",vendor?frame:pose.frame).setScale(vendor?27/this.textures.getFrame("market-vendors",frame).height:this.travellerScale({...a,kind:"person"},a.id%2,"walkers")).setOrigin(.5,vendor?.98:1).setFlipX(!vendor&&pose.flip).setPosition(v.x,v.y-groundHeight(b.x,b.y,this.simulation.state.terrain)-FOUNDATION_HEIGHT).setDepth((this.buildings.get(b.id)?.depth??0)+.1+(p.x-b.x+p.y-b.y)*.08).setVisible(true).setData("sized",false);
+      }
+      if (a.kind !== "person"&&!visit&&!shopping)
         this.animation.vehicle(
           a,
           s,

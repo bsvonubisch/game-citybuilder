@@ -1,3 +1,6 @@
+import {marketPrice,marketStalls} from "./market-layout.js";
+import {marketVendors,MARKET_GOODS,marketOpen} from "./market.js";
+import {buildingJobs} from "./catalog.js";
 import {incomeSummary} from "./economy.js";
 import {isHome,isPark} from "./catalog.js";
 import {parkVisitor} from "./park-visitors.js";
@@ -300,7 +303,7 @@ function setTool(next: Tool) {
       e.classList.toggle("selected", e.dataset.building === tool),
     );
   const d = Object.hasOwn(BUILDINGS, next)
-    ? BUILDINGS[next as BuildingKind]
+    ? {...BUILDINGS[next as BuildingKind],...(next==="market"?marketPrice(scene.marketPlot):{})}
     : null;
   const decoration = isDecoration(next) ? DECORATIONS[next] : null;
   $("#placement-hint").innerHTML = d
@@ -310,7 +313,7 @@ function setTool(next: Tool) {
         .map(([r, n]) => `· ${n} ${r}`)
         .join(
           " ",
-        )} · ${dimensions(next as BuildingKind, scene.rotation).join("×")} tiles · ${constructionWork(next as BuildingKind)} worker-seconds ${isBuilding(next) ? `<button id="rotate-placement" class="rotate-placement" title="Rotate building">${icon("reset")} Rotate</button><span id="front-access"></span>` : ""} <kbd>Esc</kbd>`
+        )} · ${dimensions(next as BuildingKind, scene.rotation,next==="market"?scene.marketPlot:undefined).join("×")} tiles · ${next==="market"?80+scene.marketPlot[0]*scene.marketPlot[1]*35:constructionWork(next as BuildingKind)} worker-seconds ${isBuilding(next) ? `<button id="rotate-placement" class="rotate-placement" title="Rotate building">${icon("reset")} Rotate</button><span id="front-access"></span>` : ""} <kbd>Esc</kbd>`
     : decoration
       ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
       : next === "road"
@@ -321,6 +324,10 @@ function setTool(next: Tool) {
             ? `${icon("hammer")} Click or drag to remove a stretch · Release to apply · Half the gold returned <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if(next==="market"){
+    $("#placement-hint").insertAdjacentHTML("beforeend",'<div class="market-size"><label>Width <select id="market-width">'+[1,2,3,4,5].map(n=>'<option '+(scene.marketPlot[0]===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label><label>Length <select id="market-length">'+[1,2,3,4,5].map(n=>'<option '+(scene.marketPlot[1]===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label><b>'+marketStalls({x:0,y:0,rotation:scene.rotation,plot:scene.marketPlot})+' stalls · one vendor per stall</b></div>');
+    for(const id of ['market-width','market-length'])$("#"+id).onchange=()=>{scene.marketPlot=[Number($<HTMLSelectElement>('#market-width').value),Number($<HTMLSelectElement>('#market-length').value)];setTool('market');scene.drawOverlay();};
+  }
   if(next==="fence")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at a tile edge · Fences join at shared corners · The tile stays usable</span>');
   if(next==="streetlight")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at either road edge to choose the curb · One post per click · 20 gold</span>');
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
@@ -398,6 +405,7 @@ $("#close-panel").onclick = () => {
   $(tool === "terrain" ? '[data-tool="terrain"]' : `#${tab}-tab`).focus();
 };
 function rotatePlacement() {
+  if(tool==="market")scene.marketPlot=[scene.marketPlot[1],scene.marketPlot[0]];
   scene.rotation = ((scene.rotation + 1) % 4) as 0 | 1 | 2 | 3;
   scene.drawOverlay();
   setTool(tool);
@@ -551,7 +559,7 @@ const placementCost=document.createElement("div");placementCost.className="place
 let costPointer:{x:number;y:number}|null=null;
 function updatePlacementCost(){
   if(typeof placementCost==="undefined")return;
-  const d=isBuilding(tool)?BUILDINGS[tool]:isDecoration(tool)?DECORATIONS[tool]:null;
+  const d=isBuilding(tool)?{...BUILDINGS[tool],...(tool==="market"?marketPrice(scene.marketPlot):{})}:isDecoration(tool)?DECORATIONS[tool]:null;
   placementCost.hidden=!d||!costPointer;
   if(!d||!costPointer)return;
   const rows=[{name:"Gold",icon:"coin",need:d.cost,have:simulation.state.money},...Object.entries("materials" in d?d.materials??{}:{}).map(([r,n])=>({name:RESOURCE_NAMES[r as Resource],icon:r==="bricks"?"box":r,need:n,have:simulation.stored(r as Resource)}))];
@@ -563,7 +571,7 @@ $(".world").addEventListener("pointermove",event=>{if(!(event.target instanceof 
 $(".world").addEventListener("pointerleave",()=>{costPointer=null;placementCost.hidden=true;});
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
-scene.onEyedropper=(kind,rotation)=>{scene.rotation=rotation;setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
+scene.onEyedropper=(kind,rotation,plot)=>{scene.rotation=rotation;if(kind==="market"&&plot)scene.marketPlot=[...plot];setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
 scene.onSelectDecoration=(id)=>{selectedDecoration=id;selected=null;scene.selected=null;selectedAgent=null;scene.selectedAgent=null;scene.drawOverlay();renderDecorationInspector();};
 scene.onDecorationRemove=async(id)=>{const result=await gateway.command({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onRemoveApply=async(from,to)=>{const result=await gateway.command({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
@@ -598,7 +606,7 @@ scene.onTile = async (p: Point) => {
         }
       : tool === "bulldoze"
         ? { type: "demolish", ...p }
-        : { type: "place", kind: tool, rotation: scene.rotation, ...p },
+        : { type: "place", kind: tool, rotation: scene.rotation, ...(tool==="market"?{plot:scene.marketPlot}:{}), ...p },
   );
   toast(result.message);
   if (result.ok) {
@@ -698,7 +706,7 @@ function renderInspector() {
   panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}`;
   panel.scrollTop = 0;
   const d = BUILDINGS[b.kind];
-  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${isHome(b.kind) ? `HOME · TIER ${b.houseTier ?? b.level ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${isHome(b.kind) ? `HOME · TIER ${b.houseTier ?? b.level ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) || b.kind === "market" ? '<button id="toggle-production" class="primary"></button>' : ""}`;
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
       const link = (event.target as Element).closest<HTMLButtonElement>(
@@ -825,7 +833,7 @@ function renderInspector() {
     panel.hidden = true;
     scene.drawOverlay();
   };
-  if (d.recipe || isLeisure(b.kind) || b.construction)
+  if (d.recipe || isLeisure(b.kind) || b.kind === "market" || b.construction)
     $("#toggle-production").onclick = async () => {
       const result = await gateway.command({ type: "toggle", id: b.id });
       toast(result.message);
@@ -1080,7 +1088,7 @@ function updateInspector() {
   $("#building-status").classList.toggle("warning", !!alert);
   $("#building-status").dataset.kind = alert?.kind ?? "ready";
   $("#building-detail").innerHTML =
-    `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${d.jobs}</b></div>` : ""}${
+    `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${buildingJobs(b)}</b></div>` : ""}${
       d.recipe
         ? `<div class="recipe">${d.recipe.input ? `${d.recipe.amount} ${d.recipe.input}` : "Gather"} <span>→</span> ${d.recipe.count} ${d.recipe.output}</div><div class="goal-progress"><span style="width:${(b.progress / d.recipe.seconds) * 100}%"></span></div><div class="detail-row"><span>Cycle</span><b>${b.progress.toFixed(1)} / ${d.recipe.seconds}s</b></div>${Object.entries(
             b.inventory,
@@ -1109,8 +1117,9 @@ function updateInspector() {
                 .join("")
             : ""
     }`;
-  if (d.recipe || isLeisure(b.kind))
-    $("#toggle-production").textContent = isLeisure(b.kind)
+  if(b.kind==="market"&&!b.construction){$("#building-detail").innerHTML=`<div class="detail-row"><span>Plot / stalls</span><b>${(b.plot??[2,2]).join("×")} / ${marketStalls(b)}</b></div><div class="detail-row"><span>Vendors on site</span><b>${marketVendors(simulation,b).length} / ${buildingJobs(b)}</b></div><div class="detail-row"><span>Customers browsing</span><b>${simulation.state.agents.filter(a=>a.target===b.id&&a.marketSlot!==undefined).length}</b></div><div class="detail-row"><span>Goods sold</span><b>${b.produced}</b></div>${MARKET_GOODS.map(r=>`<div class="detail-row"><span>${RESOURCE_NAMES[r]}</span><b>${b.inventory[r]??0}</b></div>`).join("")}<p class="muted">Open 07:00–19:00. Food purchases feed the town; sales earn gold. Nearby residents walk here, and trucks replenish stock.</p>`;}
+  if (d.recipe || isLeisure(b.kind) || b.kind === "market")
+    $("#toggle-production").textContent = isLeisure(b.kind) || b.kind === "market"
       ? b.enabled
         ? "Close for visitors"
         : "Reopen for visitors"
@@ -1174,7 +1183,7 @@ function updateInspector() {
     const open =
       !b.construction &&
       b.enabled &&
-      b.workers >= d.jobs &&
+      b.workers >= buildingJobs(b) &&
       serviceOpen(b.kind, daylight(simulation.state.tick).hour);
     $("#service-detail").innerHTML =
       `<h4>${b.kind==="church"?"Religion":"Nearby leisure"} · level ${b.level ?? 1}</h4><p>${open ? "Open for visits" : b.kind === "tavern" ? "Evening hours: 17:00–02:00 · requires two staff" : b.kind==="church"?"Visits: 08:00–20:00 · requires two staff":"Daytime visits: 06:00–20:00"}</p><p>${coverage.residents} / ${coverage.capacity} nearby residents · maximum ${coverage.range} road tiles. Green homes are in reach; amber homes need more capacity.</p>${coverage.homes.map((h) => `<button class="goods-link" data-service-home="${h.home.id}"><span>${escapeHtml(buildingName(h.home))} · ${h.home.x}, ${h.home.y}</span><small>${h.served} served · ${h.tiles} road tiles · ~${Math.ceil(h.seconds)}s walk</small></button>`).join("") || '<p class="muted">No homes within walking distance. Place homes closer and connect their road entrances.</p>'}`;
@@ -1469,9 +1478,9 @@ function updateUI() {
   updatePlacementCost();
   const bread = simulation.stored("bread"),
     fish = simulation.stored("fish");
-  $("#food-stock").textContent = String(bread + fish);
+  $("#food-stock").textContent = String(bread + fish + (s.marketMeals??0));
   $(".resource.food-stock").title =
-    `${bread} bread + ${fish} fish in warehouses · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
+    `${bread} bread + ${fish} fish in warehouses · ${s.marketMeals??0} meals bought at markets · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
   $(".resource.food-stock").setAttribute(
     "aria-label",
     $(".resource.food-stock").title,

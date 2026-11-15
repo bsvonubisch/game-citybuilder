@@ -20,7 +20,7 @@ export interface BuildingArt {
 // Original ground contacts align the base-free cutouts without shearing them.
 // The shared raised foundation fills the exact occupied grid in every view.
 const grounds: Record<
-  Exclude<BuildingKind, "fishery"|"garden">,
+  Exclude<BuildingKind, "fishery"|"garden"|"market">,
   readonly PlotCorners[]
 > = {
   church:[[[28,450],[346,609],[558,503]],[[38,504],[250,610],[568,451]],[[47,472],[263,580],[587,418]],[[45,414],[369,576],[585,468]]],
@@ -363,6 +363,7 @@ export function buildingArt(
   rotation = 0,
   houseTier: HouseTier = 1,
 ): BuildingArt {
+  if(kind==="market")return {texture:"market-stalls",frame:rotation,columns:4,rows:3,size:[444,296],ground:[[0,148],[222,259],[444,148]]};
   if(kind==="church"){
     const frame=[1,0,2,3][rotation],y=frame<2?0:610,height=frame<2?610:637;
     return {texture:"building-church",frame,columns:2,rows:2,size:[630,height],sourceRect:[frame%2*630,y,630,height],ground:grounds.church[frame].map(([x,y])=>[x,y+(frame>=2?25:12)]) as unknown as PlotCorners};

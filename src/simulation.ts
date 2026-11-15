@@ -1,3 +1,6 @@
+import {marketDestination,marketOpen,buyAtMarket,marketStock,marketVendors,MARKET_GOODS} from "./market.js";
+import {validMarketPlot,marketStalls} from "./market-layout.js";
+import {buildingJobs,buildingPrice} from "./catalog.js";
 import {isHome,isPark} from "./catalog.js";
 import {warehouseReady, LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
 import {parkVisitDuration,parkVisitorLimit} from "./park-visitors.js";
@@ -104,6 +107,7 @@ export interface Building extends Point {
   fishing?: FishingTrip;
 }
 export interface Resident {
+  lastShopping?:number;
   id: number;
   name: string;
   home: number;
@@ -130,8 +134,10 @@ export interface Agent {
   queuedTicks?: number;
   onsite?: number;
   parkSlot?:number;
+  marketSlot?:number;
 }
 export interface World {
+  marketMeals?:number;
   income?: import("./economy.js").IncomeEntry[];
   bridgeVersion?:1;
   version: 3;
@@ -165,6 +171,7 @@ export type Command =
   | { type: "undoTerrain" }
   | {
       type: "place";
+      plot?:readonly[number,number];
       kind: Exclude<Tool, "inspect" | "bulldoze" | "terrain" | "move">;
       x: number;
       y: number;
@@ -521,7 +528,7 @@ export class Simulation {
         !b.construction &&
         b.connected &&
         b.enabled &&
-        BUILDINGS[b.kind].jobs > 0,
+        buildingJobs(b) > 0,
     );
     for (const r of this.state.residents) {
       const h = this.building(r.home)!;
@@ -540,13 +547,13 @@ export class Simulation {
       const previous = nearby.find(
         (b) =>
           b.id === r.job &&
-          b.workers < BUILDINGS[b.kind].jobs &&
+          b.workers < buildingJobs(b) &&
           this.route(h, b),
       );
       const job =
         (preserveTravel ? previous : undefined) ??
         nearby.find(
-          (b) => b.workers < BUILDINGS[b.kind].jobs && this.route(h, b),
+          (b) => b.workers < buildingJobs(b) && this.route(h, b),
         );
       r.job = job?.id ?? null;
       if (job) job.workers++;
@@ -571,7 +578,7 @@ export class Simulation {
         !b.construction &&
         b.enabled &&
         b.connected &&
-        b.workers >= BUILDINGS[b.kind].jobs,
+        b.workers >= buildingJobs(b),
     ))
       for (const h of serviceCoverage(this, service).homes)
         for (const r of this.state.residents
@@ -632,7 +639,7 @@ export class Simulation {
         existing &&
         this.retarget(existing, existing.returning ? home : destination)
       ) {
-        if (existing.onsite && (r.job !== destination.id || !destination.connected || !destination.enabled || (!destination.construction && destination.kind !== "forester" && !isExtractor(destination.kind)))) {
+        if (existing.onsite && (r.job !== destination.id || !destination.connected || !destination.enabled || (!destination.construction && destination.kind !== "forester" && destination.kind !== "market" && !isExtractor(destination.kind)))) {
           delete existing.onsite;
           existing.wait = 0;
           existing.path = this.route(destination, home,existing.kind) ?? existing.path;
@@ -646,7 +653,7 @@ export class Simulation {
       if (p)
         this.state.agents.push({
           id: this.state.nextId++,
-          kind: destination.construction || destination.kind === "forester" || isExtractor(destination.kind)
+          kind: destination.construction || destination.kind === "market" || destination.kind === "forester" || isExtractor(destination.kind)
             ? "person"
             : r.id % 4 === 0 && p.every(tile=>roadTypeAt(this.state.roadTypes,tile)!=="pavement")
               ? "car"
@@ -679,6 +686,8 @@ export class Simulation {
     const leisure=services.filter(b=>isLeisure(b.kind));
     const worship=services.find(b=>b.kind==="church");
     const job = this.building(r.job ?? -1);
+    if(job?.kind==="market"&&marketOpen(this.state.tick))return job;
+    if(!job?.construction){const market=marketDestination(this,r);if(market)return market;}
     if(worship && (r.faith??70)<55 && !job?.construction) return worship;
     if ((r.leisure ?? 60) < 90 && (!job || hour >= 17 || hour < 6))
       return leisure[0] ?? job;
@@ -790,7 +799,9 @@ export class Simulation {
     x: number,
     y: number,
     rotation = 0,
+    plot?:readonly[number,number],
   ): string | null {
+    if(plot!==undefined&&(kind!=="market"||!validMarketPlot(plot)))return "Market plots must be between 1×1 and 5×5 tiles.";
     if (!inside(x, y)) return "Choose a tile inside the valley.";
     if(kind==="fence"){
       if(!Number.isInteger(rotation)||rotation<0||rotation>3)return "Choose one of the four tile edges.";
@@ -816,7 +827,7 @@ export class Simulation {
     if (kind === "bridge" && terrain(x, y, this.state.terrain) !== "water")
       return "Place bridges over water. Use roads on dry land.";
     const cells = isBuilding(kind)
-      ? footprint(kind, x, y, rotation)
+      ? footprint(kind, x, y, rotation, plot)
       : [{ x, y }];
     if (
       this.state.buildings.some((b) =>
@@ -887,10 +898,10 @@ export class Simulation {
           : 12
         : isDecoration(kind)
           ? DECORATIONS[kind].cost
-          : BUILDINGS[kind].cost;
+          : buildingPrice(kind,plot).cost;
     if (this.state.money < cost) return "Not enough gold yet.";
     if (isBuilding(kind))
-      for (const [r, n] of Object.entries(BUILDINGS[kind].materials ?? {})) {
+      for (const [r, n] of Object.entries(buildingPrice(kind,plot).materials)) {
         if (this.stored(r as Resource) < n)
           return `Need ${n} ${r} in warehouses.`;
       }
@@ -1089,7 +1100,7 @@ export class Simulation {
           message: "Unknown building.",
           revision: this.state.revision,
         };
-      const error = this.canPlace(c.kind, c.x, c.y, c.rotation);
+      const error = this.canPlace(c.kind, c.x, c.y, c.rotation, c.plot);
       if (error)
         return { ok: false, message: error, revision: this.state.revision };
       const cost =
@@ -1099,10 +1110,10 @@ export class Simulation {
             : 12
           : isDecoration(c.kind)
             ? DECORATIONS[c.kind].cost
-            : BUILDINGS[c.kind].cost;
+            : buildingPrice(c.kind,c.plot).cost;
       this.state.money -= cost;
       if (isBuilding(c.kind))
-        for (const [r, n] of Object.entries(BUILDINGS[c.kind].materials ?? {}))
+        for (const [r, n] of Object.entries(buildingPrice(c.kind,c.plot).materials))
           this.consume(r as Resource, n);
       const cells = isBuilding(c.kind)
         ? footprint(c.kind, c.x, c.y, c.rotation)
@@ -1136,12 +1147,12 @@ export class Simulation {
           enabled: true,
           produced: 0,
           rotation: c.rotation ?? 0,
-          plot: dimensions(c.kind, c.rotation),
+          plot: dimensions(c.kind, c.rotation,c.plot),
           ...(c.kind === "house" ? { houseTier: 1 as const } : {}),
           ...(isExtractor(c.kind)?{deposit:nearbyDeposit({kind:c.kind,x:c.x,y:c.y,rotation:c.rotation??0})}:{}),
           construction: (()=>{
-            const tiles=footprint(c.kind,c.x,c.y,c.rotation??0).filter(p=>exposedDeposit(this.state,p));
-            return {required:constructionWork(c.kind)+tiles.length*ROCK_CLEARING_WORK,completed:0,...(tiles.length?{clearance:{tiles,work:0}}:{})};
+            const tiles=footprint(c.kind,c.x,c.y,c.rotation??0,c.plot).filter(p=>exposedDeposit(this.state,p));
+            return {required:(c.kind==="market"?80+dimensions(c.kind,c.rotation,c.plot).reduce((a,b)=>a*b,1)*35:constructionWork(c.kind))+tiles.length*ROCK_CLEARING_WORK,completed:0,...(tiles.length?{clearance:{tiles,work:0}}:{})};
           })(),
         });
       message =
@@ -1394,7 +1405,7 @@ export class Simulation {
         !recipe ||
         !b.enabled ||
         !b.connected ||
-        b.workers < BUILDINGS[b.kind].jobs
+        b.workers < buildingJobs(b)
       )
         continue;
       if ((b.inventory[recipe.output] ?? 0) >= outputCapacity(b)) continue;
@@ -1438,7 +1449,7 @@ export class Simulation {
         }
         if (!destination) a.wait = Math.max(a.wait, STEP * 2);
       }
-      if(a.wait<=0)delete a.parkSlot;
+      if(a.wait<=0){delete a.parkSlot;delete a.marketSlot;}
       // Finish journeys already on the road; most residents stay home at night.
       if (
         day.night &&
@@ -1454,6 +1465,11 @@ export class Simulation {
         !a.onsite
       )
         a.wait = Math.max(a.wait, STEP * 2);
+      if(a.onsite&&this.building(a.onsite)?.kind==="market") {
+        const market=this.building(a.onsite)!;
+        if(marketOpen(this.state.tick)&&market.enabled&&market.connected&&this.state.residents.some(r=>r.id===a.resident&&r.job===market.id)){a.wait=1;a.active=false;continue;}
+        delete a.onsite;a.wait=0;
+      }
       if (a.onsite && this.building(a.onsite)?.construction) {
         a.wait = 1;
         a.active = false;
@@ -1526,9 +1542,10 @@ export class Simulation {
           a.parkSlot=parkSlot;
           a.wait = a.returning&&arrival&&isPark(arrival.kind)?(parkSlot!==undefined?parkVisitDuration(a.id):0):4+(a.id%8);
           a.active = false;
+          if(a.returning&&arrival?.kind==="market"&&resident&&resident.job!==arrival.id)buyAtMarket(this,a,arrival,resident);
           if (
             a.returning &&
-            (this.building(a.target)?.construction || this.building(a.target)?.kind === "forester" || isExtractor(this.building(a.target)?.kind??"")) &&
+            (this.building(a.target)?.construction || this.building(a.target)?.kind === "forester" || (this.building(a.target)?.kind === "market"&&marketOpen(this.state.tick)) || isExtractor(this.building(a.target)?.kind??"")) &&
             this.state.residents.some(
               (r) => r.id === a.resident && r.job === a.target,
             )
@@ -1545,6 +1562,7 @@ export class Simulation {
       this.earn(this.state.residents.length * 6,"tax");
       let demand = Math.ceil(this.state.residents.length / 3);
       const needed = demand;
+      const meals=Math.min(demand,this.state.marketMeals??0);demand-=meals;this.state.marketMeals=Math.max(0,(this.state.marketMeals??0)-meals);
       for (const w of this.state.buildings.filter(
         (b) => b.kind === "warehouse",
       )) {
@@ -1575,6 +1593,18 @@ export class Simulation {
         const path=this.route(warehouse,target,"truck");if(!path)continue;
         const amount=Math.min(6,warehouse.inventory.metal??0);warehouse.inventory.metal!-=amount;
         this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:warehouse.id,target:target.id,cargo:"metal",amount,returning:false,wait:0});break;
+      }
+    }
+    for(const source of this.state.buildings.filter(b=>b.kind==="warehouse"&&warehouseReady(b)&&b.connected&&b.enabled)){
+      if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
+      const markets=this.state.buildings.filter(b=>b.kind==="market"&&!b.construction&&b.connected&&b.enabled).sort((a,b)=>marketStock(a)-marketStock(b));
+      let sent=false;for(const target of markets){
+        for(const cargo of [...MARKET_GOODS].sort((a,b)=>(target.inventory[a]??0)-(target.inventory[b]??0))){
+          const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo===cargo).reduce((n,a)=>n+a.amount,0),room=marketStalls(target)*4-(target.inventory[cargo]??0)-incoming;
+          if(room<=0||(source.inventory[cargo]??0)<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;
+          const amount=Math.min(6,room,source.inventory[cargo]??0);source.inventory[cargo]!-=amount;
+          this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo,amount,returning:false,wait:0});sent=true;break;
+        }if(sent)break;
       }
     }
     for (const b of this.state.buildings) {
@@ -1625,7 +1655,7 @@ export class Simulation {
           .reduce((n, a) => n + a.amount, 0);
         if (
           (dest.inventory[r.output] ?? 0) + incoming >=
-            outputCapacity(dest) + 4 &&
+            (dest.kind==="market"?marketStalls(dest)*4:outputCapacity(dest)+4) &&
           dest.kind !== "warehouse"
         )
           continue;
@@ -1731,11 +1761,11 @@ export class Simulation {
         title: "Output storage full",
         message: `Waiting for a delivery to collect ${d.recipe.output}. Check road access and downstream demand.`,
       };
-    if (d.jobs > b.workers)
+    if (buildingJobs(b) > b.workers)
       return {
         kind: "workers",
         title: "Waiting for workers",
-        message: `${b.workers} of ${d.jobs} jobs filled. Connect more homes or upgrade a connected house.`,
+        message: `${b.workers} of ${buildingJobs(b)} jobs filled. Connect more homes or upgrade a connected house.`,
       };
     if (
       d.recipe?.input &&
@@ -1772,6 +1802,7 @@ export class Simulation {
   status(b: Building) {
     const alert = this.alert(b);
     if (alert) return alert.title;
+    if(b.kind==="market")return marketOpen(this.state.tick)?`${marketVendors(this,b).length} vendors serving · ${b.produced} sales`:"Opens at 07:00";
     if (b.kind === "fishery") return fishingStatus(b);
     if(isExtractor(b.kind))return b.mining?.some(t=>t.phase==="returning")?"Carrying resources to the workplace":b.mining?.some(t=>t.phase==="mining")?"Mining the rock face":daylight(this.state.tick).night?"Miners resting until morning":"Miners walking to the deposit";
     if (b.kind === "forester") return b.forestry?.some(t=>t.phase==="returning") ? "Bringing logs to the lodge" : b.forestry?.some(t=>t.phase==="chopping") ? "Cutting trees" : daylight(this.state.tick).night ? "Foresters resting until morning" : "Workers walking to trees";
@@ -1820,6 +1851,7 @@ export function parseSave(raw: string): World {
     !finite(s.exported)
   )
     throw new Error("This save is not compatible with this version.");
+  if(s.marketMeals!==undefined&&(!finite(s.marketMeals)||s.marketMeals!>2400))throw new Error("Invalid market meals.");
   if(s.income!==undefined&&(!Array.isArray(s.income)||s.income.length>3000||s.income.some(e=>!e||!Number.isSafeInteger(e.tick)||e.tick<0||e.tick>s.tick||!finite(e.amount)||!["tax","exports","market"].includes(e.source))))throw new Error("Invalid income history.");
   const legacy = s.version === 1;
   validateTerrain(s.terrain);
@@ -1864,7 +1896,7 @@ export function parseSave(raw: string): World {
   )) throw new Error("Invalid road surfaces.");
   for (const b of s.buildings) {
     const clearance=b.construction?.clearance;
-    if(clearance&&(!Array.isArray(clearance.tiles)||!clearance.tiles.length||clearance.tiles.length>16||!finite(clearance.work)||clearance.work>=ROCK_CLEARING_WORK||clearance.tiles.some(p=>!p||!Number.isInteger(p.x)||!Number.isInteger(p.y)||!exposedDeposit(s,p)||!footprint(b.kind,b.x,b.y,b.rotation,b.plot).some(q=>q.x===p.x&&q.y===p.y))||new Set(clearance.tiles.map(key)).size!==clearance.tiles.length))throw new Error("Invalid surface clearance.");
+    if(clearance&&(!Array.isArray(clearance.tiles)||!clearance.tiles.length||clearance.tiles.length>25||!finite(clearance.work)||clearance.work>=ROCK_CLEARING_WORK||clearance.tiles.some(p=>!p||!Number.isInteger(p.x)||!Number.isInteger(p.y)||!exposedDeposit(s,p)||!footprint(b.kind,b.x,b.y,b.rotation,b.plot).some(q=>q.x===p.x&&q.y===p.y))||new Set(clearance.tiles.map(key)).size!==clearance.tiles.length))throw new Error("Invalid surface clearance.");
     if(b.deposit!==undefined&&(!isExtractor(b.kind)||DEPOSITS[b.deposit] !== (b.kind==="quarry"?"stone":"metal")))throw new Error("Invalid assigned deposit.");
     if(b.mining!==undefined&&(!isExtractor(b.kind)||!Array.isArray(b.mining)||b.mining.length>4||!b.mining.every(t=>validMiningTrip(t)&&t.deposit===buildingDeposit(b))))throw new Error("Invalid mining work.");
     if (b.forestry !== undefined && (b.kind!=="forester" || !Array.isArray(b.forestry) || b.forestry.length>2 || !b.forestry.every(validForestTrip))) throw new Error("Invalid forestry work.");
@@ -1964,7 +1996,7 @@ export function parseSave(raw: string): World {
       (b.plot !== undefined &&
         (!Array.isArray(b.plot) ||
           b.plot.length !== 2 ||
-          ![
+          !(b.kind==="market"&&validMarketPlot(b.plot)) && ![
             FOOTPRINTS[b.kind].join(","),
             [...FOOTPRINTS[b.kind]].reverse().join(","),
           ].includes(b.plot.join(","))))
@@ -2130,6 +2162,7 @@ export function parseSave(raw: string): World {
   for (const r of s.residents){
     r.leisure = finite(r.leisure) ? Math.min(100, r.leisure!) : 60;
     r.faith=finite(r.faith)?Math.min(100,r.faith!):70;
+    if(r.lastShopping!==undefined&&(!Number.isInteger(r.lastShopping)||r.lastShopping<0||r.lastShopping>s.tick))delete r.lastShopping;
   }
   // Keep validated on-site builders through a reload, reconstructing their
   // route from the entrance instead of trusting saved movement coordinates.
@@ -2138,7 +2171,7 @@ export function parseSave(raw: string): World {
   for (const a of savedBuilders) {
     if (!a || !Number.isInteger(a.id) || a.id < 1 || ids.has(a.id) || residentIds.has(a.id) || a.resident === null || restoredResidents.has(a.resident)) continue;
     const resident = s.residents.find(r => r.id === a.resident && r.home === a.source && r.job === a.onsite);
-    const site = s.buildings.find(b => b.id === a.onsite && b.id === a.target && b.construction && b.enabled);
+    const site = s.buildings.find(b => b.id === a.onsite && b.id === a.target && (b.construction || (b.kind === "market" && marketOpen(s.tick))) && b.enabled);
     if (!resident || !site || (a.kind !== "person" && a.kind !== "car")) continue;
     const entrance = frontage(site.kind,site.x,site.y,site.rotation,site.plot).find(p => s.roads.includes(key(p)));
     if (!entrance) continue;

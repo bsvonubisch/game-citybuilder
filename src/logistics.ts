@@ -1,3 +1,4 @@
+import {MARKET_GOODS} from "./market.js";
 import { BUILDINGS, type Resource } from "./catalog.js";
 import type {
   Agent,
@@ -33,7 +34,7 @@ export function canSupply(source: Building, target: Building) {
     !target.construction &&
     !!output &&
     source.id !== target.id &&
-    (BUILDINGS[target.kind].recipe?.input === output ||
+    (BUILDINGS[target.kind].recipe?.input === output || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||
       (target.kind === "warehouse" &&
         ["bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
           output,

@@ -79,7 +79,7 @@ export function nextUpgrade(b: Building) {
     } as Partial<Record<Resource, number>>,
     labour: constructionWork(b.kind) * next,
     benefit:
-      b.kind === "church" || b.kind === "tavern" || b.kind === "park" || b.kind === "garden"
+      b.kind === "market" ? `Sales earn ${Math.round((1+(next-1)*.1)*100)}% gold · same stalls, staff and plot.` : b.kind === "church" || b.kind === "tavern" || b.kind === "park" || b.kind === "garden"
         ? `Serves ${next * (b.kind === "church" || b.kind === "garden" ? 40 : b.kind === "tavern" ? 18 : 12)} nearby residents; walking range stays the same.`
         : b.kind === "warehouse"
           ? `Tool exports earn ${Math.round(35 * (1 + (next - 1) * 0.1))} gold each. Stock and road network stay here.`

@@ -1,3 +1,4 @@
+import {marketPrice,marketStalls} from "./market-layout.js";
 export type Resource =
   | "bricks"
   | "grain"
@@ -10,6 +11,7 @@ export type Resource =
   | "planks"
   | "tools";
 export type BuildingKind =
+  | "market"
   | "church"
   | "garden"
   | "cottage"
@@ -77,6 +79,7 @@ export const houseCapacity = (b: {
   level?: HouseTier;
 }) => (b.kind === "house" ? HOUSE_TIERS[b.houseTier ?? 1].capacity : b.kind === "cottage" ? 1 + (b.level ?? 1) : 0);
 export const buildingInvestment = (b: {
+  plot?:readonly[number,number];
   kind: BuildingKind;
   houseTier?: HouseTier;
   level?: HouseTier;
@@ -85,7 +88,7 @@ export const buildingInvestment = (b: {
     ? ([1, 2, 3] as HouseTier[])
         .filter((t) => t <= (b.houseTier ?? 1))
         .reduce((sum, t) => sum + HOUSE_TIERS[t].cost, 0)
-    : BUILDINGS[b.kind].cost *
+    : (b.kind==="market"?marketPrice(b.plot).cost:BUILDINGS[b.kind].cost) *
       ((b.level ?? 1) === 3 ? 6 : (b.level ?? 1) === 2 ? 3 : 1);
 export type DecorationKind =
   | "oak"
@@ -181,6 +184,7 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
+  market:{name:"Marketplace",cost:260,jobs:2,frame:0,materials:{wood:12,stone:12,planks:4},category:"town",description:"Choose a 1×1 to 5×5 plot. Vendors sell delivered food and tools to nearby residents. Open 07:00–19:00."},
   church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{"planks":16,"stone":30,"metal":4},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors from 08:00 to 20:00; religion improves after a visit."},
   garden:{name:"Town park",cost:380,jobs:0,frame:0,materials:{"wood":12,"stone":20,"metal":4},category:"town",description:"A spacious 4×4 garden with lawns, shaded benches and a fountain. Daytime leisure for 40 residents within 18 road tiles."},
   cottage: {name:"Little cottage", cost:55, jobs:0, frame:0, materials:{"wood":3,"stone":2}, category:"homes", description:"A compact 1×1 home for two residents. Upgrade for more room without enlarging the plot."},
@@ -368,6 +372,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   tools: "Tools",
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
+    market:[2,2],
   church:[2,3],
   garden:[4,4],
   cottage:[1,1],
@@ -429,7 +434,7 @@ export function frontage(
 ) {
   const [w, h] = dimensions(kind, rotation, plot),
     d = FRONT_DIRECTIONS[rotation];
-  if (isPark(kind))
+  if (isPark(kind) || kind === "market")
     return [
       ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y - 1 })),
       ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y + h })),
@@ -450,3 +455,6 @@ export const STARTING_SIZE = 28;
 export const SIZE = 64;
 export const STEP = 0.25;
 export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;
+
+export const buildingJobs=(b:{kind:BuildingKind;rotation:number;plot?:readonly[number,number]})=>b.kind==="market"?marketStalls({x:0,y:0,...b}):BUILDINGS[b.kind].jobs;
+export const buildingPrice=(kind:BuildingKind,plot?:readonly[number,number])=>kind==="market"?marketPrice(plot):{cost:BUILDINGS[kind].cost,materials:BUILDINGS[kind].materials??{}};

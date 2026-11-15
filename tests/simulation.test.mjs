@@ -1925,7 +1925,7 @@ test("all building views share exact raised plot bounds and stone density", () =
         ]);
         assert.ok(
           buildingArt(kind, rotation, tier).texture.startsWith(
-            kind === "park" || kind === "garden" ? "park-" : "building-",
+            kind === "market" ? "market-" : kind === "park" || kind === "garden" ? "park-" : "building-",
           ),
         );
         count++;

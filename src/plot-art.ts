@@ -1,3 +1,4 @@
+import {drawMarket} from "./market-art.js";
 import type Phaser from "phaser";
 import { buildingArt, type BuildingArt } from "./building-art.js";
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
@@ -41,6 +42,7 @@ export function drawPlot(
     const rotation = [1, 0, 3, 2].indexOf(art.frame);
     drawFisheryPlatform(ctx, rotation, stone, wood);
   } else drawFoundation(ctx, w, h, stone);
+  if(art.texture==="market-stalls"){if(plaza)drawMarket(ctx,source,w,h,art.frame);return;}
   if (art.texture === "park-parts") {
     if(art.plazaSize===4 && meadow){
       ctx.save();ctx.transform(32,16,-32,16,0,-FOUNDATION_HEIGHT);
@@ -76,6 +78,7 @@ export function drawPlot(
 }
 
 export function plotBounds(art: BuildingArt, w: number, h: number) {
+  if(art.texture==="market-stalls")return {left:-h*32-32,top:-78,right:w*32+32,bottom:(w+h)*16+8};
   const t = artTransform(art, w, h),
     [cw, ch] = art.size;
   const corners = [t.point(0, 0), t.point(cw, ch), ...plotOutline(w, h)];
@@ -107,7 +110,7 @@ export class PlotArt {
     houseTier: HouseTier = 1,
   ) {
     const [w, h] = dimensions(kind, rotation, plot),
-      key = `fitted-${kind}-${houseTier}-${rotation}-${w}-${h}`;
+      key = `fitted-${kind}-${houseTier}-${rotation}-${w}-${h}-${kind==="market"&&!sprite.getData("buildingId")?"preview":"placed"}`;
     let fit = this.cache.get(key);
     if (!fit) {
       const art = buildingArt(kind, rotation, houseTier),
@@ -138,7 +141,7 @@ export class PlotArt {
         this.scene.textures
           .get("bridge-wood")
           .getSourceImage() as HTMLImageElement,
-        false,
+        kind==="market"&&!sprite.getData("buildingId"),
         this.scene.textures.get("meadow").getSourceImage() as HTMLImageElement,
       );
       texture.refresh();
