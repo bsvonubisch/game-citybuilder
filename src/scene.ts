@@ -4,6 +4,7 @@ import { ShadowArt } from "./shadow-art.js";
 import { planRoad, type RoadPlan } from "./road-stroke.js";
 import { prepareRoadSurfaces } from "./road-art.js";
 import { ForestryArt, prepareForestryFrames } from "./forestry-art.js";
+import {PlanterArt,planterMask} from "./planter-art.js";
 import { forestCenter, forestTargets, FOREST_RADIUS } from "./forestry.js";
 import { depositAt, exposedDeposit, depositTiles, buildingDeposit, MINING_RADIUS, isExtractor } from "./deposits.js";
 import { miningTargets } from "./mining.js";
@@ -186,6 +187,7 @@ export class TownScene extends Phaser.Scene {
   private plotArt!: PlotArt;
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
+  private planterArt!: PlanterArt;
   private buildingAlerts!: BuildingAlerts;
   private cameraKey = "";
   private bridgeArt!: BridgeArt;
@@ -264,6 +266,7 @@ export class TownScene extends Phaser.Scene {
     prepareForestryFrames(this);
     prepareForestryFrames(this,"mining");
     this.forestryArt=new ForestryArt(this);
+    this.planterArt=new PlanterArt(this);
     this.events.once("shutdown",()=>this.forestryArt.clear());
     this.nightArt = new NightArt(this);
     this.shadowArt = new ShadowArt(this);
@@ -725,6 +728,7 @@ export class TownScene extends Phaser.Scene {
         .setData("decoration", d)
         .setInteractive({ pixelPerfect: true });
       sprite.setScale(def.height / sprite.frame.height);
+      if(d.kind==="planter")this.planterArt.place(sprite,d.x,d.y,planterMask(d,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain)));
       if (d.kind === "fence")
         this.fenceArt.place(
           sprite,
@@ -949,6 +953,7 @@ export class TownScene extends Phaser.Scene {
             this.hover.y,
             fenceMask(this.hover, this.simulation.state.decorations),
           );
+        if(this.tool==="planter")this.planterArt.place(this.decorationGhost,this.hover.x,this.hover.y,planterMask(this.hover,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain)));
         this.decorationGhost.y -= groundHeight(
           this.hover.x,
           this.hover.y,
