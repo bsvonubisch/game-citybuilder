@@ -3549,6 +3549,7 @@ dialog p.muted {
 .placement-cost span{display:inline-flex;align-items:center;gap:4px;}
 .placement-cost .icon{width:14px;height:14px;}
 .placement-cost .shortage{color:#ad5135;}
+.placement-cost .plot-size{display:block;font-size:14px;font-weight:700;margin:0 0 8px;color:#365a43}
 @media(max-width:600px){.build-drawer .building-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.build-drawer .category-tabs button{padding:7px 8px;font-size:10px;}.build-drawer .building-card .building-icon{height:70px;}.build-drawer .building-card{min-height:146px;}}
 
 .market-size{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.market-size label{display:flex;gap:6px;align-items:center}.market-size select{padding:7px 10px;border:1px solid #c9cbbb;border-radius:7px;background:#fffdf4;color:#34533e}.market-size b{font-size:11px}

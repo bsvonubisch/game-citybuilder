@@ -288,8 +288,8 @@ function toast(message: string) {
     4200,
   );
 }
-function setTool(next: Tool) {
-  scene.cancelRoad();
+function setTool(next: Tool, preservePlot=false) {
+  scene.cancelRoad(!preservePlot);
   scene.clearBuildingHover();
   scene.guidanceBuilding = null;
   if (next !== "move") scene.movingBuilding = null;
@@ -421,7 +421,7 @@ function rotatePlacement() {
   if(tool==="market")scene.marketPlot=[scene.marketPlot[1],scene.marketPlot[0]];
   scene.rotation = ((scene.rotation + 1) % 4) as 0 | 1 | 2 | 3;
   scene.drawOverlay();
-  setTool(tool);
+  setTool(tool,true);
   toast(`Front entrance facing ${FRONT_NAMES[scene.rotation]}.`);
 }
 function cancelTool() {
@@ -578,22 +578,25 @@ function updateMarketPreview(){
   updatePlacementCost();
 }
 scene.onMarketPreview=updateMarketPreview;
-let costPointer:{x:number;y:number}|null=null;
+let costPointer:{x:number;y:number;touch:boolean}|null=null;
 function updatePlacementCost(){
   if(typeof placementCost==="undefined")return;
   const d=isBuilding(tool)?{...BUILDINGS[tool],...(tool==='farm'?farmPrice(scene.farmPlot):tool==="market"?marketPrice(scene.marketPlot):{})}:isDecoration(tool)?DECORATIONS[tool]:null;
   placementCost.hidden=!d||!costPointer;
   if(!d||!costPointer)return;
   const rows=[{name:"Gold",icon:"coin",need:d.cost,have:simulation.state.money},...Object.entries("materials" in d?d.materials??{}:{}).map(([r,n])=>({name:RESOURCE_NAMES[r as Resource],icon:r==="bricks"?"box":r,need:n,have:simulation.stored(r as Resource)}))];
-  placementCost.innerHTML='<b>'+d.name+'</b><div>'+rows.map(r=>'<span class="'+(r.have<r.need?'shortage':'')+'">'+icon(r.icon)+r.need+' '+r.name+(r.have<r.need?' · have '+Math.floor(r.have):'')+'</span>').join('')+'</div>';
+  const plot=isBuilding(tool)?dimensions(tool,scene.rotation,tool==='farm'?scene.farmPlot:tool==='market'?scene.marketPlot:undefined):null;
+  placementCost.innerHTML='<b>'+d.name+'</b>'+(plot?'<span class="plot-size">'+plot.join(' × ')+' · '+plot[0]*plot[1]+' tiles</span>':'')+'<div>'+rows.map(r=>'<span class="'+(r.have<r.need?'shortage':'')+'">'+icon(r.icon)+r.need+' '+r.name+(r.have<r.need?' · have '+Math.floor(r.have):'')+'</span>').join('')+'</div>';
   placementCost.style.left=Math.max(8,Math.min(costPointer.x+20,$(".world").clientWidth-placementCost.offsetWidth-8))+"px";
-  placementCost.style.top=Math.max(8,Math.min(costPointer.y+22,$(".world").clientHeight-placementCost.offsetHeight-90))+"px";
+  placementCost.style.top=Math.max(8,Math.min(costPointer.touch?costPointer.y-placementCost.offsetHeight-25:costPointer.y+22,$(".world").clientHeight-placementCost.offsetHeight-90))+"px";
 }
-$(".world").addEventListener("pointermove",event=>{if(!(event.target instanceof HTMLCanvasElement)){costPointer=null;placementCost.hidden=true;return;}const bounds=$(".world").getBoundingClientRect();costPointer={x:event.clientX-bounds.left,y:event.clientY-bounds.top};updatePlacementCost();});
+const placementPointer=(event:PointerEvent)=>{if(!(event.target instanceof HTMLCanvasElement)){costPointer=null;placementCost.hidden=true;return;}const bounds=$(".world").getBoundingClientRect();costPointer={x:event.clientX-bounds.left,y:event.clientY-bounds.top,touch:event.pointerType==='touch'};updatePlacementCost();};
+$(".world").addEventListener("pointermove",placementPointer);
+$(".world").addEventListener("pointerdown",placementPointer);
 $(".world").addEventListener("pointerleave",()=>{costPointer=null;placementCost.hidden=true;});
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
-scene.onEyedropper=(kind,rotation,plot)=>{scene.rotation=rotation;if(kind==='farm'&&plot)scene.farmPlot=[...plot];if(kind==="market"&&plot)scene.marketPlot=[...plot];setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
+scene.onEyedropper=(kind,rotation,plot)=>{scene.rotation=rotation;if(kind==='farm'&&plot)scene.farmPlot=[...plot];if(kind==="market"&&plot)scene.marketPlot=[...plot];setTool(kind,true);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
 scene.onSelectDecoration=(id)=>{selectedDecoration=id;selected=null;scene.selected=null;selectedAgent=null;scene.selectedAgent=null;scene.drawOverlay();renderDecorationInspector();};
 scene.onDecorationRemove=async(id)=>{const result=await gateway.command({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onRemoveApply=async(from,to)=>{const result=await gateway.command({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};

@@ -207,8 +207,9 @@ export class TownScene extends Phaser.Scene {
   private roadDrag: { from: Point; to: Point; pointer: number; decoration?:number } | null = null;
   onRoadPreview: (plan: RoadPlan | null) => void = () => {};
   onRoadApply: (from: Point, to: Point) => void = () => {};
-  cancelRoad() {
+  cancelRoad(resetPlots=true) {
     this.marketDrag=null;
+    if(resetPlots){this.farmPlot=[1,1];this.marketPlot=[1,1];this.onMarketPreview();}
     this.roadDrag = null;
     this.onRoadPreview(null);
   }
@@ -525,6 +526,7 @@ export class TownScene extends Phaser.Scene {
           const rect=(this.tool==='farm'?farmRectangle:marketRectangle)(this.marketDrag.from,this.marketDrag.to);this.marketDrag=null;
           if(p.wasTouch)this.touches.end(p.id);
           if(p.event.type!=="touchcancel"){if(this.tool==='farm')this.farmPlot=rect.plot;else this.marketPlot=rect.plot;this.onTile({x:rect.x,y:rect.y});}
+          this.cancelRoad();
           this.drawOverlay();return;
         }
         if (this.roadDrag?.pointer === p.id && (this.tool === "road"||this.tool === "bulldoze")) {
