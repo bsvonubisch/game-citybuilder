@@ -983,6 +983,7 @@ function updateInspector() {
     ? `<div class="status-heading">${icon(alertIcon[alert.kind])}<b>${escapeHtml(alert.title)}</b></div><p>${escapeHtml(alert.message)}</p>`
     : escapeHtml(simulation.status(b));
   $("#building-status").classList.toggle("warning", !!alert);
+  $("#building-status").dataset.kind = alert?.kind ?? "ready";
   $("#building-detail").innerHTML =
     `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${d.jobs}</b></div>` : ""}${
       d.recipe
