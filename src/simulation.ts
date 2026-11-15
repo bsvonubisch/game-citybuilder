@@ -28,7 +28,7 @@ import {
   type Tool,
 } from "./catalog.js";
 import { initialDecorations, type Decoration } from "./decorations.js";
-import { daylight } from "./daylight.js";
+import { daylight, DAY_TICKS, lengthenDays } from "./daylight.js";
 import {
   buildingLevel,
   nextUpgrade,
@@ -143,6 +143,7 @@ export interface World {
   valleyVersion?: 2;
   depositDepths?: Record<string, number>;
   geologyVersion?: 2;
+  clockVersion?: 2;
   clearedDeposits?: string[];
 }
 export type Command =
@@ -256,6 +257,7 @@ export class Simulation {
           version: 3,
           valleyVersion: 2,
           geologyVersion: 2,
+          clockVersion: 2,
           depositDepths: {},
           tick: 0,
           revision: 0,
@@ -297,6 +299,7 @@ export class Simulation {
       );
     expandValley(this.state);
     expandReserves(this.state);
+    lengthenDays(this.state);
     for(const b of this.state.buildings)if(isExtractor(b.kind))b.deposit=buildingDeposit(b);
     this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
     this.reconnect();
@@ -1411,7 +1414,7 @@ export class Simulation {
     }
     if (this.state.tick % (day.night ? 48 : 12) === 0) this.dispatch();
     this.traffic.plan(this.state.agents);
-    if (this.state.tick % 240 === 0) {
+    if (this.state.tick % DAY_TICKS === 0) {
       this.state.money += this.state.residents.length * 6;
       let demand = Math.ceil(this.state.residents.length / 3);
       const needed = demand;
@@ -1679,6 +1682,7 @@ export function parseSave(raw: string): World {
     !s.deposits ||
     (s.valleyVersion !== undefined && s.valleyVersion !== 2) ||
     (s.geologyVersion !== undefined && s.geologyVersion !== 2) ||
+    (s.clockVersion !== undefined && s.clockVersion !== 2) ||
     Object.entries(s.deposits).some(
       ([k, v]) =>
         !Object.hasOwn(DEPOSITS, k) || !finite(v) || !Number.isSafeInteger(v),
@@ -1983,6 +1987,7 @@ export function parseSave(raw: string): World {
   s.version = 3;
   expandValley(s as World);
   expandReserves(s as World);
+  lengthenDays(s);
   return s as World;
 }
 

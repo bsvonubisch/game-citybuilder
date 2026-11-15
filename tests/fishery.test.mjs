@@ -204,7 +204,7 @@ test("food demand consumes bread and fish without double charging and reports sh
       w = sim.state.buildings.find((b) => b.kind === "warehouse");
     w.inventory.bread = bread;
     w.inventory.fish = fish;
-    sim.state.tick = 239;
+    sim.state.tick = 959;
     sim.step();
     assert.equal(sim.state.food, expected);
     assert.equal((w.inventory.bread ?? 0) + (w.inventory.fish ?? 0), remaining);
@@ -270,9 +270,11 @@ test("boats reserve separate corridors and cannot sail through bridges, land or 
       }
   }
   assert.ok(b.produced > 0 && second.produced > 0);
-  const p = b.fishing?.path[0] ?? fishingRoute(sim, b)?.[0];
+  // Night may now last longer than a completed fishing trip. Wait for an actual
+  // boat departure before asserting that its reserved corridor is protected.
+  for(let tick=0;tick<1200&&!b.fishing;tick++)sim.step();
+  const p = b.fishing?.path[0];
   assert.ok(p);
-  if (!b.fishing) stepFishing(sim, b);
   assert.equal(
     execute(sim, { type: "place", kind: "road", x: p.x, y: p.y }).ok,
     false,

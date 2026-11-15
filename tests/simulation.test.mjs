@@ -42,7 +42,7 @@ import {
   deeperLayer,
 } from "../.test-dist/deposits.js";
 import { baseTerrain } from "../.test-dist/terrain.js";
-import { daylight, warmEmission, shiftChange } from "../.test-dist/daylight.js";
+import { daylight, warmEmission, shiftChange, DAY_TICKS, lengthenDays } from "../.test-dist/daylight.js";
 import {
   NIGHT_AMBIENT,
   windowGround,
@@ -94,10 +94,21 @@ const advance = (sim, seconds) => {
 test("the displayed day advances at midnight while keeping the 08:00 start", () => {
   assert.equal(daylight(0).day, 1);
   assert.equal(daylight(0).hour, 8);
-  assert.equal(daylight(159).day, 1);
-  assert.equal(daylight(160).day, 2);
-  assert.equal(daylight(160).hour, 0);
-  assert.equal(daylight(240).day, 2);
+  assert.equal(daylight(159 * 4).day, 1);
+  assert.equal(daylight(160 * 4).day, 2);
+  assert.equal(daylight(160 * 4).hour, 0);
+  assert.equal(daylight(240 * 4).day, 2);
+});
+
+test("longer days preserve old save date, hour and stump regrowth age exactly once",()=>{
+  assert.equal(DAY_TICKS*STEP,240);
+  const world={tick:750,decorations:[{cutAt:700}]};
+  lengthenDays(world);
+  assert.equal(daylight(world.tick).hour,11);
+  assert.equal(daylight(world.tick).day,4);
+  assert.equal(world.tick-world.decorations[0].cutAt,50);
+  const snapshot=structuredClone(world);lengthenDays(world);
+  assert.deepEqual(world,snapshot);
 });
 test("night light pools follow each rotated foundation and shadows point away from nearby lamps", () => {
   assert.ok(NIGHT_AMBIENT.every((value, i) => value < [122, 138, 177][i]));
@@ -123,12 +134,12 @@ test("night light pools follow each rotated foundation and shadows point away fr
   );
 });
 test("shift notices match work-rate boundaries and ignore loading, pauses and time resets", () => {
-  assert.equal(shiftChange(119, 120), "night");
-  assert.equal(daylight(120).workRate, 0.25);
-  assert.equal(shiftChange(219, 220), "morning");
-  assert.equal(daylight(220).workRate, 1);
+  assert.equal(shiftChange(119 * 4, 120 * 4), "night");
+  assert.equal(daylight(120 * 4).workRate, 0.25);
+  assert.equal(shiftChange(219 * 4, 220 * 4), "morning");
+  assert.equal(daylight(220 * 4).workRate, 1);
   assert.equal(
-    shiftChange(116, 124),
+    shiftChange(116 * 4, 124 * 4),
     "night",
     "accelerated play may skip the exact boundary",
   );
@@ -140,7 +151,7 @@ test("shift notices match work-rate boundaries and ignore loading, pauses and ti
     [0, 360],
     [99, 100],
   ]) {
-    assert.equal(shiftChange(before, after), null);
+    assert.equal(shiftChange(before === undefined ? undefined : before * 4, after * 4), null);
   }
 });
 test("construction roster follows assigned residents through travel and work, and clears on completion", () => {
@@ -2158,10 +2169,10 @@ test("unaffordable and duplicate excavation commands are atomic; malformed depth
 
 test("daylight is continuous, repeats daily and night production slows without changing inventory", () => {
   assert.equal(daylight(0).hour, 8);
-  assert.deepEqual(daylight(240), { ...daylight(0), day: 2 });
-  assert.equal(daylight(150).night, true);
-  assert.equal(daylight(150).workRate, 0.25);
-  for (let tick = 0; tick < 240; tick += 0.25)
+  assert.deepEqual(daylight(240 * 4), { ...daylight(0), day: 2 });
+  assert.equal(daylight(150 * 4).night, true);
+  assert.equal(daylight(150 * 4).workRate, 0.25);
+  for (let tick = 0; tick < DAY_TICKS; tick += 0.25)
     assert.ok(
       Math.abs(daylight(tick).light - daylight(tick + 0.25).light) < 0.03,
     );
@@ -2172,7 +2183,7 @@ test("daylight is continuous, repeats daily and night production slows without c
   sim.state.tick = 0;
   sim.step();
   assert.equal(b.progress, STEP);
-  sim.state.tick = 150;
+  sim.state.tick = 600;
   sim.step();
   assert.equal(b.progress, STEP * 1.25);
   assert.equal(b.inventory.grain, 0);
@@ -2188,7 +2199,7 @@ test("night keeps most residents at home while journeys already in progress cont
   );
   person.active = false;
   person.wait = 0;
-  sim.state.tick = 150;
+  sim.state.tick = 600;
   sim.step();
   assert.ok(person.wait > 0);
   assert.equal(person.segment, 0);
@@ -2240,7 +2251,7 @@ test("tavern visits improve leisure only on arrival during opening hours", () =>
       sim.roads.has(key(p)),
     ),
   );
-  sim.state.tick = 100;
+  sim.state.tick = 400;
   for (const r of sim.state.residents) r.leisure = 0;
   sim.reconnect();
   assert.equal(tavern.workers, 2);

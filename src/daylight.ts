@@ -1,6 +1,15 @@
-/** One existing simulation day remains 240 ticks. Start at 08:00. */
+import type { World } from "./simulation.js";
+/** Four minutes per day at 1x; start at 08:00. */
+export const DAY_TICKS=960;
+export function lengthenDays(world:Pick<World,"tick"|"clockVersion"|"decorations">) {
+  if(world.clockVersion===2)return;
+  const shift=world.tick*3;
+  world.tick+=shift;
+  for(const d of world.decorations??[])if(d.cutAt!==undefined)d.cutAt+=shift;
+  world.clockVersion=2;
+}
 export function daylight(tick: number) {
-  const hour = ((tick / 240) * 24 + 8) % 24;
+  const hour = ((tick / DAY_TICKS) * 24 + 8) % 24;
   const smooth = (n: number) => {
     const t = Math.max(0, Math.min(1, n));
     return t * t * (3 - 2 * t);
@@ -8,7 +17,7 @@ export function daylight(tick: number) {
   const light = smooth((hour - 5) / 2) * (1 - smooth((hour - 18) / 3));
   const night = hour < 6 || hour >= 20;
   return {
-    day: Math.floor((tick + 80) / 240) + 1,
+    day: Math.floor((tick + DAY_TICKS/3) / DAY_TICKS) + 1,
     hour,
     light,
     darkness: 1 - light,
@@ -27,7 +36,7 @@ export function daylight(tick: number) {
 
 /** Only announce a live shift transition, never loading a save or a paused tick. */
 export function shiftChange(previous: number | undefined, tick: number) {
-  if (previous === undefined || tick <= previous || tick - previous >= 240)
+  if (previous === undefined || tick <= previous || tick - previous >= DAY_TICKS)
     return null;
   const now = daylight(tick);
   if (daylight(previous).night === now.night) return null;
