@@ -1,3 +1,5 @@
+import {finishRoadFixture} from './roadwork-fixture.mjs';
+const executeFinishedRoad=(...args)=>{const result=execute(...args);if(result.ok)finishRoadFixture(args[0]);return result;};
 import test from "node:test";
 import assert from "node:assert/strict";
 import { nearbyDeposits } from "../.test-dist/deposits.js";
@@ -584,12 +586,12 @@ test("bridges connect people and deliveries across an inlet and survive a save r
     money = sim.state.money;
   assert.equal(sim.path({ x: 21, y: 10 }, { x: 21, y: 16 }), null);
   assert.equal(
-    execute(sim, { type: "place", kind: "bridge", x: 20, y: 12 }).ok,
+    executeFinishedRoad(sim, { type: "place", kind: "bridge", x: 20, y: 12 }).ok,
     false,
     "bridge tool requires water",
   );
   assert.equal(
-    execute(sim, { type: "place", kind: "bridge", x: 21, y: 13 }).ok,
+    executeFinishedRoad(sim, { type: "place", kind: "bridge", x: 21, y: 13 }).ok,
     true,
   );
   assert.equal(sim.state.money, money - 35);
@@ -608,7 +610,7 @@ test("bridges connect people and deliveries across an inlet and survive a save r
   const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
   assert.ok(restored.path({ x: 21, y: 10 }, { x: 21, y: 16 }));
   assert.equal(roadHeight(restored.roads, 21, 13), BRIDGE_HEIGHT);
-  assert.equal(execute(restored, { type: "demolish", x: 21, y: 13 }).ok, true);
+  assert.equal(executeFinishedRoad(restored, { type: "demolish", x: 21, y: 13 }).ok, true);
   assert.equal(restored.path({ x: 21, y: 10 }, { x: 21, y: 16 }), null);
   assert.equal(
     restored.state.buildings.find((b) => b.kind === "forester").connected,
@@ -1260,8 +1262,8 @@ test("empty forest areas produce no free timber", () => {
 test("disconnecting roads stops production and removes impossible routes", () => {
   const sim = new Simulation();
   const farm = sim.state.buildings.find((b) => b.kind === "farm");
-  assert.equal(execute(sim, { type: "demolish", x: 13, y: 4 }).ok, true);
-  assert.equal(execute(sim, { type: "demolish", x: 13, y: 5 }).ok, true);
+  assert.equal(executeFinishedRoad(sim, { type: "demolish", x: 13, y: 4 }).ok, true);
+  assert.equal(executeFinishedRoad(sim, { type: "demolish", x: 13, y: 5 }).ok, true);
   assert.equal(farm.connected, false);
   advance(sim, 30);
   assert.equal(farm.produced, 0);
@@ -1545,7 +1547,7 @@ test("one road drag builds roads and bridges together, charges only new tiles, a
   const sim = new Simulation();
   const from = { x: 1, y: 1 }, to = { x: 5, y: 1 };
   sim.state.terrain = { "3,1": { kind: "water", height: 0 } };
-  assert.equal(execute(sim, { type: "place", kind: "road", ...from }).ok, true);
+  assert.equal(executeFinishedRoad(sim, { type: "place", kind: "road", ...from }).ok, true);
   sim.state.decorations = sim.state.decorations.filter((d) => ![
     "2,1", "2,2", "3,1",
   ].includes(key(d)));
@@ -1564,9 +1566,9 @@ test("one road drag builds roads and bridges together, charges only new tiles, a
   assert.equal(plan.cost, 12 * 3 + 55);
   assert.deepEqual(sim.snapshot(), before, "preview does not modify the town");
   const command = { type: "roadStroke", from, to };
-  const result = execute(sim, command, "whole-road-once");
+  const result = executeFinishedRoad(sim, command, "whole-road-once");
   assert.equal(result.ok, true, result.message);
-  assert.equal(sim.state.revision, before.revision + 1);
+  assert.ok(sim.state.revision > before.revision);
   assert.equal(sim.state.money, before.money - plan.cost);
   for (const p of plan.tiles) assert.ok(sim.roads.has(key(p)));
   assert.equal(isBridge(sim.roads, 3, 1, sim.state.terrain), true);
@@ -1579,9 +1581,9 @@ test("one road drag builds roads and bridges together, charges only new tiles, a
     assert.equal(current.progress, old.progress);
   }
   const after = sim.snapshot();
-  assert.deepEqual(execute(sim, command, "whole-road-once"), result);
+  assert.deepEqual(executeFinishedRoad(sim, command, "whole-road-once"), result);
   assert.deepEqual(sim.snapshot(), after, "repeating the command never charges twice");
-  assert.equal(execute(sim, command).ok, false, "an existing stretch needs no new construction");
+  assert.equal(executeFinishedRoad(sim, command).ok, false, "an existing stretch needs no new construction");
   assert.deepEqual(sim.snapshot(), after);
   const restored = new Simulation(parseSave(JSON.stringify(after)));
   assert.deepEqual(restored.state.roads, after.roads);
@@ -1626,7 +1628,7 @@ test("a whole road stretch accepts gentle slopes but rejects a changed town revi
   const before = sim.snapshot();
   assert.equal(sim.execute({ id: "old-road", actorId: "test", expectedRevision: before.revision - 1, command }).ok, false);
   assert.deepEqual(sim.snapshot(), before);
-  assert.equal(execute(sim, command).ok, true);
+  assert.equal(executeFinishedRoad(sim, command).ok, true);
   assert.equal(sim.state.money, before.money - 36);
   for (const x of [1.5, 2.5]) assert.ok(Math.abs(
     roadHeight(sim.roads, x - 1e-7, 1, [], sim.state.terrain) -
@@ -1644,7 +1646,7 @@ test("road surfaces build cheaply, upgrade for the difference, persist and refun
     const preview = planRoad(sim, from, to, roadType);
     assert.equal(preview.cost, price);
     assert.equal(preview.upgrades.length, upgrades);
-    assert.equal(execute(sim, { type: "roadStroke", from, to, roadType }).ok, true);
+    assert.equal(executeFinishedRoad(sim, { type: "roadStroke", from, to, roadType }).ok, true);
     assert.equal(sim.state.money, before.money - price);
     for (const p of roadStroke(from, to)) assert.equal(roadTypeAt(sim.state.roadTypes, p), roadType);
     for (const b of sim.state.buildings) {
@@ -1659,14 +1661,14 @@ test("road surfaces build cheaply, upgrade for the difference, persist and refun
   assert.equal(sim.state.money, initialMoney - 4 * ROAD_TYPES.brick.cost);
   const before = sim.snapshot();
   for (const roadType of ["dirt", "stone", "brick"]) {
-    assert.equal(execute(sim, { type: "roadStroke", from, to, roadType }).ok, false);
+    assert.equal(executeFinishedRoad(sim, { type: "roadStroke", from, to, roadType }).ok, false);
     assert.deepEqual(sim.snapshot(), before, "same or lower quality never charges or downgrades");
   }
-  assert.equal(execute(sim, { type: "demolish", ...from }).ok, true);
+  assert.equal(executeFinishedRoad(sim, { type: "demolish", ...from }).ok, true);
   assert.equal(sim.state.money, before.money + ROAD_TYPES.brick.cost / 2);
   assert.ok(!Object.hasOwn(sim.state.roadTypes, key(from)));
   assert.doesNotThrow(() => parseSave(JSON.stringify(sim.snapshot())));
-  assert.equal(execute(sim, { type: "place", kind: "road", ...from }).ok, true);
+  assert.equal(executeFinishedRoad(sim, { type: "place", kind: "road", ...from }).ok, true);
   assert.equal(roadTypeAt(sim.state.roadTypes, from), "stone", "removed metadata cannot change a replacement road");
 });
 
@@ -1674,7 +1676,7 @@ test("mixed upgrades and additions are atomic and bridge surfaces follow the cho
   const sim = new Simulation();
   const from = { x: 1, y: 1 }, to = { x: 5, y: 1 };
   sim.state.terrain = { "3,1": { kind: "water", height: 0 } };
-  assert.equal(execute(sim, { type: "roadStroke", from, to: { x: 2, y: 1 }, roadType: "dirt" }).ok, true);
+  assert.equal(executeFinishedRoad(sim, { type: "roadStroke", from, to: { x: 2, y: 1 }, roadType: "dirt" }).ok, true);
   sim.state.buildings.find(b=>b.kind==="warehouse").inventory.bricks=20;
   const plan = planRoad(sim, from, to, "brick");
   assert.equal(plan.cost, 2 * (24 - 6) + 2 * 24 + 75);
@@ -1683,10 +1685,10 @@ test("mixed upgrades and additions are atomic and bridge surfaces follow the cho
   assert.equal(plan.bridges, 1);
   sim.state.money = plan.cost - 1;
   const before = sim.snapshot();
-  assert.equal(execute(sim, { type: "roadStroke", from, to, roadType: "brick" }).ok, false);
+  assert.equal(executeFinishedRoad(sim, { type: "roadStroke", from, to, roadType: "brick" }).ok, false);
   assert.deepEqual(sim.snapshot(), before);
   sim.state.money++;
-  assert.equal(execute(sim, { type: "roadStroke", from, to, roadType: "brick" }).ok, true);
+  assert.equal(executeFinishedRoad(sim, { type: "roadStroke", from, to, roadType: "brick" }).ok, true);
   assert.equal(sim.state.money, 0);
   assert.equal(roadTypeAt(sim.state.roadTypes, { x: 3, y: 1 }), "brick");
   assert.equal(planRoad(sim, { x: 3, y: 1 }, { x: 3, y: 1 }, "brick").cost, 0);
@@ -1810,13 +1812,13 @@ test("ponds flood connected low ground, permit real bridges, and filling water p
     "2,1": { kind: "land", height: -1 },
   };
   assert.equal(
-    execute(sim, { type: "terrain", mode: "water", x: 1, y: 1, size: 1 }).ok,
+    executeFinishedRoad(sim, { type: "terrain", mode: "water", x: 1, y: 1, size: 1 }).ok,
     true,
   );
   assert.equal(terrainCell(2, 1, sim.state.terrain).kind, "water");
   assert.equal(terrainCell(3, 1, sim.state.terrain).kind, "land");
   assert.equal(
-    execute(sim, { type: "place", kind: "bridge", x: 1, y: 1 }).ok,
+    executeFinishedRoad(sim, { type: "place", kind: "bridge", x: 1, y: 1 }).ok,
     true,
   );
   assert.equal(isBridge(sim.roads, 1, 1, sim.state.terrain), true);
@@ -1824,11 +1826,11 @@ test("ponds flood connected low ground, permit real bridges, and filling water p
     roadHeight(sim.roads, 1, 1, sim.state.buildings, sim.state.terrain) > 0,
   );
   assert.equal(
-    execute(sim, { type: "terrain", mode: "land", x: 26, y: 21, size: 2 }).ok,
+    executeFinishedRoad(sim, { type: "terrain", mode: "land", x: 26, y: 21, size: 2 }).ok,
     true,
   );
   assert.equal(
-    execute(sim, { type: "place", kind: "house", x: 26, y: 21 }).ok,
+    executeFinishedRoad(sim, { type: "place", kind: "house", x: 26, y: 21 }).ok,
     true,
   );
   assert.ok(
@@ -1841,7 +1843,7 @@ test("buildings require level ground and sloping roads meet continuously at shar
   const sim = new Simulation();
   sim.state.decorations = [];
   assert.equal(
-    execute(sim, { type: "terrain", mode: "raise", x: 1, y: 1, size: 1 }).ok,
+    executeFinishedRoad(sim, { type: "terrain", mode: "raise", x: 1, y: 1, size: 1 }).ok,
     true,
   );
   assert.match(sim.canPlace("house", 1, 1), /Level/);
@@ -1852,7 +1854,7 @@ test("buildings require level ground and sloping roads meet continuously at shar
   };
   for (const x of [1, 2, 3])
     assert.equal(
-      execute(sim, { type: "place", kind: "road", x, y: 1 }).ok,
+      executeFinishedRoad(sim, { type: "place", kind: "road", x, y: 1 }).ok,
       true,
     );
   for (const x of [1.5, 2.5])
@@ -1864,7 +1866,7 @@ test("buildings require level ground and sloping roads meet continuously at shar
         ) < 1e-4,
       );
   assert.equal(
-    execute(sim, { type: "place", kind: "road", x: 4, y: 1 }).ok,
+    executeFinishedRoad(sim, { type: "place", kind: "road", x: 4, y: 1 }).ok,
     false,
     "roads cannot jump a cliff",
   );
@@ -2465,7 +2467,7 @@ test("pavements keep pedestrian access, block freight and save as footbridges",(
   const cargo=sim.state.agents.filter(a=>a.kind==="truck");assert.equal(cargo.length,0);
   advance(sim,15);assert.ok(sim.state.agents.length);assert.ok(sim.state.agents.every(a=>a.kind==="person"));
   assert.doesNotThrow(()=>parseSave(JSON.stringify(sim.snapshot())));
-  const p=sim.adjacent(mill)[0];assert.equal(execute(sim,{type:"roadStroke",from:p,to:p,roadType:"stone"}).ok,true);
+  const p=sim.adjacent(mill)[0];assert.equal(executeFinishedRoad(sim,{type:"roadStroke",from:p,to:p,roadType:"stone"}).ok,true);
   assert.equal(roadTypeAt(sim.state.roadTypes,p),"stone");
 });
 test("cars take a longer vehicle route while pedestrians can use a pavement shortcut",()=>{
@@ -2524,13 +2526,13 @@ test("a fence between staggered buildings stays behind the nearer wall even with
 test("brick roads and bridges consume warehouse bricks atomically and timber bridges upgrade in place",()=>{
  const sim=new Simulation(),w=sim.state.buildings.find(b=>b.kind==='warehouse');sim.state.terrain={'2,1':{kind:'water',height:0}};
  const command={type:'roadStroke',from:{x:1,y:1},to:{x:3,y:1},roadType:'brick'};
- const before=sim.snapshot();assert.equal(execute(sim,command).ok,false);assert.deepEqual(sim.snapshot(),before);
- w.inventory.bricks=12;const money=sim.state.money;assert.equal(execute(sim,command,'brick-stretch').ok,true);
+ const before=sim.snapshot();assert.equal(executeFinishedRoad(sim,command).ok,false);assert.deepEqual(sim.snapshot(),before);
+ w.inventory.bricks=12;const money=sim.state.money;assert.equal(executeFinishedRoad(sim,command,'brick-stretch').ok,true);
  assert.equal(w.inventory.bricks,6);assert.equal(sim.state.money,money-123);assert.equal(roadTypeAt(sim.state.roadTypes,{x:2,y:1}),'brick');
- const after=sim.snapshot();execute(sim,command,'brick-stretch');assert.deepEqual(sim.snapshot(),after);assert.doesNotThrow(()=>parseSave(JSON.stringify(after)));
+ const after=sim.snapshot();executeFinishedRoad(sim,command,'brick-stretch');assert.deepEqual(sim.snapshot(),after);assert.doesNotThrow(()=>parseSave(JSON.stringify(after)));
  const old=sim.snapshot();delete old.bridgeVersion;delete old.roadTypes;
  const restored=new Simulation(parseSave(JSON.stringify(old)));assert.equal(roadTypeAt(restored.state.roadTypes,{x:2,y:1}),'dirt');
- const cost=restored.state.money;assert.equal(execute(restored,{type:'roadStroke',from:{x:2,y:1},to:{x:2,y:1},roadType:'stone'}).ok,true);assert.equal(restored.state.money,cost-20);assert.equal(roadTypeAt(restored.state.roadTypes,{x:2,y:1}),'stone');
+ const cost=restored.state.money;assert.equal(executeFinishedRoad(restored,{type:'roadStroke',from:{x:2,y:1},to:{x:2,y:1},roadType:'stone'}).ok,true);assert.equal(restored.state.money,cost-20);assert.equal(roadTypeAt(restored.state.roadTypes,{x:2,y:1}),'stone');
 });
 test("a small fountain admits at most four simultaneous visitors with unique places",()=>{
  const sim=new Simulation(),park=sim.state.buildings.find(b=>b.kind==='park');

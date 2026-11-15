@@ -1,3 +1,4 @@
+import {queueRoadWork,roadWorkAt,stepRoadWorks,validateRoadWorks,type RoadWork} from './roadworks.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown,landscapeStarterTown} from './starter-town.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
@@ -128,6 +129,7 @@ export interface Resident {
   faith?: number;
 }
 export interface Agent {
+  roadWork?:number;
   id: number;
   kind: "person" | "car" | "truck";
   path: Point[];
@@ -149,6 +151,7 @@ export interface Agent {
   marketSlot?:number;
 }
 export interface World {
+  roadWorks?:RoadWork[];
   events?:TownEvent[];
   wildlife?:Animal[];
   marketMeals?:number;
@@ -444,7 +447,9 @@ export class Simulation {
     return null;
   }
   reconnect(preserveTravel = false) {
-    const travellers = preserveTravel ? [...this.state.agents] : [];
+    const roadCrew=preserveTravel?this.state.agents.filter(a=>a.roadWork!==undefined&&this.state.roadWorks?.some(w=>w.id===a.roadWork)&&this.state.residents.some(r=>r.id===a.resident)):[];
+    const roadResidents=new Set(roadCrew.map(a=>a.resident));
+    const travellers = preserveTravel ? this.state.agents.filter(a=>a.roadWork===undefined) : [];
     this.roadSet = new Set(this.state.roads);
     this.traffic.configure(this.roadSet, this.state.roadTypes);
     for(const a of travellers)if(a.kind==="car"&&a.path.slice(a.segment).some(p=>roadTypeAt(this.state.roadTypes,p)==="pavement"))a.kind="person";
@@ -485,6 +490,7 @@ export class Simulation {
         buildingJobs(b) > 0,
     );
     for (const r of this.state.residents) {
+      if(roadResidents.has(r.id)){r.job=null;continue;}
       const h = this.building(r.home)!;
       r.leisure ??= 60;
       r.faith ??= 70;
@@ -515,7 +521,7 @@ export class Simulation {
     const sites = this.state.buildings.filter(
       (b) => b.construction && b.connected && b.enabled,
     );
-    for (const r of this.state.residents.filter((r) => r.job === null)) {
+    for (const r of this.state.residents.filter((r) => r.job === null&&!roadResidents.has(r.id))) {
       const home = this.building(r.home)!;
       const site = sites.find(
         (b) => b.workers < builderCapacity(b) && this.route(home, b),
@@ -569,6 +575,7 @@ export class Simulation {
       return !!valid;
     });
     for (const r of this.state.residents) {
+      if(roadResidents.has(r.id))continue;
       const home = this.building(r.home)!,
         retained = travellers.find(
           (a) =>
@@ -624,6 +631,7 @@ export class Simulation {
           wait: (r.id % 12) * 0.45,
         });
     }
+    this.state.agents.push(...roadCrew);
     if (!preserveTravel) for (const a of this.state.agents) a.active = false;
     this.traffic.plan(this.state.agents);
   }
@@ -728,7 +736,7 @@ export class Simulation {
       )
         return "Level the whole footprint before moving here.";
       if (
-        this.roads.has(key(p)) ||
+        this.roads.has(key(p)) || roadWorkAt(this.state,p) ||
         (this.buildingAt(p.x, p.y)?.id ?? id) !== id
       )
         return "The footprint overlaps a road or another building.";
@@ -823,6 +831,7 @@ export class Simulation {
     for (const p of cells) {
       if (!inside(p.x, p.y))
         return "The whole building must fit inside the valley.";
+      if(roadWorkAt(this.state,p))return "Road workers are using this tile. Wait for the work to finish.";
       if (this.buildingAt(p.x, p.y) || (this.roadSet.has(key(p))&&!roadLamp))
         return "The building footprint overlaps a road or another building.";
       if(exposedDeposit(this.state,p)&&!isBuilding(kind)&&!roadLamp)return "Surface rocks need to be cleared by builders before this tile can be used.";
@@ -962,33 +971,25 @@ export class Simulation {
       if(plan.error)return {ok:false,message:plan.error,revision:this.state.revision};
       networkChanged=plan.buildings.size>0||plan.roads.size>0;
       for(const b of this.state.buildings.filter(b=>plan.buildings.has(b.id))) this.startDemolition(b);
+      const roadGroup=plan.roads.size?this.state.nextId++:undefined;
       for(const k of plan.roads) {
         const [x,y]=k.split(",").map(Number);
-        this.state.money+=terrain(x,y,this.state.terrain)==="water"?Math.floor(BRIDGE_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2):Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes,{x,y})].cost/2);
-        if(this.state.roadTypes)delete this.state.roadTypes[k];
+        queueRoadWork(this,{x,y},roadWorkAt(this.state,{x,y})?.type??roadTypeAt(this.state.roadTypes,{x,y}),'remove',roadGroup);
       }
-      this.state.roads=this.state.roads.filter(k=>!plan.roads.has(k));
       this.state.decorations=this.state.decorations.filter(d=>{
-        if(!plan.decorations.has(d.id)&&!(d.edge!==undefined&&plan.roads.has(key(d))))return true;
+        if(!plan.decorations.has(d.id))return true;
         this.state.money+=d.natural?0:Math.floor(DECORATIONS[d.kind].cost/2);return false;
       });
-      message=`${plan.buildings.size} buildings marked for demolition. Removed ${plan.roads.size} road tiles and ${plan.decorations.size} decorations. Keep roads connected until crews finish.`;
+      message=`${plan.buildings.size} buildings marked for demolition. ${plan.roads.size} road tiles queued for removal; ${plan.decorations.size} decorations removed. Keep roads connected until crews finish.`;
     } else if (c.type === "roadStroke") {
       const roadType = c.roadType ?? "stone";
       const plan = planRoad(this, c.from, c.to, roadType);
       if (plan.error) return { ok: false, message: plan.error, revision: this.state.revision };
-      const added = new Set(plan.additions.map(key));
-      this.state.roads.push(...added);
-      this.state.roadTypes ??= {};
-      for (const p of [...plan.additions, ...plan.upgrades]) {
-        if (roadType === "stone")
-          delete this.state.roadTypes[key(p)];
-        else this.state.roadTypes[key(p)] = roadType;
-      }
-      this.state.decorations = this.state.decorations.filter((d) => d.side!==undefined?!(this.state.roads.includes(key(d))&&this.state.roads.includes(key(fenceNeighbour(d,d.side)))):!added.has(key(d)));
+      for(const p of plan.additions)queueRoadWork(this,p,roadType,'build');
+      for(const p of plan.upgrades)queueRoadWork(this,p,roadType,'upgrade');
       this.state.money -= plan.cost;
       for(const [r,n] of Object.entries(plan.materials))this.consume(r as Resource,n);
-      message = `${ROAD_TYPES[roadType].name} roads · ${plan.additions.length} new tiles${plan.upgrades.length ? ` · ${plan.upgrades.length} upgraded` : ""}${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""} · ${plan.cost} gold.`;
+      message = `${ROAD_TYPES[roadType].name} road work queued · ${plan.additions.length} new tiles${plan.upgrades.length ? ` · ${plan.upgrades.length} upgraded` : ""}${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""} · ${plan.cost} gold.`;
     } else if (c.type === "terrain") {
       const plan = planTerrain(this.state, c);
       if (plan.error)
@@ -1132,12 +1133,8 @@ export class Simulation {
         };
       if (b) {
         this.startDemolition(b);
-      } else if (this.roadSet.has(key(c))) {
-        this.state.decorations=this.state.decorations.filter(d=>{if(d.edge===undefined||key(d)!==key(c))return true;this.state.money+=Math.floor(DECORATIONS[d.kind].cost/2);return false;});
-        this.state.roads = this.state.roads.filter((k) => k !== key(c));
-        this.state.money +=
-          terrain(c.x, c.y, this.state.terrain) === "water" ? Math.floor(BRIDGE_TYPES[roadTypeAt(this.state.roadTypes,c)].cost/2) : Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes, c)].cost / 2);
-        if (this.state.roadTypes) delete this.state.roadTypes[key(c)];
+      } else if (this.roadSet.has(key(c))||roadWorkAt(this.state,c)) {
+        queueRoadWork(this,c,roadWorkAt(this.state,c)?.type??roadTypeAt(this.state.roadTypes,c),'remove');
       } else if (decoration) {
         this.state.decorations = this.state.decorations.filter(
           (d) => d.id !== decoration.id,
@@ -1152,7 +1149,7 @@ export class Simulation {
           message: "There is nothing to remove here.",
           revision: this.state.revision,
         };
-      message = b ? "Marked for demolition. Builders will clear the plot; stock and half the gold cost are recovered when finished." : decoration?.natural
+      message = b ? "Marked for demolition. Builders will clear the plot; stock and half the gold cost are recovered when finished." : roadWorkAt(this.state,c)?"Road removal queued. An available worker will clear it.": decoration?.natural
         ? "Decoration removed."
         : "Removed. Half the build cost returned.";
     } else if (c.type === "move") {
@@ -1194,7 +1191,7 @@ export class Simulation {
               groundHeight(b.x, b.y, this.state.terrain) ||
             (b.kind !== "fishery" &&
               terrain(p.x, p.y, this.state.terrain) === "water") ||
-            this.roads.has(key(p)) ||
+            this.roads.has(key(p)) || roadWorkAt(this.state,p) ||
             this.state.buildings.some(
               (other) =>
                 other.id !== b.id &&
@@ -1419,12 +1416,14 @@ export class Simulation {
         b.produced += recipe.count;
       }
     }
+    stepRoadWorks(this);
     stepWildlife(this);
     for (const r of this.state.residents){
       r.leisure = Math.max(0, (r.leisure ?? 60) - 0.04);
       r.faith=Math.max(0,(r.faith??70)-.025);
     }
     for (const a of [...this.state.agents]) {
+      if(a.roadWork!==undefined)continue;
       if (
         a.resident !== null &&
         a.active === false &&
@@ -2207,6 +2206,7 @@ export function parseSave(raw: string): World {
       !!DEPOSITS[key({ x, y })],
     () => s.nextId++,
   );
+  validateRoadWorks(s as World);
   s.version = 3;
   expandValley(s as World);
   expandReserves(s as World);

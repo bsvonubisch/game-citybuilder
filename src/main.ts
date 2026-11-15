@@ -1,3 +1,4 @@
+import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
@@ -695,7 +696,8 @@ scene.onTerrainApply = async (command) => {
 scene.onHover = (p) => {
   hovered = p;
   updateEntranceHint();
-  const surface = p && simulation.roads.has(key(p))
+  const work=p&&roadWorkAt(simulation.state,p);
+  const surface = work?`${work.operation==='remove'?'Road removal':'Road construction'} · ${Math.floor(work.completed/work.required*100)}% · ${simulation.state.agents.some(a=>a.roadWork===work.id)?'Crew assigned':'Waiting for an available worker'}`:p && simulation.roads.has(key(p))
     ? terrainCell(p.x, p.y, simulation.state.terrain).kind === "water"
       ? "Wooden bridge · standard speed"
       : `${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].name} road · ${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].description.toLowerCase()}`
@@ -1028,6 +1030,8 @@ function renderAgentInspector() {
   $("#show-destination").onclick = () => {
     const a = simulation.state.agents.find((a) => a.id === selectedAgent);
     if (a) {
+      const work=simulation.state.roadWorks?.find(w=>w.id===a.roadWork);
+      if(work){scene.focusTile(work.x,work.y);return;}
       const site = simulation.building(
         simulation.state.residents.find((r) => r.id === a.resident)?.job ?? 0,
       );
@@ -1052,6 +1056,13 @@ function updateAgentInspector() {
   $("#show-destination").textContent = job?.construction
     ? "Back to construction site"
     : "Show destination";
+  const roadWork=simulation.state.roadWorks?.find(w=>w.id===a.roadWork);
+  if(roadWork){
+    $('#traveller-name').textContent=person?.name??'Road worker';$('#traveller-kind').textContent='Road worker';
+    $('#traveller-status').textContent=a.wait>0?(roadWork.operation==='remove'?'Removing the road':'Laying the road'):'Walking to road work';
+    $('#traveller-detail').innerHTML='<div class="detail-row"><span>Progress</span><b>'+Math.floor(roadWork.completed/roadWork.required*100)+'%</b></div>';
+    $('#show-destination').textContent='Show road work';return;
+  }
   if (a.onsite) {
     const site = simulation.building(a.onsite);
     if(site?.kind==='farm'&&!site.construction){
@@ -1532,15 +1543,16 @@ $("#minimap").onclick = (event) => {
 function updateUI() {
   const s = simulation.state;
   townLog.update(s);
-  const employed = s.residents.filter((r) => r.job !== null).length;
+  const roadCrew=s.agents.filter(a=>a.roadWork!==undefined).length;
+  const employed = s.residents.filter((r) => r.job !== null).length+roadCrew;
   const sites = s.buildings.filter((b) => b.construction && b.enabled);
   const buildersNeeded = sites.reduce(
     (total, b) => total + builderCapacity(b),
-    0,
+    roadBuildersNeeded(s),
   );
-  const buildersAssigned = sites.reduce((total, b) => total + b.workers, 0);
+  const buildersAssigned = sites.reduce((total, b) => total + b.workers, roadCrew);
   $("#builders").textContent = `${buildersAssigned} / ${buildersNeeded}`;
-  const builderSummary = `${buildersAssigned} builders assigned of ${buildersNeeded} needed at ${sites.length} active construction sites · ${Math.max(0, buildersNeeded - buildersAssigned)} more builders needed. Paused sites excluded; sites awaiting road access included.`;
+  const builderSummary = `${buildersAssigned} builders assigned of ${buildersNeeded} needed at ${sites.length} building sites and ${s.roadWorks?.length??0} road tiles · ${Math.max(0, buildersNeeded - buildersAssigned)} more builders needed. Paused sites excluded; sites awaiting road access included.`;
   $(".resource.builders").title = builderSummary;
   $(".resource.builders").setAttribute("aria-label", builderSummary);
   $(".resource.builders").classList.toggle(

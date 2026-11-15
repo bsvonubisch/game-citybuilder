@@ -1,3 +1,4 @@
+import {roadVisualState,roadWorkAt} from './roadworks.js';
 import {sourceImage} from "./source-images.js";
 import type {EdgeOccluder} from "./edge-occlusion.js";
 import {roadTypeAt} from "./roads.js";
@@ -391,6 +392,7 @@ export class BridgeArt {
     const result={deck,supports,rails};this.variants.set(id,result);return result;
   }
   redraw(sim: Simulation) {
+    sim=roadVisualState(sim);
     this.edges=[];
     this.images.forEach((image) => image.destroy());
     this.images = [];
@@ -405,7 +407,7 @@ export class BridgeArt {
             .image(p.x - WIDTH / 2, p.y - HEIGHT / 2, texture)
             .setOrigin(0)
             .setScale(1 / RESOLUTION)
-            .setDepth(depth),
+            .setDepth(depth).setAlpha(roadWorkAt(sim.state,{x,y})? .8:1).setTint(roadWorkAt(sim.state,{x,y})?0xb8b7ab:0xffffff),
         );
       add(art.supports, -997);
       add(art.deck, -996);

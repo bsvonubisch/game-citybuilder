@@ -1,3 +1,4 @@
+import {finishRoadFixture} from './roadwork-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Simulation, key } from "./legacy-town.mjs";
@@ -119,10 +120,12 @@ test("cached routes survive simulation ticks, invalidate after road changes, and
   assert.strictEqual(cache.get(sim, mill.id), first);
   const front = sim.adjacent(farm);
   for (const p of front) execute(sim, { type: "demolish", ...p });
+  finishRoadFixture(sim);
   const broken = cache.get(sim, mill.id);
   assert.notStrictEqual(broken, first);
   assert.equal(broken.inputs.find((l) => l.source === farm.id).path, null);
   for (const p of front) execute(sim, { type: "place", kind: "road", ...p });
+  finishRoadFixture(sim);
   assert.ok(
     cache.get(sim, mill.id).inputs.find((l) => l.source === farm.id).path,
   );

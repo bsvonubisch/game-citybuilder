@@ -147,7 +147,7 @@ export function planTerrain(
       footprint(b.kind, b.x, b.y, b.rotation, b.plot).map((p) => key(p.x, p.y)),
     ),
   );
-  const roads = new Set(world.roads);
+  const roads = new Set([...world.roads,...(world.roadWorks??[]).map(p=>key(p.x,p.y))]);
   const cost = changes.reduce((sum, c) => {
     const old = terrainCell(c.x, c.y, world.terrain);
     return (

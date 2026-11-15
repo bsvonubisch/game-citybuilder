@@ -1,3 +1,4 @@
+import {roadWorkAt} from './roadworks.js';
 import { SIZE,RESOURCE_NAMES,type Resource } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import type { Point, Simulation } from "./simulation.js";
@@ -34,6 +35,7 @@ export function planRoad(sim: Simulation, from: Point, to: Point, roadType: Road
   const plan: RoadPlan = { tiles, additions: tiles.filter((p) => !sim.roads.has(tileKey(p))), upgrades: [], cost: 0, bridges: 0, materials:{} };
   if (!isRoadType(roadType)) return { ...plan, error: "Choose a road surface or pedestrian pavement." };
   if (!tiles.length) return { ...plan, error: "Keep both ends of the road inside the valley." };
+  if(tiles.some(p=>roadWorkAt(sim.state,p)))return {...plan,error:'Workers are already assigned to this stretch. Wait for them to finish.'};
   const chargeMaterials=(water:boolean)=>{if(water){const b=BRIDGE_TYPES[roadType];plan.materials[b.material]=(plan.materials[b.material]??0)+b.amount;}else if(roadType==="brick")plan.materials.bricks=(plan.materials.bricks??0)+1;};
   const planned = new Set(tiles.map(tileKey));
   for (const p of plan.additions) {

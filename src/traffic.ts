@@ -226,6 +226,7 @@ export class Traffic {
   }
   plan(agents: Agent[]) {
     for (const a of agents) {
+      if(a.roadWork!==undefined){a.active=true;a.move=a.wait>0?0:STEP*.85;continue;}
       a.move = 0;
       a.trafficWait = false;
       if (a.kind === "person") {

@@ -1,3 +1,4 @@
+import {roadVisualState,roadWorkAt} from './roadworks.js';
 import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import { roadSurface } from "./road-art.js";
@@ -27,6 +28,7 @@ export class ElevationArt {
   private textures = new Set<string>();
   constructor(private scene: Phaser.Scene) {}
   redraw(sim: Simulation) {
+    sim=roadVisualState(sim);
     this.images.forEach((s) => s.destroy());
     this.images = [];
     for (const k of this.textures) this.scene.textures.remove(k);
@@ -163,6 +165,7 @@ export class ElevationArt {
             { x: number; y: number }[],
           ][]) {
             ctx.save();
+            if(roadWorkAt(sim.state,{x,y})){ctx.globalAlpha=.9;ctx.filter='saturate(.15) brightness(.8)';}
             ctx.beginPath();
             triangle.forEach((p, i) =>
               i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),

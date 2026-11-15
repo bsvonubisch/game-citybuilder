@@ -1,3 +1,4 @@
+import {roadWorkAt} from './roadworks.js';
 import {roadStroke} from "./road-stroke.js";
 import {warehouseReady,LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
 import {footprint} from "./catalog.js";
@@ -7,7 +8,7 @@ export function planRemoval(sim:Simulation,from:Point,to:Point) {
   for(const p of tiles) {
     const b=sim.buildingAt(p.x,p.y),k=`${p.x},${p.y}`;
     if(b){buildings.add(b.id);for(const q of footprint(b.kind,b.x,b.y,b.rotation,b.plot))outline.set(`${q.x},${q.y}`,q);}
-    else if(sim.roads.has(k)){roads.add(k);outline.set(k,p);}
+    else if(sim.roads.has(k)||roadWorkAt(sim.state,p)){roads.add(k);outline.set(k,p);}
     else {for(const d of sim.state.decorations.filter(d=>d.x===p.x&&d.y===p.y))decorations.add(d.id);if(sim.decorationAt(p.x,p.y))outline.set(k,p);}
   }
   const removesLastDepot = !sim.state.buildings.some(b => b.kind === "warehouse" && !buildings.has(b.id));

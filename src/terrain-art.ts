@@ -1,3 +1,4 @@
+import {roadVisualState,roadWorkAt} from './roadworks.js';
 import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import { roadSurface } from "./road-art.js";
@@ -61,6 +62,7 @@ export class TerrainArt {
   /** The expanded valley keeps high-resolution terrain only around the camera.
    * Off-screen chunks are disposable, so map size does not allocate one huge bitmap. */
   update(sim: Simulation) {
+    sim=roadVisualState(sim);
     const view = cameraViewport(this.scene.cameras.main),
       margin = 64;
     for (const chunk of this.chunks) {
@@ -182,6 +184,7 @@ export class TerrainArt {
           if (!water) poly(diamond, meadow);
           if (!water && road) {
             ctx.save();
+            if(roadWorkAt(sim.state,{x,y})){ctx.globalAlpha=.9;ctx.filter="saturate(.15) brightness(.8)";}
             ctx.translate(p.x, p.y - 16);
             ctx.transform(32, 16, -32, 16, 0, 0);
             ctx.drawImage(roadSurface(this.scene, roadTypeAt(sim.state.roadTypes, {x, y}), x, y), 0, 0, 1, 1);

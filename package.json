@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "test": "tsc -p tsconfig.test.json && node --test tests/simulation.test.mjs tests/traffic.test.mjs tests/logistics.test.mjs tests/fishery.test.mjs tests/mining.test.mjs tests/farming.test.mjs tests/market.test.mjs tests/hunting.test.mjs tests/butcher.test.mjs tests/sprite-ground.test.mjs tests/starter-town.test.mjs tests/demolition.test.mjs tests/vehicle-recovery.test.mjs tests/town-events.test.mjs",
+    "test": "tsc -p tsconfig.test.json && node --test tests/simulation.test.mjs tests/traffic.test.mjs tests/logistics.test.mjs tests/fishery.test.mjs tests/mining.test.mjs tests/farming.test.mjs tests/market.test.mjs tests/hunting.test.mjs tests/butcher.test.mjs tests/sprite-ground.test.mjs tests/starter-town.test.mjs tests/demolition.test.mjs tests/vehicle-recovery.test.mjs tests/town-events.test.mjs tests/roadworks.test.mjs",
     "test:rules": "firebase emulators:exec --project demo-citybuilder --only firestore \"node --test tests/firestore.test.mjs\"",
     "deploy": "npm run build && firebase deploy --project vu-citybuilder --only hosting,firestore"
   },

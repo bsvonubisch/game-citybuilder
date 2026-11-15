@@ -1,3 +1,4 @@
+import {roadWorkerPosition,roadVisualState} from './roadworks.js';
 import {retainSourceImages} from "./source-images.js";
 import {HuntingArt,prepareHuntingFrames} from "./hunting-art.js";
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
@@ -1471,7 +1472,7 @@ export class TownScene extends Phaser.Scene {
     for (const a of this.simulation.state.agents) {
       let s = this.people.get(a.id);
       const site = a.onsite ? this.simulation.building(a.onsite) : undefined;
-      const p = lanePose(a, agentDistance(a, this.acc)),
+      const p = a.roadWork!==undefined?roadWorkerPosition(a,this.acc):lanePose(a, agentDistance(a, this.acc)),
         heading = travelFacing(p.dx, p.dy),
         direction = Math.floor(heading / 2),
         intermediate = heading % 2 === 1;
@@ -1543,7 +1544,14 @@ export class TownScene extends Phaser.Scene {
           ),
         )
         .setFlipX(a.kind === "person" && walk.flip);
+      if(a.roadWork!==undefined){const visual=roadVisualState(this.simulation);s.y=v.y-roadHeight(visual.roads,p.x,p.y,visual.state.buildings,visual.state.terrain)+bob;}
       s.setDepth(edgeDepth(p,{left:s.x-s.displayWidth*s.originX,right:s.x+s.displayWidth*(1-s.originX),top:s.y-s.displayHeight*s.originY,bottom:s.y+s.displayHeight*(1-s.originY)},s.depth,this.occludingEdges));
+      if(a.roadWork!==undefined&&a.wait>0){
+        const pose=builderFrame(a.resident??a.id,a.id%2,this.simulation.state.tick*STEP+this.acc,true);
+        s.setTexture('construction-workers',pose.frame).setOrigin(pose.originX,pose.originY).setScale(pose.size/this.textures.getFrame('construction-workers',pose.frame).height).setFlipX(false);
+        const visual=roadVisualState(this.simulation);
+        s.y=v.y-roadHeight(visual.roads,p.x,p.y,visual.state.buildings,visual.state.terrain);
+      }
       if (site?.construction) {
         const crew = this.simulation.state.agents.filter(
             (a) => a.onsite === site.id,
