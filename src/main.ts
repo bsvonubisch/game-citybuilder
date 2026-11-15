@@ -1,3 +1,4 @@
+import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {marketPrice,marketStalls} from "./market-layout.js";
 import {marketVendors,MARKET_GOODS,marketOpen} from "./market.js";
 import {buildingJobs} from "./catalog.js";
@@ -331,6 +332,7 @@ function setTool(next: Tool) {
   }
   if(next==="fence")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at a tile edge · Fences join at shared corners · The tile stays usable</span>');
   if(next==="streetlight")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at either road edge to choose the curb · One post per click · 20 gold</span>');
+  if(next==="hunter")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${HUNT_RADIUS}-tile hunting area · Green markers show reachable wildlife · Meat arrives when hunters return</span>`);
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
   if(isExtractor(next))$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">Build beside the deposit · ${MINING_RADIUS}-tile reach · Green rocks are reachable from the entrance</span>`);
   if (next === "road") document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((button) => {
@@ -1016,6 +1018,19 @@ function updateAgentInspector() {
     : "Show destination";
   if (a.onsite) {
     const site = simulation.building(a.onsite);
+    if(site?.kind==="hunter"&&!site.construction){
+      const trip=site.hunting?.find(t=>t.resident===a.resident);
+      $("#traveller-name").textContent=person?.name??"Hunter";
+      $("#traveller-kind").textContent="Hunter";
+      $("#traveller-status").textContent=trip?.phase==="aiming"?"Aiming at wildlife":trip?.phase==="returning"?"Returning to the lodge":trip?"Walking into the woodland":"At the hunting lodge";
+      $("#traveller-detail").innerHTML=`<div class="detail-row"><span>Workplace</span><b>${escapeHtml(buildingName(site))}</b></div><div class="detail-row"><span>Carrying</span><b>${trip?.cargo??0} meat</b></div><p class="muted">Meat enters the lodge's inventory when this hunter returns.</p>`;return;
+    }
+    if(site?.kind==="market"&&!site.construction){
+      $("#traveller-name").textContent=person?.name??"Vendor";
+      $("#traveller-kind").textContent="Market vendor";
+      $("#traveller-status").textContent="Serving customers at the stall";
+      $("#traveller-detail").innerHTML=`<div class="detail-row"><span>Workplace</span><b>${escapeHtml(buildingName(site))}</b></div><p class="muted">Sells delivered food and goods to nearby residents.</p>`;return;
+    }
     if(site?.kind==="forester"&&!site.construction) {
       const trip=site.forestry?.find(t=>t.resident===a.resident);
       $("#traveller-name").textContent=person?.name??"Forester";
@@ -1053,7 +1068,7 @@ function updateAgentInspector() {
     to = simulation.building(a.returning ? a.source : a.target);
   const label = (b: typeof from) =>
     b ? `${buildingName(b)} · ${b.x}, ${b.y}` : "No destination";
-  $("#traveller-status").textContent = visit ? visit.walking?"Walking to a resting place":"Relaxing in the park" :
+  $("#traveller-status").textContent = a.marketSlot!==undefined ? "Shopping at the market" : visit ? visit.walking?"Walking to a resting place":"Relaxing in the park" :
     a.wait > 0
       ? "At the building"
       : a.trafficWait
@@ -1140,6 +1155,9 @@ function updateInspector() {
       `<div class="detail-row"><span>Level ${b.level ?? 1} · capacity</span><b>${Math.round(productionRate(b) * 100)}% pace · ${outputCapacity(b)} output</b></div>`,
     );
   if (d.recipe) updateLogistics(b);
+  if(b.kind==="hunter"&&!b.construction){
+    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Hunting area · ${HUNT_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable wildlife</span><b>${huntTargets(simulation,b).length}</b></div><p class="muted">Hunters track wildlife in woodland and carry meat back. Animals avoid buildings and roads; preserve forest around the lodge.</p>${(b.hunting??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Hunter")}</span><b>${t.phase==="aiming"?"Aiming":t.phase==="returning"?`Carrying ${t.cargo} meat`:"Tracking wildlife"}</b></div>`).join("")}`);
+  }
   if(isExtractor(b.kind)&&!b.construction) {
     const targets=miningTargets(simulation,b);
     $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Mining area · ${MINING_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable rock faces</span><b>${targets.length}</b></div><p class="muted">Miners walk to the highlighted deposit, break up rock and carry it back. Digging deeper extends this same deposit.</p>${(b.mining??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Miner")}</span><b>${t.phase==="mining"?"Mining":t.phase==="returning"?`Carrying ${t.cargo} ${b.kind==="quarry"?"stone":"metal"}`:"Walking to the deposit"}</b></div>`).join("")}`);
@@ -1485,10 +1503,10 @@ function updateUI() {
   $(".resource.gold").title=`Income over the last game day: ${income.total} gold · taxes ${income.tax} · exports ${income.exports} · market sales ${income.market}. Building refunds are excluded.`;
   updatePlacementCost();
   const bread = simulation.stored("bread"),
-    fish = simulation.stored("fish");
-  $("#food-stock").textContent = String(bread + fish + (s.marketMeals??0));
+    fish = simulation.stored("fish"),meat=simulation.stored("meat");
+  $("#food-stock").textContent = String(bread + fish + meat + (s.marketMeals??0));
   $(".resource.food-stock").title =
-    `${bread} bread + ${fish} fish in warehouses · ${s.marketMeals??0} meals bought at markets · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
+    `${bread} bread + ${fish} fish + ${meat} meat in warehouses · ${s.marketMeals??0} meals bought at markets · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
   $(".resource.food-stock").setAttribute(
     "aria-label",
     $(".resource.food-stock").title,

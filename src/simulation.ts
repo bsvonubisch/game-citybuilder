@@ -1,3 +1,4 @@
+import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {marketDestination,marketOpen,buyAtMarket,marketStock,marketVendors,MARKET_GOODS} from "./market.js";
 import {validMarketPlot,marketStalls} from "./market-layout.js";
 import {buildingJobs,buildingPrice} from "./catalog.js";
@@ -88,6 +89,7 @@ export interface Point {
   y: number;
 }
 export interface Building extends Point {
+  hunting?:HuntTrip[];
   forestry?: ForestTrip[];
   mining?: MiningTrip[];
   deposit?: string;
@@ -137,6 +139,7 @@ export interface Agent {
   marketSlot?:number;
 }
 export interface World {
+  wildlife?:Animal[];
   marketMeals?:number;
   income?: import("./economy.js").IncomeEntry[];
   bridgeVersion?:1;
@@ -344,6 +347,7 @@ export class Simulation {
       }
     }
     this.reconnect(!!saved);
+    ensureWildlife(this);
   }
   private seed() {
     const road = (x: number, y: number) => {
@@ -639,7 +643,7 @@ export class Simulation {
         existing &&
         this.retarget(existing, existing.returning ? home : destination)
       ) {
-        if (existing.onsite && (r.job !== destination.id || !destination.connected || !destination.enabled || (!destination.construction && destination.kind !== "forester" && destination.kind !== "market" && !isExtractor(destination.kind)))) {
+        if (existing.onsite && (r.job !== destination.id || !destination.connected || !destination.enabled || (!destination.construction && destination.kind !== "hunter" && destination.kind !== "forester" && destination.kind !== "market" && !isExtractor(destination.kind)))) {
           delete existing.onsite;
           existing.wait = 0;
           existing.path = this.route(destination, home,existing.kind) ?? existing.path;
@@ -653,7 +657,7 @@ export class Simulation {
       if (p)
         this.state.agents.push({
           id: this.state.nextId++,
-          kind: destination.construction || destination.kind === "market" || destination.kind === "forester" || isExtractor(destination.kind)
+          kind: destination.construction || destination.kind === "hunter" || destination.kind === "market" || destination.kind === "forester" || isExtractor(destination.kind)
             ? "person"
             : r.id % 4 === 0 && p.every(tile=>roadTypeAt(this.state.roadTypes,tile)!=="pavement")
               ? "car"
@@ -1007,7 +1011,7 @@ export class Simulation {
       networkChanged=plan.buildings.size>0||plan.roads.size>0;
       const warehouse=this.state.buildings.find(b=>b.kind==="warehouse"&&!plan.buildings.has(b.id))!;
       for(const b of this.state.buildings.filter(b=>plan.buildings.has(b.id))) {
-        landCatch(b);landTimber(b);landOre(b);
+        landCatch(b);landTimber(b);landOre(b);landHunt(b);
         for(const r of RESOURCES)warehouse.inventory[r]=(warehouse.inventory[r]??0)+(b.inventory[r]??0);
         this.state.money+=Math.floor(buildingInvestment(b)/2);
       }
@@ -1179,7 +1183,7 @@ export class Simulation {
       if (b) {
         landCatch(b);
         landTimber(b);
-        landOre(b);
+        landOre(b);landHunt(b);
         const depot = this.state.buildings.find(
           (w) => w.kind === "warehouse" && w.id !== b.id,
         );
@@ -1222,7 +1226,7 @@ export class Simulation {
       const b = this.building(c.id)!;
       landCatch(b);
       landTimber(b);
-      landOre(b);
+      landOre(b);landHunt(b);
       b.plot = this.relocationPlot(b, c.rotation ?? b.rotation);
       b.x = c.x;
       b.y = c.y;
@@ -1284,7 +1288,7 @@ export class Simulation {
         return { ok: false, message: error, revision: this.state.revision };
       const b = this.building(c.id)!;
       const next = deeperLayer(this.state.depositDepths?.[buildingDeposit(b)!] ?? 0);
-      landOre(b);
+      landOre(b);landHunt(b);
       this.state.money -= next.cost;
       for (const [r, n] of Object.entries(next.materials))
         this.consume(r as Resource, n);
@@ -1303,7 +1307,7 @@ export class Simulation {
       const next = nextUpgrade(b)!,
         tier = next.level;
       landTimber(b);
-      landOre(b);
+      landOre(b);landHunt(b);
       this.state.money -= next.cost;
       for (const [r, n] of Object.entries(next.materials))
         this.consume(r as Resource, n);
@@ -1394,6 +1398,7 @@ export class Simulation {
     }
     for (const b of this.state.buildings) {
       const recipe = BUILDINGS[b.kind].recipe;
+      if(b.kind==="hunter"){stepHunting(this,b);continue;}
       if (b.kind === "forester") { stepForestry(this,b); continue; }
       if (isExtractor(b.kind)) { stepMining(this,b); continue; }
       if (b.kind === "fishery") {
@@ -1423,6 +1428,7 @@ export class Simulation {
         b.produced += recipe.count;
       }
     }
+    stepWildlife(this);
     for (const r of this.state.residents){
       r.leisure = Math.max(0, (r.leisure ?? 60) - 0.04);
       r.faith=Math.max(0,(r.faith??70)-.025);
@@ -1475,9 +1481,9 @@ export class Simulation {
         a.active = false;
         continue;
       }
-      if (a.onsite && (this.building(a.onsite)?.kind === "forester" || isExtractor(this.building(a.onsite)?.kind??""))) {
+      if (a.onsite && (this.building(a.onsite)?.kind === "forester" || this.building(a.onsite)?.kind === "hunter" || isExtractor(this.building(a.onsite)?.kind??""))) {
         const lodge=this.building(a.onsite)!;
-        if (lodge.forestry?.some(t=>t.resident===a.resident) || lodge.mining?.some(t=>t.resident===a.resident) || (!day.night && lodge.enabled && lodge.connected && this.state.residents.some(r=>r.id===a.resident&&r.job===lodge.id))) {
+        if (lodge.hunting?.some(t=>t.resident===a.resident) || lodge.forestry?.some(t=>t.resident===a.resident) || lodge.mining?.some(t=>t.resident===a.resident) || (!day.night && lodge.enabled && lodge.connected && this.state.residents.some(r=>r.id===a.resident&&r.job===lodge.id))) {
           a.wait=1; a.active=false; continue;
         }
         delete a.onsite; a.wait=0;
@@ -1545,7 +1551,7 @@ export class Simulation {
           if(a.returning&&arrival?.kind==="market"&&resident&&resident.job!==arrival.id)buyAtMarket(this,a,arrival,resident);
           if (
             a.returning &&
-            (this.building(a.target)?.construction || this.building(a.target)?.kind === "forester" || (this.building(a.target)?.kind === "market"&&marketOpen(this.state.tick)) || isExtractor(this.building(a.target)?.kind??"")) &&
+            (this.building(a.target)?.construction || this.building(a.target)?.kind === "forester" || this.building(a.target)?.kind === "hunter" || (this.building(a.target)?.kind === "market"&&marketOpen(this.state.tick)) || isExtractor(this.building(a.target)?.kind??"")) &&
             this.state.residents.some(
               (r) => r.id === a.resident && r.job === a.target,
             )
@@ -1566,7 +1572,7 @@ export class Simulation {
       for (const w of this.state.buildings.filter(
         (b) => b.kind === "warehouse",
       )) {
-        for (const food of ["bread", "fish"] as const) {
+        for (const food of ["bread", "fish", "meat"] as const) {
           const n = Math.min(demand, w.inventory[food] ?? 0);
           w.inventory[food] = (w.inventory[food] ?? 0) - n;
           demand -= n;
@@ -1690,6 +1696,7 @@ export class Simulation {
             n +
             (b.inventory[r] ?? 0) +
             (r === "fish" ? (b.fishing?.cargo ?? 0) : 0) +
+            (r === "meat" ? (b.hunting??[]).reduce((total,t)=>total+t.cargo,0):0) +
             (r === "wood" ? (b.forestry??[]).reduce((total,t)=>total+t.cargo,0) : 0) +
             (r===(b.kind==="quarry"?"stone":b.kind==="mine"?"metal":"")?(b.mining??[]).reduce((total,t)=>total+t.cargo,0):0),
           0,
@@ -1785,6 +1792,7 @@ export class Simulation {
       };
     if (b.kind === "forester" && !b.forestry?.length && !forestTargets(this,b).length)
       return {kind:"input", title:"No reachable mature trees", message:"Wait for nearby stumps to regrow, clear a walking route, or move this lodge closer to woodland. Its highlighted area reaches 10 tiles. Planted garden trees are protected."};
+    if(b.kind==="hunter"&&!b.hunting?.length&&!(this.state.wildlife??[]).some(a=>a.respawnAt===undefined&&Math.hypot(a.x-b.x-.5,a.y-b.y-.5)<=12))return{kind:"input",title:"No wildlife nearby",message:"Keep natural woodland within 12 tiles. Animals avoid buildings and roads; move the lodge near the forest or let wildlife recover."};
     if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
     if (isHome(b.kind)) {
       const residents = this.state.residents.filter((r) => r.home === b.id);
@@ -1803,6 +1811,7 @@ export class Simulation {
     const alert = this.alert(b);
     if (alert) return alert.title;
     if(b.kind==="market")return marketOpen(this.state.tick)?`${marketVendors(this,b).length} vendors serving · ${b.produced} sales`:"Opens at 07:00";
+    if(b.kind==="hunter")return b.hunting?.some(t=>t.phase==="returning"&&t.cargo)?"Carrying meat home":b.hunting?.some(t=>t.phase==="aiming")?"Hunting wildlife":daylight(this.state.tick).night?"Hunters resting until morning":"Looking for wildlife";
     if (b.kind === "fishery") return fishingStatus(b);
     if(isExtractor(b.kind))return b.mining?.some(t=>t.phase==="returning")?"Carrying resources to the workplace":b.mining?.some(t=>t.phase==="mining")?"Mining the rock face":daylight(this.state.tick).night?"Miners resting until morning":"Miners walking to the deposit";
     if (b.kind === "forester") return b.forestry?.some(t=>t.phase==="returning") ? "Bringing logs to the lodge" : b.forestry?.some(t=>t.phase==="chopping") ? "Cutting trees" : daylight(this.state.tick).night ? "Foresters resting until morning" : "Workers walking to trees";
@@ -1855,6 +1864,7 @@ export function parseSave(raw: string): World {
   if(s.income!==undefined&&(!Array.isArray(s.income)||s.income.length>3000||s.income.some(e=>!e||!Number.isSafeInteger(e.tick)||e.tick<0||e.tick>s.tick||!finite(e.amount)||!["tax","exports","market"].includes(e.source))))throw new Error("Invalid income history.");
   const legacy = s.version === 1;
   validateTerrain(s.terrain);
+  validateWildlife(s as World);
   const occupied = new Set<string>();
   const ids = new Set<number>();
   if (
@@ -2002,6 +2012,7 @@ export function parseSave(raw: string): World {
           ].includes(b.plot.join(","))))
     )
       throw new Error("Invalid building.");
+    if(b.hunting!==undefined&&(b.kind!=="hunter"||!Array.isArray(b.hunting)||b.hunting.length>2||!b.hunting.every(validHunt)))throw new Error("Invalid hunt.");
     if (
       b.fishing !== undefined &&
       (b.kind !== "fishery" || b.construction || !validFishingTrip(b.fishing))
@@ -2148,7 +2159,7 @@ export function parseSave(raw: string): World {
   s.agents = [];
   // Like delivery trucks, restore carried timber before resident journeys are rebuilt.
   for (const b of s.buildings) landTimber(b);
-  for (const b of s.buildings) landOre(b);
+  for (const b of s.buildings) { landOre(b);landHunt(b); }
   s.residents = s.residents.filter(
     (r) =>
       Number.isInteger(r.id) &&

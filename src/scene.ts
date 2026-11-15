@@ -1,3 +1,5 @@
+import {HuntingArt,prepareHuntingFrames} from "./hunting-art.js";
+import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {MarketArt,prepareVendorFrames} from "./market-art.js";
 import {marketRectangle} from "./market-layout.js";
 import {marketActor} from "./market.js";
@@ -221,6 +223,7 @@ export class TownScene extends Phaser.Scene {
   marketPlot: [number,number]=[1,1];
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
+  private huntingArt!:HuntingArt;
   private planterArt!: PlanterArt;
   private buildingAlerts!: BuildingAlerts;
   private cameraKey = "";
@@ -291,6 +294,8 @@ export class TownScene extends Phaser.Scene {
     this.load.image("construction-props", "/construction-props.png");
     this.load.image("construction-earth", "/construction-earth.png");
     this.load.image("construction-workers", "/construction-workers.png");
+    this.load.image("wildlife","/wildlife-deer.png");
+    this.load.image("hunters","/hunter-workers.png");
     this.load.image("forestry", "/forestry-workers.png");
     this.load.image("mining", "/mining-workers.png");
     this.load.image("planter-plants", "/planter-plants.png");
@@ -304,6 +309,7 @@ export class TownScene extends Phaser.Scene {
     prepareForestryFrames(this);
     prepareForestryFrames(this,"mining");
     this.forestryArt=new ForestryArt(this);
+    prepareHuntingFrames(this);this.huntingArt=new HuntingArt(this);this.events.once("shutdown",()=>this.huntingArt.clear());
     this.planterArt=new PlanterArt(this);
     this.events.once("shutdown",()=>this.forestryArt.clear());
     this.nightArt = new NightArt(this);
@@ -956,6 +962,7 @@ export class TownScene extends Phaser.Scene {
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
         if (isLeisure(b.kind)) this.drawCoverage(b);
         if (b.kind==="forester")this.drawForestRange(b);
+        if (b.kind==="hunter")this.drawHuntRange(b);
         if (isExtractor(b.kind))this.drawMiningRange(b);
       }
     }
@@ -1058,6 +1065,7 @@ export class TownScene extends Phaser.Scene {
       }
       if (isBuilding(kind)) {
         if(kind==="market")this.drawCoverage({...servicePreview(kind,this.hover.x,this.hover.y,this.rotation),plot});
+        if(kind==="hunter")this.drawHuntRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if(kind==="forester")this.drawForestRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if(isExtractor(kind))this.drawMiningRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if (isLeisure(kind))
@@ -1203,7 +1211,7 @@ export class TownScene extends Phaser.Scene {
     if (!a) return;
     if (a.onsite) {
       const workplace=this.simulation.building(a.onsite);
-      const trip=workplace?.forestry?.find(t=>t.resident===a.resident)??workplace?.mining?.find(t=>t.resident===a.resident);
+      const trip=workplace?.hunting?.find(t=>t.resident===a.resident)??workplace?.forestry?.find(t=>t.resident===a.resident)??workplace?.mining?.find(t=>t.resident===a.resident);
       if(trip) this.routeOverlay.lineStyle(1.5,0xffdf88,.85).strokePoints(trip.path.slice(Math.floor(trip.distance)).map(p=>{const v=iso(p.x,p.y);return{x:v.x,y:v.y-groundHeight(p.x,p.y,this.simulation.state.terrain)};}),false);
       this.highlightWorker(a, 0xffdf88);
       return;
@@ -1566,6 +1574,7 @@ export class TownScene extends Phaser.Scene {
     }
     const time = this.simulation.state.tick * STEP + this.acc;
     this.forestryArt.update(this.simulation,this.acc,this.people,this.trees,this.occludingPlots);
+    this.huntingArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
     this.fishingArt.update(this.simulation, this.acc, time, this.selected);
     this.trafficAlerts.update(
       this.simulation,
@@ -1627,6 +1636,7 @@ export class TownScene extends Phaser.Scene {
       );
     }
   }
+  private drawHuntRange(b:Building){const center=forestCenter(b),points=[];for(let i=0;i<=64;i++){const angle=i/64*Math.PI*2,p=iso(center.x+Math.cos(angle)*HUNT_RADIUS,center.y+Math.sin(angle)*HUNT_RADIUS);points.push({x:p.x,y:p.y-groundHeight(b.x,b.y,this.simulation.state.terrain)});}this.overlay.lineStyle(1.4,0x98d7a0,.9).strokePoints(points,false);for(const target of huntTargets(this.simulation,b))this.diamond(target.animal,0x93d993,.35);}
   private drawForestRange(b:Building) {
     const center=forestCenter(b), points=[];
     for(let i=0;i<=64;i++) {
@@ -1651,7 +1661,7 @@ export class TownScene extends Phaser.Scene {
     this.animation.clear();
     this.nightArt.clear();
     this.shadowArt.clear();
-    this.fishingArt.clear();
+    this.fishingArt.clear();this.huntingArt.clear();
     this.trafficAlerts.clear();
     this.acc = 0;
     this.selected = null;

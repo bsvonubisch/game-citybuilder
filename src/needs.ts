@@ -29,7 +29,7 @@ export function townNeeds(sim:Simulation):Need[] {
   };
   const unfilled=jobs.find(b=>b.workers<buildingJobs(b)),site=sites.find(b=>b.workers<builderCapacity(b));
   return [
-    {id:"food",label:"Food for the next day",have:sim.stored("bread")+sim.stored("fish")+(sim.state.marketMeals??0),need:Math.ceil(population/3),unit:"meals",action:suggest("fishery","Build fishery")},
+    {id:"food",label:"Food for the next day",have:sim.stored("bread")+sim.stored("fish")+sim.stored("meat")+(sim.state.marketMeals??0),need:Math.ceil(population/3),unit:"meals",action:suggest("fishery","Build fishery")},
     {id:"workers",label:"Workplaces staffed",have:jobs.reduce((n,b)=>n+b.workers,0),need:jobs.reduce((n,b)=>n+buildingJobs(b),0),unit:"workers",action:unfilled?{label:"Check unfilled workplace",building:unfilled.id}:suggest("house","Build homes")},
     {id:"builders",label:"Construction crew",have:sites.reduce((n,b)=>n+b.workers,0),need:sites.reduce((n,b)=>n+builderCapacity(b),0),unit:"builders",action:site?{label:"Check construction site",building:site.id}:undefined},
     {id:"homes",label:"Housing",have:buildings.filter(b=>isHome(b.kind)&&(!b.construction||b.construction.upgradeTo||b.construction.upgradeLevel)&&b.connected).reduce((n,b)=>n+houseCapacity(b),0),need:population,unit:"places",action:suggest("house","Build homes")},
@@ -51,6 +51,7 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
   if(d.recipe?.input)rows.push({label:RESOURCE_NAMES[d.recipe.input],have:String(b.inventory[d.recipe.input]??0),need:`${d.recipe.amount??0} / batch`,ok:(b.inventory[d.recipe.input]??0)>=(d.recipe.amount??0)});
   if(isExtractor(b.kind)){const reserve=sim.state.deposits[buildingDeposit(b)!]??0;rows.push({label:"Deposit",have:reserve.toLocaleString(),need:"Within reach",ok:reserve>0&&sim.alert(b)?.kind!=="input"});}
   if(b.kind==="forester")rows.push({label:"Trees",have:sim.alert(b)?.kind==="input"?"None reachable":"In reach",need:"Mature woodland",ok:sim.alert(b)?.kind!=="input"});
+  if(b.kind==="hunter")rows.push({label:"Wildlife",have:sim.alert(b)?.kind==="input"?"None nearby":"In reach",need:"Woodland within 12 tiles",ok:sim.alert(b)?.kind!=="input"});
   if(isHome(b.kind)) {
     rows.push({label:"Food",have:`${sim.state.food}% fed`,need:"100%",ok:sim.state.food>=100});
     const occupants=sim.state.residents.filter(r=>r.home===b.id),leisure=occupants.length?Math.round(occupants.reduce((n,r)=>n+(r.leisure??60),0)/occupants.length):0;

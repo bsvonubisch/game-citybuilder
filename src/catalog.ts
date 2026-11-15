@@ -1,5 +1,6 @@
 import {marketPrice,marketStalls} from "./market-layout.js";
 export type Resource =
+  | "meat"
   | "bricks"
   | "grain"
   | "flour"
@@ -11,6 +12,7 @@ export type Resource =
   | "planks"
   | "tools";
 export type BuildingKind =
+  | "hunter"
   | "market"
   | "church"
   | "garden"
@@ -184,6 +186,7 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
+  hunter:{name:"Hunter’s lodge",cost:200,jobs:2,frame:0,materials:{wood:12,stone:8,metal:2},category:"production",description:"Two hunters follow wildlife within 12 tiles. They carry meat back to the lodge for food deliveries. Keep nearby woodland open.",recipe:{output:"meat",count:6,seconds:20}},
   market:{name:"Marketplace",cost:260,jobs:2,frame:0,materials:{wood:12,stone:12,planks:4},category:"town",description:"Choose a 1×1 to 5×5 plot. Vendors sell delivered food and tools to nearby residents. Open 07:00–19:00."},
   church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{"planks":16,"stone":30,"metal":4},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors from 08:00 to 20:00; religion improves after a visit."},
   garden:{name:"Town park",cost:380,jobs:0,frame:0,materials:{"wood":12,"stone":20,"metal":4},category:"town",description:"A spacious 4×4 garden with lawns, shaded benches and a fountain. Daytime leisure for 40 residents within 18 road tiles."},
@@ -348,6 +351,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
   },
 };
 export const RESOURCES: Resource[] = [
+  "meat",
   "bricks",
   "wood",
   "stone",
@@ -360,6 +364,7 @@ export const RESOURCES: Resource[] = [
   "tools",
 ];
 export const RESOURCE_NAMES: Record<Resource, string> = {
+  meat:"Meat",
   bricks:"Bricks",
   grain: "Grain",
   flour: "Flour",
@@ -372,6 +377,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   tools: "Tools",
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
+  hunter:[2,2],
     market:[2,2],
   church:[2,3],
   garden:[4,4],
