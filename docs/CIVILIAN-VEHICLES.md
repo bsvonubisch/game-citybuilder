@@ -12,6 +12,9 @@ saloon. Upright images use no screen rotation, skew, or per-frame resizing.
 Origin is (0.5, 0.8), matching existing vehicle ground contacts. Collision bodies
 and speeds retain their existing dimensions.
 
+The narrow S-facing cells exclude their outer 15% gutters before alpha trimming,
+to prevent stray pixels from neighboring cars appearing beside the front view.
+
 `src/civilian-vehicles.ts` hashes resident identity before selecting a model.
 This avoids regularly spaced motorist IDs showing only two colors. Return trips,
 vehicle recovery and reloaded saves keep the same model without new save fields.

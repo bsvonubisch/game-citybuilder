@@ -695,16 +695,19 @@ export class TownScene extends Phaser.Scene {
         y = Math.floor((Math.floor(i / columns) * source.height) / rows),
         w = Math.floor(source.width / columns),
         h = Math.floor(source.height / rows);
-      const contentWidth = w;
+      // The narrow front views have a few pixels from adjacent atlas cells
+      // in their outer gutters. Keep those outside the frame bounds.
+      const inset = name==='civilian-cars'&&i%columns===1?Math.floor(w*.15):0;
+      const contentWidth = w-inset*2;
       const bounds = opaqueBounds(
-        context.getImageData(x, y, contentWidth, h).data,
+        context.getImageData(x+inset, y, contentWidth, h).data,
         contentWidth,
         h,
       );
       texture.add(
         i,
         0,
-        x + bounds.x,
+        x + inset + bounds.x,
         y + bounds.y,
         bounds.width,
         bounds.height,
