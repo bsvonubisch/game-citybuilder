@@ -379,6 +379,15 @@ function togglePanel(next: typeof tab) {
   renderPanel();
   setPanelOpen(true);
 }
+document.addEventListener("pointerdown", (event) => {
+  if (!panelOpen || tab !== "build" || tool === "terrain") return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  // Leave the toggle button to its own handler; closing it here would make
+  // the subsequent click reopen the menu. Do not consume the map gesture.
+  if (target.closest("#build-drawer, #build-tab")) return;
+  setPanelOpen(false);
+}, {capture: true});
 $("#close-panel").onclick = () => {
   setPanelOpen(false);
   $(tool === "terrain" ? '[data-tool="terrain"]' : `#${tab}-tab`).focus();
