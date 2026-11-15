@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from 'phaser';
 import {marketLayout} from './market-layout.js';
 import {iso} from './rendering.js';
@@ -26,7 +27,7 @@ export class MarketArt {
    const name=`market-part-${slot.variant}-${b.rotation}`;
    if(!this.scene.textures.exists(name)){
     const texture=this.scene.textures.createCanvas(name,144*4,100*4)!,ctx=texture.context;ctx.scale(4,4);ctx.translate(72,84);
-    drawMarketStall(ctx,this.scene.textures.get('market-stalls').getSourceImage() as HTMLImageElement,this.scene.textures.get('market-produce').getSourceImage() as HTMLImageElement,slot.variant,b.rotation,0,0);texture.refresh();
+    drawMarketStall(ctx,sourceImage(this.scene,'market-stalls') as HTMLImageElement,sourceImage(this.scene,'market-produce') as HTMLImageElement,slot.variant,b.rotation,0,0);texture.refresh();
    }
    const p=iso(slot.stall.x,slot.stall.y),local=slot.stall.x-b.x+slot.stall.y-b.y;
    this.sprites.push(this.scene.add.image(p.x-72,p.y-84-groundHeight(b.x,b.y,sim.state.terrain),name).setOrigin(0).setScale(.25).setDepth((depths.get(b.id)??0)+.1+local*.08).setData('buildingId',b.id).setInteractive({pixelPerfect:true}));

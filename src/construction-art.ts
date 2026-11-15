@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import { dimensions } from "./catalog.js";
 import { iso, plotOutline } from "./rendering.js";
@@ -54,9 +55,7 @@ export class ConstructionArt {
           drawFisheryDock(
             ctx,
             shoreRotation,
-            this.scene.textures
-              .get("bridge-wood")
-              .getSourceImage() as HTMLImageElement,
+            sourceImage(this.scene,"bridge-wood") as HTMLImageElement,
             0,
           );
         const offset = iso(land.x, land.y);
@@ -75,9 +74,7 @@ export class ConstructionArt {
         ctx.clip();
         // A detailed painted earth material, at the same scale on every plot.
         // Project its ground plane only; scaffolding and workers remain rigid.
-        const earth = this.scene.textures
-          .get("construction-earth")
-          .getSourceImage() as HTMLImageElement;
+        const earth = sourceImage(this.scene,"construction-earth") as HTMLImageElement;
         const origin = iso(-0.5, -0.5);
         ctx.transform(32, 16, -32, 16, origin.x, origin.y);
         for (let x = 0; x < w; x += 2)
@@ -87,9 +84,7 @@ export class ConstructionArt {
         ctx.lineWidth = 0.4;
         ctx.stroke();
       }
-      const source = this.scene.textures
-        .get("construction-props")
-        .getSourceImage() as HTMLImageElement;
+      const source = sourceImage(this.scene,"construction-props") as HTMLImageElement;
       const cell = source.width / 2,
         cellH = source.height / 2;
       const prop = (frame: number, x: number, y: number, size: number) => {

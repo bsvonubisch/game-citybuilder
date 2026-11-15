@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type {EdgeOccluder} from "./edge-occlusion.js";
 import {roadTypeAt} from "./roads.js";
 import {roadSurface} from "./road-art.js";
@@ -46,9 +47,7 @@ export class BridgeArt {
   private images: Phaser.GameObjects.Image[] = [];
   private wood: HTMLImageElement;
   constructor(private scene: Phaser.Scene) {
-    this.wood = scene.textures
-      .get("bridge-wood")
-      .getSourceImage() as HTMLImageElement;
+    this.wood = sourceImage(scene,"bridge-wood") as HTMLImageElement;
   }
   private canvas(name: string, paint: (ctx: CanvasRenderingContext2D) => void) {
     const texture = this.scene.textures.createCanvas(
@@ -333,7 +332,7 @@ export class BridgeArt {
     return result;
   }
   private masonry(id:string,open:boolean[],point:(u:number,v:number)=>Vec,kind:'stone'|'brick',supportDepth:(u:number,v:number)=>number) {
-    const surface=roadSurface(this.scene,kind,0,0),wall=kind==='brick'?surface:this.scene.textures.get('foundation-stone').getSourceImage() as HTMLImageElement;
+    const surface=roadSurface(this.scene,kind,0,0),wall=kind==='brick'?surface:sourceImage(this.scene,'foundation-stone') as HTMLImageElement;
     const tint=kind==='brick'?{cap:'#e5af86',edge:'#734d3e'}:{cap:'#dfd7bf',edge:'#656864'};
     const deck=this.canvas('bridge-deck-'+id,ctx=>{
       // Opaque underpaint seals shared raster edges between ramp patches.

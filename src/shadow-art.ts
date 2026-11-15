@@ -33,6 +33,8 @@ export class ShadowArt {
     this.stamp = stamp;
     const live = new Set(casters),
       dark = daylight(time * 4).darkness;
+    const cloud=weather(time*4).cloud;
+    const used = new Set<string>();
     for (const [source, shadow] of this.images)
       if (!live.has(source) || !source.active) {
         shadow.destroy();
@@ -61,7 +63,8 @@ export class ShadowArt {
         p.y > v.y - 160 &&
         p.y < v.y + v.height + 160;
       if (!visible) {
-        this.images.get(source)?.setVisible(false);
+        this.images.get(source)?.destroy();
+        this.images.delete(source);
         continue;
       }
       const sun = castShadow(p.x, p.y, lamps, false),
@@ -70,6 +73,7 @@ export class ShadowArt {
       const dy = Math.round((sun.y * (1 - dark) + lamp.y * dark) / 4) * 4;
       const shape = `${w}-${h}-${dx}-${dy}`,
         key = `ground-shadow-${shape}`;
+      used.add(shape);
       let texture = this.textures.get(shape);
       if (!texture) {
         const rx = (w + h) * 17,
@@ -122,13 +126,21 @@ export class ShadowArt {
         .setTexture(texture.key)
         .setPosition(p.x + texture.left, p.y + texture.top)
         .setDepth(z === 0 ? -990 : (gx + gy) * 32 - 9)
-        .setAlpha(sun.alpha * (1 - dark) * (1-weather(time*4).cloud*.7) + lamp.alpha * dark)
+        .setAlpha(sun.alpha * (1 - dark) * (1-cloud*.7) + lamp.alpha * dark)
         .setVisible(true);
+    }
+    // Dusk/dawn create different direction variants. Only current variants need
+    // GPU memory; invisible shadows are recreated from the same geometry.
+    for(const [shape,texture] of this.textures)if(!used.has(shape)){
+      this.scene.textures.remove(texture.key);
+      this.textures.delete(shape);
     }
   }
   clear() {
     for (const image of this.images.values()) image.destroy();
     this.images.clear();
+    for(const texture of this.textures.values())this.scene.textures.remove(texture.key);
+    this.textures.clear();
     this.stamp = "";
   }
 }

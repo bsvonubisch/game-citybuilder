@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import {iso,opaqueBounds} from "./rendering.js";
 import {fenceEnds,fencePostMask,canonicalFence} from "./fences.js";
@@ -20,7 +21,7 @@ export class FenceArt {
   const side=d.side??1,posts=fencePostMask(d,decorations),name='pickets-'+side+'-'+posts;
   if(!this.scene.textures.exists(name)){
    const texture=this.scene.textures.createCanvas(name,76*4,76*4)!,ctx=texture.context;
-   const source=this.scene.textures.get('fence-pickets').getSourceImage() as HTMLImageElement;
+   const source=sourceImage(this.scene,'fence-pickets') as HTMLImageElement;
    this.crops??=fenceCrops(source);ctx.scale(4,4);ctx.translate(38,48);drawPicketFence(ctx,source,this.crops,side,posts);texture.refresh();
   }
   const p=iso(d.x,d.y);sprite.setTexture(name).setOrigin(0).setScale(.25).setPosition(p.x-38,p.y-48);

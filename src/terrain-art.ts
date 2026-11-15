@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import { roadSurface } from "./road-art.js";
 import { roadTypeAt } from "./roads.js";
@@ -9,7 +10,8 @@ import { key, terrain, type Simulation } from "./simulation.js";
 // Four source pixels per world pixel preserves detail at the maximum 2.7× zoom.
 // Small GPU textures also work on devices with a 2048px texture limit.
 export const TERRAIN_RESOLUTION = 4;
-const CHUNK = 512;
+const CHUNK = 256;
+const BORDER = 2;
 const EDGES = [
   { dx: 1, dy: 0, a: [32, 0], b: [0, 16] },
   { dx: 0, dy: 1, a: [0, 16], b: [-32, 0] },
@@ -36,7 +38,7 @@ export class TerrainArt {
   private shore: HTMLImageElement;
   constructor(private scene: Phaser.Scene) {
     const source = (name: string) =>
-      scene.textures.get(name).getSourceImage() as HTMLImageElement;
+      sourceImage(scene,name) as HTMLImageElement;
     this.grass = source("meadow");
     this.shore = source("shore");
     const width = SIZE * 64,
@@ -60,7 +62,7 @@ export class TerrainArt {
    * Off-screen chunks are disposable, so map size does not allocate one huge bitmap. */
   update(sim: Simulation) {
     const view = cameraViewport(this.scene.cameras.main),
-      margin = 180;
+      margin = 64;
     for (const chunk of this.chunks) {
       const near =
         chunk.x + chunk.w >= view.x - margin &&
@@ -80,11 +82,14 @@ export class TerrainArt {
       if (!chunk.texture) {
         chunk.texture = this.scene.textures.createCanvas(
           chunk.name,
-          chunk.w * TERRAIN_RESOLUTION,
-          chunk.h * TERRAIN_RESOLUTION,
+          chunk.w * TERRAIN_RESOLUTION + BORDER*2,
+          chunk.h * TERRAIN_RESOLUTION + BORDER*2,
         )!;
+        // A shared world-space gutter gives linear filtering real neighbouring
+        // pixels at chunk joins, instead of sampling a transparent boundary.
+        chunk.texture.add('inner',0,BORDER,BORDER,chunk.w*TERRAIN_RESOLUTION,chunk.h*TERRAIN_RESOLUTION);
         chunk.image = this.scene.add
-          .image(chunk.x, chunk.y, chunk.name)
+          .image(chunk.x, chunk.y, chunk.name,'inner')
           .setOrigin(0)
           .setScale(1 / TERRAIN_RESOLUTION)
           .setDepth(-1000);
@@ -99,8 +104,8 @@ export class TerrainArt {
         0,
         0,
         TERRAIN_RESOLUTION,
-        -chunk.x * TERRAIN_RESOLUTION,
-        -chunk.y * TERRAIN_RESOLUTION,
+        -chunk.x * TERRAIN_RESOLUTION + BORDER,
+        -chunk.y * TERRAIN_RESOLUTION + BORDER,
       );
       ctx.imageSmoothingEnabled = true;
       const pattern = (source: HTMLImageElement, size: number) => {

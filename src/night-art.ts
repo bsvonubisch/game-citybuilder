@@ -20,6 +20,9 @@ export class NightArt {
   private shade: Phaser.GameObjects.Image;
   private outside: Phaser.GameObjects.Graphics;
   private signature = "unpainted";
+  private sourceStamp = "";
+  private sources?: Phaser.GameObjects.Image[];
+  private preparedAll = false;
   private left = -SIZE * 32 - 160;
   private top = -320;
   private scale = 0.5;
@@ -127,6 +130,15 @@ export class NightArt {
     return result;
   }
   update(sim: Simulation, time: number, sources: Phaser.GameObjects.Image[]) {
+    const stamp=String(sim.state.revision);
+    const darkness=daylight(time*4).darkness;
+    if(this.preparedAll&&this.sources===sources&&this.sourceStamp===stamp){
+      for(const [source,light] of this.lights)light.setVisible(source.visible&&darkness>.01).setAlpha(darkness*(light.getData('power')??1));
+      this.shade.setVisible(darkness>0).setAlpha(darkness);
+      this.outside.setVisible(darkness>0).setAlpha(darkness);
+      return;
+    }
+    this.sources=sources;this.sourceStamp=stamp;this.preparedAll=true;
     const dark = daylight(time * 4).darkness,
       keep = new Set(sources);
     for (const [source, light] of this.lights)
@@ -145,7 +157,7 @@ export class NightArt {
       }
       const key = `emission-${sprite.texture.key}-${sprite.frame.name}`;
       // Prepare at most one mask per frame, even in daylight, avoiding a dusk hitch.
-      if (!this.cache.has(key) && prepared++ > 0) continue;
+      if (!this.cache.has(key) && prepared++ > 0) {this.preparedAll=false;continue;}
       const art = this.lightTexture(sprite);
       const power =
         b && !["house", "park", "tavern"].includes(b.kind) ? 0.72 : 1;
@@ -193,6 +205,7 @@ export class NightArt {
         this.lights.set(sprite, light);
       }
       light
+        .setData('power',power)
         .setTexture(art.texture)
         .setOrigin(sprite.originX, sprite.originY)
         .setScale(sprite.scaleX, sprite.scaleY)
@@ -223,11 +236,16 @@ export class NightArt {
     }
     this.shade.setVisible(dark > 0).setAlpha(dark);
     this.outside.setVisible(dark > 0).setAlpha(dark);
+    if(this.preparedAll){
+      const used=new Set([...this.lights.values()].map(light=>light.texture.key));
+      for(const [key,art] of this.cache)if(!used.has(art.texture)){this.scene.textures.remove(art.texture);this.cache.delete(key);}
+    }
   }
   clear() {
     for (const light of this.lights.values()) light.destroy();
     this.lights.clear();
     this.signature = "unpainted";
+    this.preparedAll=false;this.sources=undefined;
     this.lamps = [];
   }
 }

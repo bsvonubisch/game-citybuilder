@@ -1,11 +1,12 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import type { RoadType } from "./roads.js";
 
 /** Reuse the town's painted material detail. These small surface canvases are
  * made once and then baked into the same terrain chunks as the original slate. */
 export function prepareRoadSurfaces(scene: Phaser.Scene) {
-  const earth = scene.textures.get("construction-earth").getSourceImage() as HTMLImageElement;
-  const slate = scene.textures.get("slate").getSourceImage() as HTMLImageElement;
+  const earth = sourceImage(scene,"construction-earth") as HTMLImageElement;
+  const slate = sourceImage(scene,"slate") as HTMLImageElement;
   for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
     const texture = scene.textures.createCanvas(`road-dirt-${x}-${y}`, 512, 512)!;
     const ctx = texture.context;
@@ -59,5 +60,5 @@ export function paintBrickSurface(ctx: CanvasRenderingContext2D, slate: CanvasIm
 
 export function roadSurface(scene: Phaser.Scene, kind: RoadType, x: number, y: number) {
   const name = kind === "pavement" ? "road-pavement" : kind === "stone" ? "slate" : kind === "brick" ? "road-brick" : `road-dirt-${x % 2}-${y % 2}`;
-  return scene.textures.get(name).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  return sourceImage(scene,name) as HTMLImageElement | HTMLCanvasElement;
 }

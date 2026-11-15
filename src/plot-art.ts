@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import {drawMarket} from "./market-art.js";
 import type Phaser from "phaser";
 import { buildingArt, type BuildingArt } from "./building-art.js";
@@ -114,9 +115,7 @@ export class PlotArt {
     let fit = this.cache.get(key);
     if (!fit) {
       const art = buildingArt(kind, rotation, houseTier),
-        source = this.scene.textures
-          .get(art.texture)
-          .getSourceImage() as HTMLImageElement;
+        source = sourceImage(this.scene,art.texture) as HTMLImageElement;
       const { left, top, right, bottom } = plotBounds(art, w, h);
       const texture = this.scene.textures.createCanvas(
         key,
@@ -132,17 +131,11 @@ export class PlotArt {
         art,
         w,
         h,
-        this.scene.textures
-          .get("park-benches")
-          .getSourceImage() as HTMLImageElement,
-        this.scene.textures
-          .get("foundation-stone")
-          .getSourceImage() as HTMLImageElement,
-        this.scene.textures
-          .get("bridge-wood")
-          .getSourceImage() as HTMLImageElement,
+        sourceImage(this.scene,"park-benches") as HTMLImageElement,
+        sourceImage(this.scene,"foundation-stone") as HTMLImageElement,
+        sourceImage(this.scene,"bridge-wood") as HTMLImageElement,
         kind==="market"&&!sprite.getData("buildingId"),
-        this.scene.textures.get("meadow").getSourceImage() as HTMLImageElement,
+        sourceImage(this.scene,"meadow") as HTMLImageElement,
       );
       texture.refresh();
       fit = { texture: key, x: left, y: top };

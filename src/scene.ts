@@ -1,3 +1,4 @@
+import {retainSourceImages} from "./source-images.js";
 import {HuntingArt,prepareHuntingFrames} from "./hunting-art.js";
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {MarketArt,prepareVendorFrames} from "./market-art.js";
@@ -271,6 +272,7 @@ export class TownScene extends Phaser.Scene {
     this.simulation = simulation;
   }
   preload() {
+    retainSourceImages(this);
     for (const texture of new Set((Object.keys(BUILDINGS) as BuildingKind[]).map(kind=>buildingArt(kind).texture)))this.load.image(texture,`/${texture}.png`);
     this.load.image("building-house-2", "/building-house-2.png");
     this.load.image("building-house-3", "/building-house-3.png");
@@ -363,34 +365,7 @@ export class TownScene extends Phaser.Scene {
     this.bridgeArt = new BridgeArt(this);
     this.fenceArt = new FenceArt(this);
     this.gridCache = this.add.container(0, 0).setDepth(-999).setVisible(false);
-    const grid = this.add.graphics().lineStyle(0.5, 0xe8e9ca, 0.3);
-    for (let y = 0; y < SIZE; y++)
-      for (let x = 0; x < SIZE; x++) {
-        const p = iso(x, y);
-        grid.strokePoints(
-          [
-            { x: p.x, y: p.y - 16 },
-            { x: p.x + 32, y: p.y },
-            { x: p.x, y: p.y + 16 },
-            { x: p.x - 32, y: p.y },
-          ],
-          true,
-        );
-      }
-    for (let y = -16; y < SIZE * 32 + 16; y += 1024)
-      for (let x = -SIZE * 32; x < SIZE * 32; x += 1024) {
-        const chunk = this.add
-          .renderTexture(
-            x,
-            y,
-            Math.min(1024, SIZE * 32 - x),
-            Math.min(1024, SIZE * 32 + 16 - y),
-          )
-          .setOrigin(0);
-        chunk.draw(grid, -x, -y);
-        this.gridCache.add(chunk);
-      }
-    grid.destroy();
+
     this.overlay = this.add.graphics().setDepth(5000);
     this.frontOverlay = this.add.graphics().setDepth(5004);
     this.routeOverlay = this.add.graphics().setDepth(4999);
@@ -842,7 +817,7 @@ export class TownScene extends Phaser.Scene {
       const [w, h] = dimensions(b.kind, b.rotation, b.plot);
       if (!s) {
         s = this.add
-          .image(0, 0, buildingArt(b.kind, b.rotation, b.houseTier).texture)
+          .image(0, 0, "__DEFAULT")
           .setOrigin(0.5, 1)
           .setData("buildingId", b.id)
           .setInteractive({ pixelPerfect: true });
@@ -910,6 +885,37 @@ export class TownScene extends Phaser.Scene {
       false,
     );
   }
+  private prepareGrid() {
+    if(this.gridCache.length)return;
+    const grid = this.add.graphics().lineStyle(0.5, 0xe8e9ca, 0.3);
+    for (let y = 0; y < SIZE; y++)
+      for (let x = 0; x < SIZE; x++) {
+        const p = iso(x, y);
+        grid.strokePoints(
+          [
+            { x: p.x, y: p.y - 16 },
+            { x: p.x + 32, y: p.y },
+            { x: p.x, y: p.y + 16 },
+            { x: p.x - 32, y: p.y },
+          ],
+          true,
+        );
+      }
+    for (let y = -16; y < SIZE * 32 + 16; y += 1024)
+      for (let x = -SIZE * 32; x < SIZE * 32; x += 1024) {
+        const chunk = this.add
+          .renderTexture(
+            x,
+            y,
+            Math.min(1024, SIZE * 32 - x),
+            Math.min(1024, SIZE * 32 + 16 - y),
+          )
+          .setOrigin(0);
+        chunk.draw(grid, -x, -y);
+        this.gridCache.add(chunk);
+      }
+    grid.destroy();
+  }
   drawOverlay() {
     if (!this.overlay) return;
     this.overlay.clear();
@@ -920,6 +926,8 @@ export class TownScene extends Phaser.Scene {
     const raised = Object.values(this.simulation.state.terrain ?? {}).some(
       (c) => c.height !== 0,
     );
+    if(this.showGrid&&!raised)this.prepareGrid();
+    else if(this.gridCache.length)this.gridCache.removeAll(true);
     this.gridCache.setVisible(this.showGrid && !raised);
     if (this.showGrid && raised)
       for (let y = 0; y < SIZE; y++)
@@ -1079,7 +1087,7 @@ export class TownScene extends Phaser.Scene {
             ),
           );
         this.drawFront(kind, this.hover.x, this.hover.y, this.rotation, plot);
-        this.ghost ??= this.add.image(0, 0, "building-house").setDepth(5001);
+        this.ghost ??= this.add.image(0, 0, "__DEFAULT").setDepth(5001);
         this.placeSprite(
           this.ghost,
           kind,
@@ -1606,6 +1614,10 @@ export class TownScene extends Phaser.Scene {
     );
     this.waterArt.update(time);
     this.weatherArt.update(time / STEP);
+    // Phaser batches ordinary Images even outside the camera. Exclude only
+    // fully off-screen scenery, with enough margin for every shadow and glow.
+    const view=cameraViewport(camera),margin=160;
+    for(const sprite of this.trees){const left=sprite.x-sprite.displayWidth*sprite.originX,top=sprite.y-sprite.displayHeight*sprite.originY;sprite.setVisible(left+sprite.displayWidth>=view.x-margin&&left<=view.x+view.width+margin&&top+sprite.displayHeight>=view.y-margin&&top<=view.y+view.height+margin);}
     this.nightArt.update(this.simulation, time, this.lightSources);
     this.shadowArt.update(
       this.simulation,
@@ -1622,6 +1634,7 @@ export class TownScene extends Phaser.Scene {
     );
     this.waterEffects.clear();
     for (const p of this.waterPoints) {
+      if(p.x<view.x-12||p.x>view.x+view.width+12||p.y<view.y-12||p.y>view.y+view.height+12)continue;
       const phase = (time * 0.22 + hash(p.x, p.y)) % 1;
       this.waterEffects.lineStyle(
         1,

@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import {iso} from "./rendering.js";
 import {FENCE_DIRECTIONS} from "./fences.js";
@@ -40,8 +41,8 @@ export class PlanterArt {
     if(!this.scene.textures.exists(name)) {
       const texture=this.scene.textures.createCanvas(name,66*4,44*4)!;
       const ctx=texture.context;ctx.scale(4,4);ctx.translate(33,26);
-      const source=this.scene.textures.get("planter-plants").getSourceImage() as HTMLImageElement;
-      const wood=this.scene.textures.get("bridge-wood").getSourceImage() as HTMLImageElement;
+      const source=sourceImage(this.scene,"planter-plants") as HTMLImageElement;
+      const wood=sourceImage(this.scene,"bridge-wood") as HTMLImageElement;
       drawPlanter(ctx,mask,source,plantCrops(source),wood,variant);
       texture.refresh();
     }

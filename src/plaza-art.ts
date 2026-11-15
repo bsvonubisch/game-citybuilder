@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from 'phaser';
 import {drawPlaza,plazaLayout} from './park-art.js';
 import {iso} from './rendering.js';
@@ -12,7 +13,7 @@ export class PlazaArt {
    const size=b.kind==='garden'?4:2;const name='plaza-part-'+size+'-'+b.rotation+'-'+item.id;
    if(!this.scene.textures.exists(name)){
     const t=this.scene.textures.createCanvas(name,288*4,260*4)!,ctx=t.context;ctx.scale(4,4);ctx.translate(144,96);
-    drawPlaza(ctx,this.scene.textures.get('park-parts').getSourceImage() as HTMLImageElement,this.scene.textures.get('park-benches').getSourceImage() as HTMLImageElement,b.rotation,item.id,size);t.refresh();
+    drawPlaza(ctx,sourceImage(this.scene,'park-parts') as HTMLImageElement,sourceImage(this.scene,'park-benches') as HTMLImageElement,b.rotation,item.id,size);t.refresh();
    }
    const p=iso(b.x,b.y),ground=iso(b.x+item.x,b.y+item.y),height=groundHeight(b.x,b.y,sim.state.terrain);ground.y-=height;
    const s=this.scene.add.image(p.x-144,p.y-96-height,name).setOrigin(0).setScale(.25).setDepth((depths.get(b.id)??((b.x+b.y+size*2-2)*32+12))+.1+(item.x+item.y)*.08).setData('buildingId',b.id).setData('plazaPart',true).setInteractive({pixelPerfect:true});

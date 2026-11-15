@@ -1,3 +1,4 @@
+import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
 import { roadSurface } from "./road-art.js";
 import { roadTypeAt } from "./roads.js";
@@ -111,9 +112,7 @@ export class ElevationArt {
           }
           ctx.restore();
         }
-        const grass = this.scene.textures
-          .get("meadow")
-          .getSourceImage() as HTMLImageElement;
+        const grass = sourceImage(this.scene,"meadow") as HTMLImageElement;
         const pattern = ctx.createPattern(grass, "repeat")!;
         pattern.setTransform(
           new DOMMatrix().scale(160 / grass.width, 160 / grass.height),
