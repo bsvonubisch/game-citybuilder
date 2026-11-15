@@ -4,7 +4,8 @@ import {iso,facing,travellerDepth,type OccludingPlot} from './rendering.js';
 import {groundHeight} from './terrain.js';
 import {STEP} from './catalog.js';
 import type {Simulation} from './simulation.js';
-export function prepareHuntingFrames(scene:Phaser.Scene){for(const [name,cols] of [['wildlife',4],['hunters',5]] as const){const texture=scene.textures.get(name),source=texture.getSourceImage() as HTMLImageElement;for(let i=0;i<cols*4;i++){const x=Math.round(i%cols*source.width/cols),y=Math.round(Math.floor(i/cols)*source.height/4);texture.add(i,0,x,y,Math.round((i%cols+1)*source.width/cols)-x,Math.round((Math.floor(i/cols)+1)*source.height/4)-y);}}}
+import {prepareActorFrames,placeActor} from './actor-art.js';
+export function prepareHuntingFrames(scene:Phaser.Scene){prepareActorFrames(scene,'hunters',5);prepareActorFrames(scene,'hunter-walk',4);for(const [name,cols] of [['wildlife',4]] as const){const texture=scene.textures.get(name),source=texture.getSourceImage() as HTMLImageElement;for(let i=0;i<cols*4;i++){const x=Math.round(i%cols*source.width/cols),y=Math.round(Math.floor(i/cols)*source.height/4);texture.add(i,0,x,y,Math.round((i%cols+1)*source.width/cols)-x,Math.round((Math.floor(i/cols)+1)*source.height/4)-y);}}}
 export class HuntingArt {
  private animals=new Map<number,Phaser.GameObjects.Image>();private arrows:Phaser.GameObjects.Graphics;
  constructor(private scene:Phaser.Scene){this.arrows=scene.add.graphics();}
@@ -18,7 +19,9 @@ export class HuntingArt {
   }
   for(const b of sim.state.buildings)for(const trip of b.hunting??[]){const agent=sim.state.agents.find(a=>a.resident===trip.resident&&a.onsite===b.id),s=agent&&people.get(agent.id);if(!s)continue;
    const p=huntPosition(trip,elapsed),animal=sim.state.wildlife?.find(a=>a.id===trip.animal),direction=trip.phase==='aiming'&&animal?facing(animal.x-p.x,animal.y-p.y):facing(p.dx,p.dy),phase=trip.phase==='returning'&&trip.cargo?4:trip.phase==='aiming'?(trip.work<.8?1:trip.work<HUNT_SECONDS-.6?2:3):0,frame=direction*5+phase,v=iso(p.x,p.y);
-   s.setTexture('hunters',frame).setScale(29/s.frame.height).setOrigin(.5,.98).setFlipX(false).setVisible(true).setPosition(v.x,v.y-groundHeight(p.x,p.y,sim.state.terrain)+(trip.phase==='aiming'?0:Math.sin((sim.state.tick*STEP+elapsed)*8)*.35)).setData('sized',false);
+   if(trip.phase==='aiming')placeActor(s,'hunters',frame);
+   else placeActor(s,'hunter-walk',direction*4+Math.floor((trip.distance+elapsed*.75)*10)%4);
+   s.setVisible(true).setPosition(v.x,v.y-groundHeight(p.x,p.y,sim.state.terrain)).setData('sized',false);
    s.setDepth(travellerDepth(p,{left:s.x-s.displayWidth/2,right:s.x+s.displayWidth/2,top:s.y-s.displayHeight,bottom:s.y},plots));
    if(trip.phase==='aiming'&&animal&&trip.work>=HUNT_SECONDS-.6){const end=iso(animal.x,animal.y),t=Math.min(1,(trip.work-HUNT_SECONDS+.6)/.6),x=s.x+(end.x-s.x)*t,y=s.y-17+(end.y-groundHeight(animal.x,animal.y,sim.state.terrain)-s.y+9)*t;this.arrows.setDepth(s.depth+.1).lineStyle(.8,0xd9bc75,1).lineBetween(x-(end.x-s.x)*.14,y-(end.y-s.y)*.14,x,y);}
   }

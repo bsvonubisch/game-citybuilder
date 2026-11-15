@@ -1,9 +1,10 @@
 import {sourceImage} from "./source-images.js";
+import {resolvedBuildingArt} from './sprite-ground.js';
 import {drawMarket} from "./market-art.js";
 import type Phaser from "phaser";
 import { buildingArt, type BuildingArt } from "./building-art.js";
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
-import { iso, plotTransform, plotOutline } from "./rendering.js";
+import { iso, plotTransform, plotOutline,fitGround } from "./rendering.js";
 import { drawFoundation } from "./foundation.js";
 import { drawPlaza } from "./park-art.js";
 import { drawFisheryPlatform } from "./fishery-art.js";
@@ -11,7 +12,8 @@ import { FOUNDATION_HEIGHT } from "./foundation.js";
 
 export function artTransform(art: BuildingArt, w: number, h: number) {
   const land = art.land;
-  const t = plotTransform(art.ground, land?.width ?? w, land?.height ?? h);
+  const fit=art.contacts?fitGround(art.contacts,w,h,.06,art.scaleLimit):undefined;
+  const t = fit?{scale:fit.scale,point:(x:number,y:number)=>({x:fit.x+x*fit.scale,y:fit.y+y*fit.scale})}:plotTransform(art.ground, land?.width ?? w, land?.height ?? h);
   const offset = land ? iso(land.x, land.y) : { x: 0, y: 0 };
   return {
     scale: t.scale,
@@ -19,7 +21,7 @@ export function artTransform(art: BuildingArt, w: number, h: number) {
       const p = t.point(x, y);
       return {
         x: p.x + offset.x,
-        y: p.y + offset.y - (land ? FOUNDATION_HEIGHT : 0),
+        y: p.y + offset.y - (land || art.contacts ? FOUNDATION_HEIGHT : 0),
       };
     },
   };
@@ -114,8 +116,9 @@ export class PlotArt {
       key = `fitted-${kind}-${houseTier}-${rotation}-${w}-${h}-${kind==="market"&&!sprite.getData("buildingId")?"preview":"placed"}`;
     let fit = this.cache.get(key);
     if (!fit) {
-      const art = buildingArt(kind, rotation, houseTier),
-        source = sourceImage(this.scene,art.texture) as HTMLImageElement;
+      const raw = buildingArt(kind, rotation, houseTier),
+        source = sourceImage(this.scene,raw.texture) as HTMLImageElement,
+        art = resolvedBuildingArt(kind,rotation,houseTier,source);
       const { left, top, right, bottom } = plotBounds(art, w, h);
       const texture = this.scene.textures.createCanvas(
         key,
@@ -156,9 +159,9 @@ export class PlotArt {
     plot?: readonly [number, number],
     houseTier: HouseTier = 1,
   ) {
-    const art = buildingArt(kind, rotation, houseTier),
+    const raw = buildingArt(kind, rotation, houseTier),art=resolvedBuildingArt(kind,rotation,houseTier,sourceImage(this.scene,raw.texture)),
       [w, h] = dimensions(kind, rotation, plot),
       t = artTransform(art, w, h);
-    return { ...t.point(x, y), scale: t.scale };
+    return { ...t.point(x*art.size[0]/raw.size[0], y*art.size[1]/raw.size[1]), scale: t.scale };
   }
 }

@@ -6,7 +6,11 @@ Generated with the built-in image generation tool. All project assets are in `pu
 
 Every land building now uses the same four-world-pixel raised stone foundation, with six stones per tile along both grid axes. Its lower outside corners coincide exactly with the occupied footprint. Building artwork uses only uniform scaling and translation; no shearing, rotation of the upright image, or independent axis scaling. Menu thumbnails use the same composition as the game.
 
-The sawmill, warehouse, copper workshop and wheat farm now use compact 2×2 plots, matching the near-square ground envelopes of the art. All current buildings occupy 2×2. The shoreline fishery uses this shared stone base only on its land half, with a timber pier over the other half. The rendering/placement system still supports rectangular footprints for future larger buildings. Old six-cell lots shrink only inside their previously occupied area; the preferred retained area keeps their road frontage. IDs, stocks, work, enabled state, residents and money are retained. Local saves are backed up before this migration.
+The sawmill, warehouse, copper workshop and wheat farm use compact 2×2 plots. The small cottage occupies 1×1, church 3×2, large park 4×4, and markets use configurable 1–5-tile sides. The shoreline fishery uses this shared stone base only on its land half, with a timber pier over the other half. Old six-cell lots shrink only inside their previously occupied area; the preferred retained area keeps their road frontage. IDs, stocks, work, enabled state, residents and money are retained. Local saves are backed up before this migration.
+
+The November 15 audit covers 22 building/tier variants in all four directions. Source alpha ground contacts include stairs, ramps, barrels and other low props. These fit inside both grid axes with a small inset, above the four-pixel stone foundation. All four views share one maximum scale, so smaller rear silhouettes no longer enlarge their windows to fill the plot. Uneven church source rectangles are respected when measuring and drawing. Upright art is never sheared or stretched on one axis.
+
+The butcher and tavern source artwork was replaced using orthographic geometry guides and human-sized doors/windows. Hunter entrance frames were corrected. Updated built-in generation prompts are recorded in `sprite-audit-prompts.json`. The hunter walk and action atlases use the same compact character proportions as pedestrians; feet are anchored and all action frames retain a common body scale. Vendors serve once per customer, while customers walk through the market aisles, browse and return to the road.
 
 ## Assets
 
@@ -58,5 +62,5 @@ Each direction has its own hub location. The front two views draw sails ahead of
 
 ## Verification
 
-The local `tests/footprints.html` gallery displays all 56 views (12 types plus the two extra house tiers). Tests cover rigid sprite proportions, exact foundation bounds, equal tile density/height, plaza object counts and facing, windmill layering, migration preserving inventories/work/frontage, and normal construction/logistics/traffic behavior.
+The local `tests/footprints.html` gallery displays all 88 views at the same zoom, with a 22-world-pixel pedestrian for size comparison. Tests cover rigid sprite proportions, exact foundation bounds, ground-contact measurement, consistent rotated scale, uneven source crops, equal tile density/height, plaza object counts and facing, windmill layering, market visit movement, migration preserving inventories/work/frontage, and normal construction/logistics/traffic behavior.
 

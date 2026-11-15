@@ -298,6 +298,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("construction-workers", "/construction-workers.png");
     this.load.image("wildlife","/wildlife-deer.png");
     this.load.image("hunters","/hunter-workers.png");
+    this.load.image("hunter-walk","/hunter-walk.png");
     this.load.image("forestry", "/forestry-workers.png");
     this.load.image("mining", "/mining-workers.png");
     this.load.image("planter-plants", "/planter-plants.png");
@@ -1569,8 +1570,10 @@ export class TownScene extends Phaser.Scene {
           .setDepth((this.buildings.get(visiting.id)?.depth??((visiting.x+visiting.y+(visiting.kind==="garden"?6:2))*32+12))+.1+(visit.x-visiting.x+visit.y-visiting.y)*.08).setVisible(true).setData('sized',false);
       }
       const shopping=marketActor(this.simulation,a,this.acc);
-      if(shopping){const {b,p,vendor,serving}=shopping,v=iso(p.x,p.y),pose=walkFrame((b.rotation+1)%4,a.id%2,0,true,false),frame=b.rotation*4+(serving?[0,1,2,3,2,0][Math.floor(shopping.elapsed*2)%6]:0);
-        s.setTexture(vendor?"market-vendors":"walkers",vendor?frame:pose.frame).setScale(vendor?27/this.textures.getFrame("market-vendors",frame).height:this.travellerScale({...a,kind:"person"},a.id%2,"walkers")).setOrigin(.5,vendor?.98:1).setFlipX(!vendor&&pose.flip).setPosition(v.x,v.y-groundHeight(b.x,b.y,this.simulation.state.terrain)-FOUNDATION_HEIGHT).setDepth((this.buildings.get(b.id)?.depth??0)+.1+(p.x-b.x+p.y-b.y)*.08).setVisible(true).setData("sized",false);
+      if(shopping){const {b,p,vendor,serving,visit}=shopping,v=iso(p.x,p.y),slot=marketLayout(b)[shopping.slot],direction=vendor?facing(slot.customer.x-slot.vendor.x,slot.customer.y-slot.vendor.y):visit?.walking?facing(visit.dx,visit.dy):facing(slot.vendor.x-slot.customer.x,slot.vendor.y-slot.customer.y),pose=walkFrame(direction,a.id%2,visit?.distance??0,!visit?.walking,false),t=visit?.serviceTime??0,gesture=serving&&t>.6&&t<2?(t<1||t>1.7?2:3):0;
+        if(vendor)placeActor(s,"market-vendors",direction*4+gesture);
+        else s.setTexture("walkers",pose.frame).setScale(this.travellerScale({...a,kind:"person"},a.id%2,"walkers")).setOrigin(.5,1).setFlipX(pose.flip);
+        s.setPosition(v.x,v.y-groundHeight(b.x,b.y,this.simulation.state.terrain)-FOUNDATION_HEIGHT).setDepth((this.buildings.get(b.id)?.depth??0)+.1+(p.x-b.x+p.y-b.y)*.08).setVisible(true).setData("sized",false);
       }
       if (a.kind !== "person"&&!visit&&!shopping)
         this.animation.vehicle(
@@ -1686,3 +1689,6 @@ export class TownScene extends Phaser.Scene {
     this.redraw();
   }
 }
+import {placeActor} from './actor-art.js';
+import {facing} from './rendering.js';
+import {marketLayout} from './market-layout.js';

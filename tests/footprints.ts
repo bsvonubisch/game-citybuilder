@@ -7,8 +7,9 @@ import {
   type HouseTier,
 } from "../src/catalog.js";
 import { buildingArt } from "../src/building-art.js";
-import { plotTransform, iso } from "../src/rendering.js";
-import { drawPlot, plotBounds } from "../src/plot-art.js";
+import { iso } from "../src/rendering.js";
+import { drawPlot, plotBounds, artTransform } from "../src/plot-art.js";
+import {resolvedBuildingArt} from '../src/sprite-ground.js';
 import { drawRotor, rotorView } from "../src/windmill.js";
 import { fisheryCells } from "../src/shoreline.js";
 
@@ -27,11 +28,14 @@ const stone = new Image();
 stone.src = "/foundation-stone.png";
 const wood = new Image();
 wood.src = "/bridge-wood.png";
+const meadow=new Image();meadow.src='/meadow-hd.png';
+const walker=new Image();walker.src='/pedestrian-walk.png';
 await Promise.all([
   benches.decode(),
   rotor.decode(),
   stone.decode(),
   wood.decode(),
+  meadow.decode(),walker.decode(),
 ]);
 for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
   if (filter && !filter.includes(kind)) continue;
@@ -44,9 +48,9 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
     image.src = `/${buildingArt(kind, 0, tier).texture}.png`;
     await image.decode();
     for (let rotation = 0; rotation < 4; rotation++) {
-      const art = buildingArt(kind, rotation, tier),
+      const art = resolvedBuildingArt(kind, rotation, tier,image),
         [w, h] = dimensions(kind, rotation),
-        fit = plotTransform(art.ground, w, h);
+        fit = artTransform(art, w, h);
       const article = document.createElement("article"),
         title = document.createElement("h2"),
         canvas = document.createElement("canvas");
@@ -70,7 +74,7 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
         }
       };
       if (rotorView(rotation).rear) sail();
-      drawPlot(sc, image, art, w, h, benches, stone, wood);
+      drawPlot(sc, image, art, w, h, benches, stone, wood,true,meadow);
       if (!rotorView(rotation).rear) sail();
       const draw = () => {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -123,6 +127,8 @@ for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
               );
           }
         ctx.drawImage(sprite, left, top, right - left, bottom - top);
+        const person=iso(w-.1,h-.1);
+        ctx.drawImage(walker,0,0,walker.width/8,walker.height/4,person.x-11,person.y-22,22,22);
         if (contacts.checked) {
           poly(
             [

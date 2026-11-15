@@ -133,6 +133,7 @@ export function fitGround(
   width: number,
   height: number,
   inset = 0.08,
+  scaleLimit = Infinity,
 ) {
   const projected = ground.map(([x, y]) => groundCoordinates(x, y));
   const minX = Math.min(...projected.map((p) => p.x));
@@ -140,6 +141,7 @@ export function fitGround(
   const minY = Math.min(...projected.map((p) => p.y));
   const maxY = Math.max(...projected.map((p) => p.y));
   const scale = Math.min(
+    scaleLimit,
     (width - 2 * inset) / (maxX - minX),
     (height - 2 * inset) / (maxY - minY),
   );

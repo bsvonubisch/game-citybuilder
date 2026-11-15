@@ -2,8 +2,23 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {Simulation,parseSave} from '../.test-dist/simulation.js';
 import {marketLayout,marketPrice,validMarketPlot,marketRectangle} from '../.test-dist/market-layout.js';
 import {marketVendors,buyAtMarket} from '../.test-dist/market.js';
+import {marketVisit,marketCustomerPose} from '../.test-dist/market-visitors.js';
+import {lanePose} from '../.test-dist/lanes.js';
 import {buildingJobs,footprint} from '../.test-dist/catalog.js';
 function fixture(){const sim=new Simulation();sim.state.money=100000;Object.assign(sim.state.buildings.find(b=>b.kind==='warehouse').inventory,{wood:1000,stone:1000,planks:1000,bread:100,fish:100});return sim;}
+test('shoppers enter from the road, browse once, and walk back to the same exit in every plot orientation',()=>{
+ for(const plot of [[1,1],[2,3],[5,5]])for(let rotation=0;rotation<4;rotation++){
+  const b={x:10,y:10,kind:'market',rotation,plot};
+  for(const slot of marketLayout(b)){
+   const a={id:7,kind:'person',path:[{x:10,y:10+plot[1]},{x:9,y:10+plot[1]}],segment:0,progress:0,marketSlot:slot.id,wait:0};
+   const visit=marketVisit(b,a);a.wait=visit.duration;
+   const entry=marketCustomerPose(b,a),road=lanePose(a,0);assert.equal(entry.x,road.x);assert.equal(entry.y,road.y);assert.ok(entry.walking);
+   for(const p of visit.path.slice(1))assert.ok(p.x>=b.x-.5&&p.x<=b.x+plot[0]-.5&&p.y>=b.y-.5&&p.y<=b.y+plot[1]-.5);
+   a.wait=visit.duration/2;const browsing=marketCustomerPose(b,a);assert.equal(browsing.browsing,true);assert.ok(Math.hypot(browsing.x-slot.customer.x,browsing.y-slot.customer.y)<1e-7);
+   a.wait=0;const exit=marketCustomerPose(b,a);assert.ok(Math.hypot(exit.x-road.x,exit.y-road.y)<1e-7);assert.ok(visit.duration<60);
+  }
+ }
+});
 const command=(sim,c)=>sim.execute({id:'market-'+sim.state.revision,actorId:'test',expectedRevision:sim.state.revision,command:c});
 test('market drag selects an inclusive rectangle in every direction and clamps each side to five tiles',()=>{
  assert.deepEqual(marketRectangle({x:10,y:10},{x:10,y:10}),{x:10,y:10,plot:[1,1]});

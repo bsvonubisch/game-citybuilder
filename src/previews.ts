@@ -1,8 +1,8 @@
 import {drawPicketFence,fenceCrops} from "./fence-art.js";
 import { buildingArt } from "./building-art.js";
+import {resolvedBuildingArt} from './sprite-ground.js';
 import { dimensions, type BuildingKind, type HouseTier } from "./catalog.js";
-import { drawPlot, plotBounds } from "./plot-art.js";
-import { plotTransform } from "./rendering.js";
+import { drawPlot, plotBounds,artTransform } from "./plot-art.js";
 import { drawRotor, rotorView } from "./windmill.js";
 import {drawPlanter,plantCrops} from "./planter-art.js";
 
@@ -39,8 +39,8 @@ export function buildingPreview(
   let promise = previews.get(key);
   if (!promise) {
     promise = (async () => {
-      const art = buildingArt(kind, rotation, tier),
-        [w, h] = dimensions(kind, rotation);
+      let art = buildingArt(kind, rotation, tier);
+      const [w, h] = dimensions(kind, rotation);
       const [image, benches, rotor, stone, wood, meadow] = await Promise.all([
         artImage(`/${art.texture}.png`),
         (kind === "park" || kind === "garden") ? artImage("/park-benches.png") : undefined,
@@ -49,6 +49,7 @@ export function buildingPreview(
         kind === "fishery" ? artImage("/bridge-wood.png") : undefined,
         kind === "garden" ? artImage("/meadow-hd.png") : undefined,
       ]);
+      art=resolvedBuildingArt(kind,rotation,tier,image);
       const bounds = plotBounds(art, w, h),
         canvas = document.createElement("canvas");
       canvas.width = (bounds.right - bounds.left + 16) * 3;
@@ -56,7 +57,7 @@ export function buildingPreview(
       const ctx = canvas.getContext("2d")!;
       ctx.scale(3, 3);
       ctx.translate(-bounds.left + 8, -bounds.top + 24);
-      const t = plotTransform(art.ground, w, h),
+      const t = artTransform(art, w, h),
         p = art.mechanism ? t.point(...art.mechanism) : null;
       const sail = () => {
         if (rotor && p)
