@@ -36,7 +36,7 @@ test("production links follow recipe chains, warehouse export rules and front en
   );
   assert.deepEqual(
     new Set(view.outputs.map((l) => `${l.target}:${l.resource}`)),
-    new Set([`${workshop.id}:planks`, `${warehouse.id}:planks`]),
+    new Set([`${warehouse.id}:planks`]),
   );
   assert.equal(
     canSupply(sawmill, warehouse),
@@ -95,7 +95,7 @@ test("sawmills deliver usable construction planks to warehouses while workshops 
   );
   assert.ok(
     building(sim, "workshop").produced > 10,
-    "warehouse deliveries must not starve workshops",
+    "metal deliveries must supply workshops independently of planks",
   );
   const house = building(sim, "house");
   execute(sim, { type: "upgrade", id: house.id });
@@ -327,4 +327,13 @@ test("brickworks consumes stone, makes bricks, and sends them to warehouse stock
  assert.ok(works.produced>=4);assert.equal(works.produced%4,0);
  assert.equal(12-works.inventory.stone,works.produced/2);
  assert.ok(sim.stored('bricks')>0);assert.equal(canSupply(works,building(sim,'warehouse')),true);
+});
+
+test('tools require metal, leave planks untouched, and receive warehouse metal deliveries',()=>{
+ const sim=new Simulation(),works=building(sim,'workshop');works.inventory={planks:9,metal:0};
+ assert.equal(BUILDINGS.workshop.recipe.input,'metal');
+ assert.equal(canSupply(building(sim,'sawmill'),works),false);
+ assert.equal(canSupply(building(sim,'mine'),works),true);
+ assert.equal(canSupply(building(sim,'warehouse'),works),true);
+ for(let i=0;i<800;i++)sim.step();assert.ok(works.produced>0);assert.equal(works.inventory.planks,0);assert.ok(sim.stored('planks')>=9,'former plank input returns to construction stock');
 });

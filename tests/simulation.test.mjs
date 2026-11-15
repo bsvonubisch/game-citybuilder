@@ -2666,3 +2666,44 @@ test('pedestrians remain on the correct side of fences and bridge rails along th
  const distant={a:{x:9,y:9},b:{x:10,y:9},depth:600,left:1000,right:1100,top:900,bottom:1000};
  assert.equal(edgeDepth({x:0,y:0},bounds,16,[distant]),16);
 });
+
+test('demolishing a workshop preserves builders already working on other sites, including at night',()=>{
+ const sim=new Simulation();sim.state.money=100000;for(const w of sim.state.buildings.filter(b=>b.kind==='warehouse'))Object.assign(w.inventory,{wood:1000,planks:1000,stone:1000,metal:1000});
+ const command=c=>{const r=sim.execute({id:'demolition-'+sim.state.revision,actorId:'test',expectedRevision:sim.state.revision,command:c});assert.equal(r.ok,true,r.message);};
+ for(const b of sim.state.buildings.filter(b=>b.kind==='house').slice(0,4))command({type:'upgrade',id:b.id});
+ for(let i=0;i<400;i++)sim.step();
+ const crews=sim.state.agents.filter(a=>a.onsite&&sim.building(a.onsite)?.construction).map(a=>({id:a.id,site:a.onsite,resident:a.resident}));assert.ok(crews.length>=4);
+ sim.state.tick=600;const works=sim.state.buildings.find(b=>b.kind==='workshop');command({type:'demolish',x:works.x,y:works.y});
+ for(const crew of crews){const a=sim.state.agents.find(a=>a.id===crew.id);assert.equal(a?.onsite,crew.site);assert.equal(sim.state.residents.find(r=>r.id===crew.resident)?.job,crew.site);}
+ const site=sim.building(crews[0].site),work=site.construction.completed;sim.step();assert.ok(site.construction.completed>work);
+ const loaded=new Simulation(parseSave(JSON.stringify(sim.state)));assert.equal(loaded.state.agents.filter(a=>a.onsite&&loaded.building(a.onsite)?.construction).length,sim.state.agents.filter(a=>a.onsite&&sim.building(a.onsite)?.construction).length);
+});
+
+test('the last finished warehouse is protected while its replacement is under construction',()=>{
+ const sim=new Simulation(),working=sim.state.buildings.find(b=>b.kind==='warehouse');
+ const replacement={...structuredClone(working),id:sim.state.nextId++,x:23,y:11,inventory:{},construction:{required:240,completed:20}};
+ sim.state.buildings.push(replacement);sim.reconnect(true);
+ for(const command of [{type:'demolish',x:working.x,y:working.y},{type:'removeStroke',from:{x:working.x,y:working.y},to:{x:working.x,y:working.y}}]){
+  const before=sim.snapshot(),result=sim.execute({id:'warehouse-guard',actorId:'test',expectedRevision:sim.state.revision,command});
+  assert.equal(result.ok,false);assert.match(result.message,/finished warehouse/i);assert.deepEqual(sim.snapshot(),before);
+ }
+ delete replacement.construction;sim.reconnect(true);
+ const result=sim.execute({id:'replacement-ready',actorId:'test',expectedRevision:sim.state.revision,command:{type:'demolish',x:working.x,y:working.y}});
+ assert.equal(result.ok,true,result.message);
+});
+
+test('a stranded save opens one replacement warehouse and resumes people and construction without losing stock',()=>{
+ const sim=new Simulation(),warehouse=sim.state.buildings.find(b=>b.kind==='warehouse');
+ warehouse.construction={required:240,completed:36};
+ const home=sim.state.buildings.find(b=>b.kind==='house');home.construction={required:300,completed:20,upgradeTo:2};
+ sim.reconnect();assert.equal(sim.state.agents.length,0);
+ const inventory=structuredClone(warehouse.inventory),money=sim.state.money;
+ const repaired=new Simulation(parseSave(JSON.stringify(sim.snapshot()))),depot=repaired.building(warehouse.id);
+ assert.equal(depot.construction,undefined);assert.equal(depot.connected,true);assert.deepEqual(depot.inventory,inventory);assert.equal(repaired.state.money,money);
+ assert.ok(repaired.state.agents.length>0);assert.ok(repaired.building(home.id).workers>0);
+ for(let i=0;i<300;i++)repaired.step();
+ assert.ok(repaired.building(home.id).construction.completed>20);
+ const reloaded=new Simulation(parseSave(JSON.stringify(repaired.snapshot())));
+ assert.equal(reloaded.state.buildings.filter(b=>b.kind==='warehouse').length,1);
+ assert.equal(reloaded.state.history.filter(h=>h.includes('replacement warehouse has opened')).length,1);
+});

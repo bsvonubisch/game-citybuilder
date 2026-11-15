@@ -37,7 +37,7 @@ function fixture() {
     x: 8,
     y: 8,
     rotation: 0,
-    inventory: { wood: 100, planks: 100, stone: 100 },
+    inventory: {metal:100, wood: 100, planks: 100, stone: 100 },
   };
   seed.buildings = [house, warehouse];
   seed.roadTypes = {};

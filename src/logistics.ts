@@ -27,7 +27,7 @@ export interface ProductionConnections {
 
 /** Shared by dispatch and inspection: warehouses receive only these exports. */
 export function canSupply(source: Building, target: Building) {
-  const output = BUILDINGS[source.kind].recipe?.output;
+  const output = source.kind === "warehouse" && target.kind === "workshop" ? "metal" : BUILDINGS[source.kind].recipe?.output;
   return (
     !source.construction &&
     !target.construction &&
@@ -51,7 +51,7 @@ export function productionConnections(
   const link = (source: Building, target: Building): GoodsConnection => ({
     source: source.id,
     target: target.id,
-    resource: BUILDINGS[source.kind].recipe!.output,
+    resource: source.kind==="warehouse"?"metal":BUILDINGS[source.kind].recipe!.output,
     path: sim.route(source, target,"truck"),
   });
   return {

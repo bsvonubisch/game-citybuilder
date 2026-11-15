@@ -43,7 +43,7 @@ export const HOUSE_TIERS: Record<
     capacity: 3,
     description: "A warm first home for three residents.",
     cost: 90,
-    materials: { wood: 5 },
+    materials: { wood: 5, stone: 6 },
   },
   2: {
     name: "Townhouse",
@@ -181,16 +181,16 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
-  church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{planks:16,stone:30},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors from 08:00 to 20:00; religion improves after a visit."},
-  garden:{name:"Town park",cost:380,jobs:0,frame:0,materials:{wood:12,stone:20},category:"town",description:"A spacious 4×4 garden with lawns, shaded benches and a fountain. Daytime leisure for 40 residents within 18 road tiles."},
-  cottage: {name:"Little cottage", cost:55, jobs:0, frame:0, materials:{wood:3}, category:"homes", description:"A compact 1×1 home for two residents. Upgrade for more room without enlarging the plot."},
-  brickworks:{name:"Village brickworks",cost:260,jobs:2,frame:0,materials:{wood:10,stone:12},category:"production",description:"Fires stone into bricks for faster roads and sturdy bridges.",recipe:{input:"stone",amount:2,output:"bricks",count:4,seconds:10}},
+  church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{"planks":16,"stone":30,"metal":4},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors from 08:00 to 20:00; religion improves after a visit."},
+  garden:{name:"Town park",cost:380,jobs:0,frame:0,materials:{"wood":12,"stone":20,"metal":4},category:"town",description:"A spacious 4×4 garden with lawns, shaded benches and a fountain. Daytime leisure for 40 residents within 18 road tiles."},
+  cottage: {name:"Little cottage", cost:55, jobs:0, frame:0, materials:{"wood":3,"stone":2}, category:"homes", description:"A compact 1×1 home for two residents. Upgrade for more room without enlarging the plot."},
+  brickworks:{name:"Village brickworks",cost:260,jobs:2,frame:0,materials:{"wood":10,"stone":12,"metal":4},category:"production",description:"Fires stone into bricks for faster roads and sturdy bridges.",recipe:{input:"stone",amount:2,output:"bricks",count:4,seconds:10}},
   house: {
     name: "Timber cottage",
     cost: 90,
     jobs: 0,
     frame: 0,
-    materials: { wood: 5 },
+    materials:{"wood":5,"stone":6},
     category: "homes",
     description:
       "A warm place for three residents. Connect to a warehouse by road.",
@@ -200,6 +200,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 150,
     jobs: 2,
     frame: 1,
+    materials:{"wood":10,"stone":6},
     category: "production",
     description: "Golden fields, busy hands. Grows grain for the flour mill.",
     recipe: { output: "grain", count: 3, seconds: 8 },
@@ -209,7 +210,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 180,
     jobs: 2,
     frame: 0,
-    materials: { wood: 12, planks: 4, stone: 6 },
+    materials:{"wood":12,"planks":4,"stone":6,"metal":2},
     category: "production",
     description:
       "Fresh fish for the town. Place two tiles on shore and two in water, with the entrance facing land.",
@@ -220,7 +221,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 220,
     jobs: 2,
     frame: 2,
-    materials: { wood: 8, stone: 5 },
+    materials:{"wood":8,"stone":8,"metal":2},
     category: "production",
     description:
       "Turns grain into flour. Deliveries arrive automatically by road.",
@@ -237,6 +238,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 240,
     jobs: 2,
     frame: 3,
+    materials:{"wood":10,"stone":10,"metal":3},
     category: "production",
     description: "Fresh bread for the whole town. Needs flour from a mill.",
     recipe: {
@@ -252,6 +254,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 140,
     jobs: 2,
     frame: 4,
+    materials:{"wood":8,"stone":6},
     category: "production",
     description: "Sustainably harvests wood for building and the sawmill.",
     recipe: { output: "wood", count: 3, seconds: 8 },
@@ -261,9 +264,9 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 220,
     jobs: 2,
     frame: 5,
-    materials: { wood: 8, stone: 5 },
+    materials:{"wood":10,"stone":8,"metal":5},
     category: "production",
-    description: "Cuts wood into planks for your workshop.",
+    description: "Cuts wood into planks for building and upgrades.",
     recipe: {
       input: "wood",
       amount: 3,
@@ -277,11 +280,11 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 320,
     jobs: 3,
     frame: 6,
-    materials: { wood: 10, stone: 10, metal: 8 },
+    materials:{"wood":10,"stone":10,"metal":8},
     category: "production",
-    description: "Crafts tools from planks. Delivered tools sell for 35 gold.",
+    description: "Forges metal into tools. Delivered tools sell for 35 gold.",
     recipe: {
-      input: "planks",
+      input: "metal",
       amount: 2,
       output: "tools",
       count: 1,
@@ -293,6 +296,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 200,
     jobs: 0,
     frame: 7,
+    materials:{"wood":12,"planks":6,"stone":10},
     category: "town",
     description:
       "The heart of a road network. Receives food and materials, and exports tools.",
@@ -302,7 +306,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 65,
     jobs: 0,
     frame: 8,
-    materials: { stone: 5 },
+    materials:{"wood":3,"stone":5,"metal":2},
     category: "town",
     description: "A little place to slow down. Improves the town’s happiness.",
   },
@@ -311,7 +315,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 280,
     jobs: 2,
     frame: 0,
-    materials: { wood: 12, planks: 8, stone: 10 },
+    materials:{"wood":12,"planks":8,"stone":10,"metal":3},
     category: "town",
     description:
       "A warm evening meeting place. Serves nearby homes within 14 road tiles, from 17:00 to 02:00. Needs two staff.",
@@ -321,6 +325,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 180,
     jobs: 2,
     frame: 4,
+    materials:{"wood":10,"stone":8,"metal":4},
     category: "production",
     description:
       "Build beside a stone deposit, within 8 tiles. Miners carry stone back for warehouse deliveries.",
@@ -331,7 +336,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     cost: 260,
     jobs: 3,
     frame: 6,
-    materials: { wood: 8, stone: 5 },
+    materials:{"wood":12,"stone":12,"metal":8},
     category: "production",
     description:
       "Build beside a metal deposit, within 8 tiles. Miners carry ore back for advanced construction.",

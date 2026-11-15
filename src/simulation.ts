@@ -1,4 +1,5 @@
 import {isHome,isPark} from "./catalog.js";
+import {warehouseReady, LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
 import {parkVisitDuration,parkVisitorLimit} from "./park-visitors.js";
 import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
@@ -317,7 +318,25 @@ export class Simulation {
     this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
     for(const d of this.state.decorations)if(d.kind==="fence"&&d.side===undefined)d.side=this.state.decorations.some(n=>n.kind==="fence"&&n.x===d.x&&Math.abs(n.y-d.y)===1)?0:1;
     for(const d of this.state.decorations)if(d.kind==="fence")Object.assign(d,canonicalFence(d));
-    this.reconnect();
+    // Repair older saves that allowed the final working depot to be removed
+    // while all replacements still depended on it for their builders.
+    if (saved && !this.state.buildings.some(warehouseReady)) {
+      this.roadSet = new Set(this.state.roads);
+      const replacement = this.state.buildings
+        .filter(b => b.kind === "warehouse" && b.construction && this.adjacent(b).length)
+        .sort((a,b) => b.construction!.completed / b.construction!.required - a.construction!.completed / a.construction!.required)[0];
+      if (replacement) {
+        for (const p of replacement.construction?.clearance?.tiles ?? []) {
+          this.state.clearedDeposits ??= [];
+          if (!this.state.clearedDeposits.includes(key(p))) this.state.clearedDeposits.push(key(p));
+        }
+        delete replacement.construction;
+        replacement.enabled = true;
+        this.state.revision++;
+        this.state.history.unshift("A replacement warehouse has opened to restore town access. Stored materials were kept.");
+      }
+    }
+    this.reconnect(!!saved);
   }
   private seed() {
     const road = (x: number, y: number) => {
@@ -471,11 +490,7 @@ export class Simulation {
     this.roadSet = new Set(this.state.roads);
     this.traffic.configure(this.roadSet, this.state.roadTypes);
     for(const a of travellers)if(a.kind==="car"&&a.path.slice(a.segment).some(p=>roadTypeAt(this.state.roadTypes,p)==="pavement"))a.kind="person";
-    const warehouses = this.state.buildings.filter(
-      (b) =>
-        b.kind === "warehouse" &&
-        (!b.construction || b.construction.upgradeLevel),
-    );
+    const warehouses = this.state.buildings.filter(warehouseReady);
     for (const b of this.state.buildings) {
       b.connected = warehouses.some((w) => !!this.route(b, w));
       b.workers = 0;
@@ -512,6 +527,11 @@ export class Simulation {
       const h = this.building(r.home)!;
       r.leisure ??= 60;
       r.faith ??= 70;
+      const previousSite = preserveTravel && this.building(r.job ?? -1);
+      if (previousSite && previousSite.construction && previousSite.connected && previousSite.enabled && previousSite.workers < builderCapacity(previousSite) && this.route(h, previousSite)) {
+        previousSite.workers++;
+        continue;
+      }
       const nearby = jobs
         .map((b) => ({ b, path: this.route(h, b) }))
         .filter((j) => j.path && j.path.length - 1 <= MAX_COMMUTE)
@@ -612,7 +632,7 @@ export class Simulation {
         existing &&
         this.retarget(existing, existing.returning ? home : destination)
       ) {
-        if (existing.onsite && !destination.construction && destination.kind !== "forester" && !isExtractor(destination.kind)) {
+        if (existing.onsite && (r.job !== destination.id || !destination.connected || !destination.enabled || (!destination.construction && destination.kind !== "forester" && !isExtractor(destination.kind)))) {
           delete existing.onsite;
           existing.wait = 0;
           existing.path = this.route(destination, home,existing.kind) ?? existing.path;
@@ -1137,11 +1157,12 @@ export class Simulation {
         decoration = this.decorationAt(c.x, c.y);
       if (
         b?.kind === "warehouse" &&
-        this.state.buildings.filter((b) => b.kind === "warehouse").length === 1
+        (!this.state.buildings.some(other => other.id !== b.id && other.kind === "warehouse") ||
+          (warehouseReady(b) && !this.state.buildings.some(other => other.id !== b.id && warehouseReady(other))))
       )
         return {
           ok: false,
-          message: "Keep at least one warehouse in your town.",
+          message: LAST_WAREHOUSE_MESSAGE,
           revision: this.state.revision,
         };
       if (b) {
@@ -1300,7 +1321,7 @@ export class Simulation {
     }
     this.state.revision++;
     if (networkChanged)
-      this.reconnect(["move", "place", "roadStroke", "upgrade", "deepen"].includes(c.type));
+      this.reconnect(true);
     if (c.type === "move" && !this.building(c.id)?.connected)
       message +=
         " Connect the front entrance to the warehouse road network to resume work.";
@@ -1539,6 +1560,23 @@ export class Simulation {
     }
   }
   private dispatch() {
+    // Old saves may still contain or deliver the former plank input. Return it intact.
+    for(const source of this.state.buildings.filter(b=>b.kind==="workshop"&&!b.construction&&b.connected&&(b.inventory.planks??0)>0)){
+      if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
+      const target=this.state.buildings.find(b=>b.kind==="warehouse"&&b.connected&&!b.construction&&this.route(source,b,"truck"));
+      if(!target)continue;const path=this.route(source,target,"truck")!,amount=Math.min(6,source.inventory.planks??0);source.inventory.planks!-=amount;
+      this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo:"planks",amount,returning:false,wait:0});
+    }
+    for(const warehouse of this.state.buildings.filter(b=>b.kind==="warehouse"&&!b.construction&&b.connected&&b.enabled&&(b.inventory.metal??0)>0)){
+      if(this.state.agents.some(a=>a.kind==="truck"&&a.source===warehouse.id))continue;
+      for(const target of this.state.buildings.filter(b=>b.kind==="workshop"&&!b.construction&&b.enabled&&b.connected)){
+        const inbound=this.state.agents.filter(a=>a.target===target.id&&a.cargo==="metal").reduce((n,a)=>n+a.amount,0);
+        if((target.inventory.metal??0)+inbound>=6)continue;
+        const path=this.route(warehouse,target,"truck");if(!path)continue;
+        const amount=Math.min(6,warehouse.inventory.metal??0);warehouse.inventory.metal!-=amount;
+        this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:warehouse.id,target:target.id,cargo:"metal",amount,returning:false,wait:0});break;
+      }
+    }
     for (const b of this.state.buildings) {
       const r = BUILDINGS[b.kind].recipe;
       if (
@@ -2074,6 +2112,7 @@ export function parseSave(raw: string): World {
       source.inventory[a.cargo] = (source.inventory[a.cargo] ?? 0) + a.amount;
     }
   }
+  const savedBuilders = s.agents;
   s.agents = [];
   // Like delivery trucks, restore carried timber before resident journeys are rebuilt.
   for (const b of s.buildings) landTimber(b);
@@ -2091,6 +2130,21 @@ export function parseSave(raw: string): World {
   for (const r of s.residents){
     r.leisure = finite(r.leisure) ? Math.min(100, r.leisure!) : 60;
     r.faith=finite(r.faith)?Math.min(100,r.faith!):70;
+  }
+  // Keep validated on-site builders through a reload, reconstructing their
+  // route from the entrance instead of trusting saved movement coordinates.
+  const residentIds = new Set(s.residents.map(r => r.id));
+  const restoredResidents = new Set<number>();
+  for (const a of savedBuilders) {
+    if (!a || !Number.isInteger(a.id) || a.id < 1 || ids.has(a.id) || residentIds.has(a.id) || a.resident === null || restoredResidents.has(a.resident)) continue;
+    const resident = s.residents.find(r => r.id === a.resident && r.home === a.source && r.job === a.onsite);
+    const site = s.buildings.find(b => b.id === a.onsite && b.id === a.target && b.construction && b.enabled);
+    if (!resident || !site || (a.kind !== "person" && a.kind !== "car")) continue;
+    const entrance = frontage(site.kind,site.x,site.y,site.rotation,site.plot).find(p => s.roads.includes(key(p)));
+    if (!entrance) continue;
+    s.agents.push({id:a.id,kind:"person",resident:resident.id,source:resident.home,target:site.id,onsite:site.id,path:[entrance],segment:0,progress:0,cargo:null,amount:0,returning:true,wait:1,active:false});
+    ids.add(a.id);
+    restoredResidents.add(resident.id);
   }
   s.nextId = Math.max(s.nextId, ...ids, ...s.residents.map((r) => r.id)) + 1;
   s.decorations ??= initialDecorations(
