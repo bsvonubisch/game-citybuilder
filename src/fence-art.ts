@@ -1,6 +1,6 @@
 import type Phaser from "phaser";
 import {iso,opaqueBounds} from "./rendering.js";
-import {fenceEnds,fencePostMask} from "./fences.js";
+import {fenceEnds,fencePostMask,canonicalFence} from "./fences.js";
 import type {Decoration} from "./decorations.js";
 export function fenceCrops(image:HTMLImageElement){
  const c=document.createElement('canvas');c.width=Math.floor(image.width/2);c.height=Math.floor(image.height/2);const ctx=c.getContext('2d')!;
@@ -16,6 +16,7 @@ export class FenceArt {
  private crops?:ReturnType<typeof fenceCrops>;
  constructor(private scene:Phaser.Scene){}
  place(sprite:Phaser.GameObjects.Image,d:Pick<Decoration,'id'|'x'|'y'|'side'>,decorations:readonly Decoration[]){
+  d={...d,...canonicalFence(d)};
   const side=d.side??1,posts=fencePostMask(d,decorations),name='pickets-'+side+'-'+posts;
   if(!this.scene.textures.exists(name)){
    const texture=this.scene.textures.createCanvas(name,76*4,76*4)!,ctx=texture.context;

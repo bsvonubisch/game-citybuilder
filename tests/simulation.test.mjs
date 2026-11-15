@@ -2482,3 +2482,13 @@ test("edge fences leave tiles usable, reject duplicate opposite sides and share 
  assert.equal(execute(sim,{type:'removeDecoration',id:fences[0].id}).ok,true);
  assert.ok(sim.state.decorations.some(d=>d.kind==='planter'&&d.x===2&&d.y===2));
 });
+
+
+test("both sides of the same fence edge have identical artwork anchors and front fences clear the building depth",async()=>{
+ const {canonicalFence,fenceCenter}=await import('../.test-dist/fences.js');
+ assert.deepEqual(canonicalFence({x:3,y:2,side:2}),canonicalFence({x:2,y:2,side:0}));
+ assert.deepEqual(canonicalFence({x:2,y:3,side:3}),canonicalFence({x:2,y:2,side:1}));
+ const plot={x:0,y:0,width:2,height:2,depth:76,left:-100,right:100,top:-200,bottom:100},bounds={left:-40,right:40,top:-40,bottom:40};
+ assert.ok(travellerDepth(fenceCenter({x:1,y:0,side:0}),bounds,[plot])>plot.depth);
+ assert.ok(travellerDepth(fenceCenter({x:0,y:0,side:2}),bounds,[plot])<plot.depth);
+});

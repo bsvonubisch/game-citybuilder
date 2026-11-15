@@ -53,3 +53,7 @@ export function crossesFence(a:Point,b:Point,edges:ReadonlySet<string>){return e
 export function fencePostMask(d:Pick<Decoration,'id'|'x'|'y'|'side'>,decorations:readonly Decoration[]){
   return fenceEnds(d,d.side??1).reduce((mask,p,i)=>mask|(decorations.some(other=>other.kind==='fence'&&other.id<d.id&&fenceEnds(other,other.side??1).some(q=>q.x===p.x&&q.y===p.y))?0:1<<i),0);
 }
+
+/** One physical edge has one orientation, whichever neighbouring tile was clicked. */
+export function canonicalFence(p:Point & {side?:number}){const side=p.side??1;return{x:p.x-(side===2?1:0),y:p.y-(side===3?1:0),side:(side%2) as 0|1};}
+export function fenceCenter(p:Point & {side?:number}){const ends=fenceEnds(p,p.side??1);return{x:(ends[0].x+ends[1].x)/2,y:(ends[0].y+ends[1].y)/2};}

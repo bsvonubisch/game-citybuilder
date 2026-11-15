@@ -1,4 +1,4 @@
-import {fenceKey,fenceNeighbour} from "./fences.js";
+import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
 import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
 import { stepMining, miningTargets, landOre, validMiningTrip, type MiningTrip } from "./mining.js";
@@ -308,6 +308,7 @@ export class Simulation {
     for(const b of this.state.buildings)if(isExtractor(b.kind))b.deposit=buildingDeposit(b);
     this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
     for(const d of this.state.decorations)if(d.kind==="fence"&&d.side===undefined)d.side=this.state.decorations.some(n=>n.kind==="fence"&&n.x===d.x&&Math.abs(n.y-d.y)===1)?0:1;
+    for(const d of this.state.decorations)if(d.kind==="fence")Object.assign(d,canonicalFence(d));
     this.reconnect();
   }
   private seed() {
@@ -1073,7 +1074,7 @@ export class Simulation {
           y: c.y,
           natural: false,
           ...(c.kind==="streetlight"&&this.roadSet.has(key(c))?{edge:c.rotation??0}:{}),
-          ...(c.kind==="fence"?{side:c.rotation??0}:{}),
+          ...(c.kind==="fence"?canonicalFence({x:c.x,y:c.y,side:c.rotation??0}):{}),
         });
         networkChanged = false;
       } else

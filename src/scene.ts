@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import {planRemoval} from "./removal.js";
-import {nearestFenceSide} from "./fences.js";
+import {nearestFenceSide,fenceCenter} from "./fences.js";
 import {lampPoint,nearestRoadEdge} from "./streetlights.js";
 import { NightArt } from "./night-art.js";
 import { ShadowArt } from "./shadow-art.js";
@@ -768,7 +768,7 @@ export class TownScene extends Phaser.Scene {
       }
     for (const d of this.simulation.state.decorations) {
       const def = DECORATIONS[d.kind],
-        position=d.kind==="streetlight"?lampPoint(d):d.kind==="fence"?lampPoint({...d,edge:d.side??1}):d,
+        position=d.kind==="streetlight"?lampPoint(d):d.kind==="fence"?fenceCenter(d):d,
         p = iso(position.x, position.y);
       const sprite = this.add
         .image(p.x, p.y + (d.kind==="streetlight"?0:3), def.texture, def.frame)
@@ -833,7 +833,7 @@ export class TownScene extends Phaser.Scene {
     });
     for(const rock of this.trees) {
       const decoration=rock.getData("decoration");
-      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?lampPoint({...decoration,edge:decoration.side??1}):undefined)) as Point|undefined;
+      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):decoration?.kind==="fence"?fenceCenter(decoration):undefined)) as Point|undefined;
       if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots)-.1);
     }
     this.drawOverlay();
