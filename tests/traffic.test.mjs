@@ -9,7 +9,8 @@ import {
 } from "../.test-dist/traffic.js";
 import { Simulation } from "../.test-dist/simulation.js";
 import { agentDistance } from "../.test-dist/rendering.js";
-import { STEP } from "../.test-dist/catalog.js";
+import { STEP, AGENT_SPEED } from "../.test-dist/catalog.js";
+import { ROAD_TYPES, roadTravelTime, roadMovement } from "../.test-dist/roads.js";
 import { trafficQueues } from "../.test-dist/traffic-queues.js";
 import { laneCuts, laneBounds, vehicleExtents } from "../.test-dist/lanes.js";
 import { travelFacing } from "../.test-dist/rendering.js";
@@ -50,9 +51,9 @@ function noCollisions(agents, context) {
         );
       }
 }
-function complete(agents, roads, limit = 700) {
+function complete(agents, roads, limit = 700, roadTypes) {
   const traffic = new Traffic();
-  traffic.configure(new Set(roads.map((p) => `${p.x},${p.y}`)));
+  traffic.configure(new Set(roads.map((p) => `${p.x},${p.y}`)), roadTypes);
   let queueObserved = false,
     ticks = 0;
   for (; ticks < limit && agents.length; ticks++) {
@@ -91,6 +92,52 @@ test("opposite directions use their own right-hand lane on both road axes", () =
         1e-9,
     );
   }
+});
+
+test("pedestrians, cars and deliveries travel faster on better roads without false congestion", () => {
+  const path = line(0, 0, 1, 0, 12);
+  for (const kind of ["person", "car", "truck"]) {
+    const times = [];
+    for (const [type, road] of Object.entries(ROAD_TYPES)) {
+      const types = Object.fromEntries(path.map((p) => [`${p.x},${p.y}`, type]));
+      const result = complete([vehicle(1, path, kind)], path, 700, types);
+      const expected = (path.length - 1) / (AGENT_SPEED[kind] * road.speed);
+      assert.ok(Math.abs(result.ticks * STEP - expected) <= STEP + 1e-8);
+      assert.equal(result.queueObserved, false, "normal slower movement is not a jam");
+      times.push(result.ticks);
+    }
+    assert.ok(times[0] > times[1] && times[1] > times[2]);
+  }
+});
+
+test("mixed surfaces spend time on both halves of a tile boundary in either direction", () => {
+  const path = line(0, 0, 1, 0, 12);
+  const types = Object.fromEntries(path.map((p, i) => [`${p.x},${p.y}`, i < 3 ? "brick" : i < 7 ? "dirt" : "stone"]));
+  for (const kind of ["person", "car", "truck"]) {
+    const expected = roadTravelTime(path, types, kind);
+    for (const route of [path, [...path].reverse()]) {
+      const result = complete([vehicle(1, route, kind)], path, 700, types);
+      assert.ok(Math.abs(result.ticks * STEP - expected) <= STEP + 1e-8);
+      assert.equal(result.queueObserved, false);
+    }
+    const a = vehicle(1, path, kind);
+    a.segment = 2;
+    a.progress = 0.49;
+    const brickSpeed = AGENT_SPEED[kind] * ROAD_TYPES.brick.speed;
+    const dirtSpeed = AGENT_SPEED[kind] * ROAD_TYPES.dirt.speed;
+    const expectedMove = .01 + (STEP - .01 / brickSpeed) * dirtSpeed;
+    assert.ok(Math.abs(roadMovement(a, STEP, types) - expectedMove) < 1e-8);
+  }
+});
+
+test("fast vehicles still queue safely through corners and behind slower deliveries on dirt", () => {
+  const horizontal = line(0, 5, 1, 0, 12), vertical = line(5, 0, 0, 1, 12);
+  const turn = [...horizontal.slice(0, 6), ...vertical.slice(6)];
+  const roads = [...horizontal, ...vertical];
+  const types = Object.fromEntries(roads.map((p) => [`${p.x},${p.y}`, p.x > 6 || p.y > 6 ? "dirt" : "brick"]));
+  const agents = [vehicle(1, horizontal, "truck"), vehicle(2, horizontal), vehicle(3, turn), vehicle(4, vertical), vehicle(5, [...horizontal].reverse(), "truck")];
+  const result = complete(agents, roads, 700, types);
+  assert.equal(result.queueObserved, true);
 });
 
 test("cars and pedestrians round every left and right corner with continuous position and heading", () => {

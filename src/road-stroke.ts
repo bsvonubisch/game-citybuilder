@@ -1,10 +1,12 @@
 import { SIZE } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import type { Point, Simulation } from "./simulation.js";
+import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType } from "./roads.js";
 
 export interface RoadPlan {
   tiles: Point[];
   additions: Point[];
+  upgrades: Point[];
   cost: number;
   bridges: number;
   blocked?: Point;
@@ -26,14 +28,15 @@ export function roadStroke(from: Point, to: Point): Point[] {
 }
 
 /** Read-only preview and command validation use precisely the same plan. */
-export function planRoad(sim: Simulation, from: Point, to: Point): RoadPlan {
+export function planRoad(sim: Simulation, from: Point, to: Point, roadType: RoadType = "stone"): RoadPlan {
   const tiles = roadStroke(from, to);
-  const plan: RoadPlan = { tiles, additions: tiles.filter((p) => !sim.roads.has(tileKey(p))), cost: 0, bridges: 0 };
+  const plan: RoadPlan = { tiles, additions: tiles.filter((p) => !sim.roads.has(tileKey(p))), upgrades: [], cost: 0, bridges: 0 };
+  if (!isRoadType(roadType)) return { ...plan, error: "Choose dirt, stone or brick roads." };
   if (!tiles.length) return { ...plan, error: "Keep both ends of the road inside the valley." };
   const planned = new Set(tiles.map(tileKey));
   for (const p of plan.additions) {
     const water = terrainCell(p.x, p.y, sim.state.terrain).kind === "water";
-    plan.cost += water ? 35 : 12;
+    plan.cost += water ? 35 : ROAD_TYPES[roadType].cost;
     if (water) plan.bridges++;
     const error = sim.canPlace("road", p.x, p.y);
     if (error && error !== "Not enough gold yet." && !plan.error) {
@@ -51,7 +54,15 @@ export function planRoad(sim: Simulation, from: Point, to: Point): RoadPlan {
       }
     }
   }
+  for (const p of tiles) {
+    if (!sim.roads.has(tileKey(p)) || terrainCell(p.x, p.y, sim.state.terrain).kind === "water") continue;
+    const current = ROAD_TYPES[roadTypeAt(sim.state.roadTypes, p)];
+    if (ROAD_TYPES[roadType].cost > current.cost) {
+      plan.upgrades.push(p);
+      plan.cost += ROAD_TYPES[roadType].cost - current.cost;
+    }
+  }
   if (!plan.error && plan.cost > sim.state.money) plan.error = `Need ${Math.ceil(plan.cost-sim.state.money)} more gold. Shorten the stretch or wait for taxes and exports.`;
-  if (!plan.error && !plan.additions.length) plan.error = "This stretch already has roads. Drag farther to extend it.";
+  if (!plan.error && !plan.additions.length && !plan.upgrades.length) plan.error = "This stretch already has roads of this quality or better. Choose a better surface or drag farther.";
   return plan;
 }

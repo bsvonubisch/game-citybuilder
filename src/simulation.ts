@@ -1,4 +1,5 @@
 import { planRoad } from "./road-stroke.js";
+import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType, type RoadTypes } from "./roads.js";
 import {
   BUILDINGS,
   RESOURCES,
@@ -121,6 +122,7 @@ export interface World {
   nextId: number;
   money: number;
   roads: string[];
+  roadTypes?: RoadTypes;
   decorations: Decoration[];
   buildings: Building[];
   residents: Resident[];
@@ -135,7 +137,7 @@ export interface World {
   depositDepths?: Record<string, number>;
 }
 export type Command =
-  | { type: "roadStroke"; from: Point; to: Point }
+  | { type: "roadStroke"; from: Point; to: Point; roadType?: RoadType }
   | TerrainCommand
   | { type: "undoTerrain" }
   | {
@@ -434,7 +436,7 @@ export class Simulation {
   reconnect(preserveTravel = false) {
     const travellers = preserveTravel ? [...this.state.agents] : [];
     this.roadSet = new Set(this.state.roads);
-    this.traffic.configure(this.roadSet);
+    this.traffic.configure(this.roadSet, this.state.roadTypes);
     const warehouses = this.state.buildings.filter(
       (b) =>
         b.kind === "warehouse" &&
@@ -885,13 +887,20 @@ export class Simulation {
     let message = "",
       networkChanged = true;
     if (c.type === "roadStroke") {
-      const plan = planRoad(this, c.from, c.to);
+      const roadType = c.roadType ?? "stone";
+      const plan = planRoad(this, c.from, c.to, roadType);
       if (plan.error) return { ok: false, message: plan.error, revision: this.state.revision };
       const added = new Set(plan.additions.map(key));
       this.state.roads.push(...added);
+      this.state.roadTypes ??= {};
+      for (const p of [...plan.additions, ...plan.upgrades]) {
+        if (terrain(p.x, p.y, this.state.terrain) === "water" || roadType === "stone")
+          delete this.state.roadTypes[key(p)];
+        else this.state.roadTypes[key(p)] = roadType;
+      }
       this.state.decorations = this.state.decorations.filter((d) => !added.has(key(d)));
       this.state.money -= plan.cost;
-      message = `Built ${plan.additions.length} road ${plan.additions.length === 1 ? "tile" : "tiles"}${plan.bridges ? ` · ${plan.bridges} bridge ${plan.bridges === 1 ? "tile" : "tiles"}` : ""} · ${plan.cost} gold.`;
+      message = `${ROAD_TYPES[roadType].name} roads · ${plan.additions.length} new tiles${plan.upgrades.length ? ` · ${plan.upgrades.length} upgraded` : ""}${plan.bridges ? ` · ${plan.bridges} wooden bridge tiles` : ""} · ${plan.cost} gold.`;
     } else if (c.type === "terrain") {
       const plan = planTerrain(this.state, c);
       if (plan.error)
@@ -1039,7 +1048,8 @@ export class Simulation {
       } else if (this.roadSet.has(key(c))) {
         this.state.roads = this.state.roads.filter((k) => k !== key(c));
         this.state.money +=
-          terrain(c.x, c.y, this.state.terrain) === "water" ? 17 : 6;
+          terrain(c.x, c.y, this.state.terrain) === "water" ? 17 : Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes, c)].cost / 2);
+        if (this.state.roadTypes) delete this.state.roadTypes[key(c)];
       } else if (decoration) {
         this.state.decorations = this.state.decorations.filter(
           (d) => d.id !== decoration.id,
@@ -1642,6 +1652,13 @@ export function parseSave(raw: string): World {
       throw new Error("Invalid roads.");
     occupied.add(k);
   }
+  if (s.roadTypes !== undefined && (
+    !s.roadTypes || typeof s.roadTypes !== "object" || Array.isArray(s.roadTypes) ||
+    Object.entries(s.roadTypes).some(([k, type]) => {
+      const [x, y] = k.split(",").map(Number);
+      return !occupied.has(k) || !isRoadType(type) || terrain(x, y, s.terrain) === "water";
+    })
+  )) throw new Error("Invalid road surfaces.");
   for (const b of s.buildings) {
     b.rotation ??= 0;
     if (b.kind === "house") b.houseTier ??= 1;

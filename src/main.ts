@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import "./style.css";
+import { ROAD_TYPES, roadTypeAt, type RoadType } from "./roads.js";
 import {
   BUILDINGS,
   SIZE,
@@ -293,13 +294,22 @@ function setTool(next: Tool) {
     : decoration
       ? `${icon("leaf")} Place ${decoration.name.toLowerCase()} · ${decoration.cost} gold · 1 tile <kbd>Esc</kbd>`
       : next === "road"
-        ? `${icon("road")} Drag a road and release to build · 12 gold/tile · Bridges 35 gold <span id="road-stroke-cost" aria-live="polite"></span><small>Two fingers to pan/zoom · Space-drag to pan · Esc to cancel</small>`
+        ? `<div class="road-surfaces" role="group" aria-label="Road surface">${Object.entries(ROAD_TYPES).map(([kind, d]) => `<button type="button" data-road-type="${kind}" aria-pressed="${scene.roadType === kind}"><span class="road-swatch road-${kind}" aria-hidden="true"></span><b>${d.name}</b><span>${d.cost} gold / tile</span><small>${d.description}</small></button>`).join("")}</div><span class="road-instructions">Drag to build or upgrade · Pay only the upgrade difference</span><span id="road-stroke-cost" aria-live="polite"></span><small>Wooden bridges: 35 gold · Standard speed<br>Two fingers to pan/zoom · Space-drag to pan · Esc to cancel</small>`
         : next === "bridge"
           ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
           : next === "bulldoze"
             ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if (next === "road") document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((button) => {
+    button.onclick = () => {
+      scene.cancelRoad();
+      scene.roadType = button.dataset.roadType as RoadType;
+      document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((choice) =>
+        choice.setAttribute("aria-pressed", String(choice.dataset.roadType === scene.roadType)));
+      scene.drawOverlay();
+    };
+  });
   if (next === "fishery")
     $("#placement-hint").insertAdjacentHTML(
       "beforeend",
@@ -567,11 +577,11 @@ scene.onTile = async (p: Point) => {
 scene.onRoadPreview = (plan) => {
   const label = document.querySelector<HTMLElement>("#road-stroke-cost");
   if (!label) return;
-  label.textContent = plan ? `${plan.additions.length} new tiles · ${plan.cost} gold${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""}${plan.error ? ` — ${plan.error}` : ""}` : "";
+  label.textContent = plan ? `${plan.additions.length} new · ${plan.upgrades.length} upgrades · ${plan.cost} gold${plan.bridges ? ` · ${plan.bridges} bridge tiles` : ""}${plan.error ? ` — ${plan.error}` : ""}` : "";
   label.classList.toggle("invalid", !!plan?.error);
 };
 scene.onRoadApply = async (from, to) => {
-  const result = await gateway.command({ type: "roadStroke", from, to });
+  const result = await gateway.command({ type: "roadStroke", from, to, roadType: scene.roadType });
   toast(result.message);
   if (result.ok) { scene.redraw(); save(false); updateUI(); }
 };
@@ -598,8 +608,13 @@ scene.onTerrainApply = async (command) => {
 scene.onHover = (p) => {
   hovered = p;
   updateEntranceHint();
+  const surface = p && simulation.roads.has(key(p))
+    ? terrainCell(p.x, p.y, simulation.state.terrain).kind === "water"
+      ? "Wooden bridge · standard speed"
+      : `${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].name} road · ${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].description.toLowerCase()}`
+    : "";
   $("#tile-label").textContent = p
-    ? `${p.x}, ${p.y}${DEPOSITS[key(p)] ? " · " + DEPOSITS[key(p)] + " deposit" : ""}`
+    ? `${p.x}, ${p.y}${surface ? " · " + surface : DEPOSITS[key(p)] ? " · " + DEPOSITS[key(p)] + " deposit" : ""}`
     : "";
 };
 scene.onSelectAgent = (id) => {
@@ -1308,7 +1323,7 @@ function drawMinimap() {
   simulation.state.roads.forEach((k) => {
     const [x, y] = k.split(",").map(Number),
       p = map(x, y);
-    ctx.fillStyle = "#ddd1ae";
+    ctx.fillStyle = terrainCell(x, y, simulation.state.terrain).kind === "water" ? "#c2a36c" : ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, {x, y})].color;
     ctx.fillRect(p.x, p.y, sx + 0.4, sy + 0.4);
   });
   for (const [k, kind] of Object.entries(DEPOSITS)) {

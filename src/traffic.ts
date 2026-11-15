@@ -1,4 +1,5 @@
-import { AGENT_SPEED, STEP } from "./catalog.js";
+import { STEP } from "./catalog.js";
+import { roadMovement, type RoadTypes } from "./roads.js";
 import type { Agent, Point } from "./simulation.js";
 import {
   lanePose,
@@ -136,7 +137,9 @@ export class Traffic {
   private junctionTiles = new Set<string>();
   private junctionGroups = new Map<string, string>();
   private groupTiles = new Map<string, Point[]>();
-  configure(roads: ReadonlySet<string>) {
+  private roadTypes?: RoadTypes;
+  configure(roads: ReadonlySet<string>, roadTypes?: RoadTypes) {
+    this.roadTypes = roadTypes;
     this.junctionTiles.clear();
     this.junctions.clear();
     this.junctionGroups.clear();
@@ -189,7 +192,7 @@ export class Traffic {
       a.trafficWait = false;
       if (a.kind === "person") {
         a.active = a.wait <= 0;
-        a.move = a.wait > 0 ? 0 : STEP * AGENT_SPEED.person;
+        a.move = a.wait > 0 ? 0 : roadMovement(a, STEP, this.roadTypes);
       }
     }
     const cars = agents.filter((a) => a.kind !== "person");
@@ -437,10 +440,8 @@ export class Traffic {
       );
     for (const a of ordered) {
       const at = a.segment + a.progress;
-      let desired = Math.min(
-        STEP * AGENT_SPEED[a.kind],
-        a.path.length - 1 - at,
-      );
+      const freeMove = roadMovement(a, STEP, this.roadTypes);
+      let desired = freeMove;
       for (
         let i = a.segment;
         i <= Math.min(a.path.length - 1, a.segment + 2);
@@ -471,7 +472,7 @@ export class Traffic {
       a.move = desired;
       a.trafficWait =
         desired <
-        Math.min(STEP * AGENT_SPEED[a.kind], a.path.length - 1 - at) - 0.001;
+        freeMove - 0.001;
       a.queuedTicks = a.trafficWait ? (a.queuedTicks ?? 0) + 1 : 0;
     }
   }

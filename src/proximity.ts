@@ -1,4 +1,5 @@
-import { houseCapacity, type BuildingKind, AGENT_SPEED } from "./catalog.js";
+import { houseCapacity, type BuildingKind } from "./catalog.js";
+import { roadTravelTime } from "./roads.js";
 import type { Building, Simulation } from "./simulation.js";
 export const MAX_COMMUTE = 28;
 export const isLeisure = (kind: string) => kind === "park" || kind === "tavern";
@@ -26,7 +27,7 @@ export function serviceCoverage(sim: Simulation, b: Building) {
         .map((home) => {
           const path = sim.route(b, home),
             tiles = path ? path.length - 1 : Infinity;
-          return { home, path, tiles, seconds: tiles / AGENT_SPEED.person };
+          return { home, path, tiles, seconds: path ? roadTravelTime(path, sim.state.roadTypes) : Infinity };
         })
         .filter((h) => h.tiles <= range)
         .sort((a, b) => a.tiles - b.tiles || a.home.id - b.home.id)

@@ -1,4 +1,6 @@
 import type Phaser from "phaser";
+import { roadSurface } from "./road-art.js";
+import { roadTypeAt } from "./roads.js";
 import { groundHeight } from "./terrain.js";
 import { SIZE } from "./catalog.js";
 import { iso, cameraViewport } from "./rendering.js";
@@ -31,13 +33,11 @@ export class TerrainArt {
     h: number;
   }[] = [];
   private grass: HTMLImageElement;
-  private slate: HTMLImageElement;
   private shore: HTMLImageElement;
   constructor(private scene: Phaser.Scene) {
     const source = (name: string) =>
       scene.textures.get(name).getSourceImage() as HTMLImageElement;
     this.grass = source("meadow");
-    this.slate = source("slate");
     this.shore = source("shore");
     const width = SIZE * 64,
       height = SIZE * 32 + 32;
@@ -179,7 +179,7 @@ export class TerrainArt {
             ctx.save();
             ctx.translate(p.x, p.y - 16);
             ctx.transform(32, 16, -32, 16, 0, 0);
-            ctx.drawImage(this.slate, 0, 0, 1, 1);
+            ctx.drawImage(roadSurface(this.scene, roadTypeAt(sim.state.roadTypes, {x, y}), x, y), 0, 0, 1, 1);
             ctx.restore();
           }
         }
@@ -205,6 +205,11 @@ export class TerrainArt {
               bx = p.x + e.b[0],
               by = p.y + e.b[1];
             if (curb) {
+              if (roadTypeAt(sim.state.roadTypes, {x, y}) === "dirt") {
+                line(ax, ay + .6, bx, by + .6, 2.6, "#6e674746");
+                line(ax, ay, bx, by, 1.4, "#b49a6970");
+                continue;
+              }
               line(ax, ay + 1, bx, by + 1, 3.2, "#6f7560");
               line(ax, ay - 0.6, bx, by - 0.6, 3.2, "#c6bba1");
               line(ax, ay - 1.7, bx, by - 1.7, 0.7, "#eee2c4");

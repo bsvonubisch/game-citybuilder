@@ -34,6 +34,7 @@ import {
 } from "../.test-dist/catalog.js";
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 import { roadStroke, planRoad } from "../.test-dist/road-stroke.js";
+import { ROAD_TYPES, roadTypeAt } from "../.test-dist/roads.js";
 import {
   DEPOSITS,
   INITIAL_RESERVE,
@@ -1501,6 +1502,82 @@ test("a whole road stretch accepts gentle slopes but rejects a changed town revi
     roadHeight(sim.roads, x - 1e-7, 1, [], sim.state.terrain) -
     roadHeight(sim.roads, x + 1e-7, 1, [], sim.state.terrain),
   ) < 1e-4);
+});
+
+test("road surfaces build cheaply, upgrade for the difference, persist and refund their own cost", () => {
+  const sim = new Simulation();
+  const from = { x: 1, y: 1 }, to = { x: 4, y: 1 };
+  const initialMoney = sim.state.money;
+  for (const [roadType, price, upgrades] of [["dirt", 24, 0], ["stone", 24, 4], ["brick", 48, 4]]) {
+    const before = sim.snapshot();
+    const preview = planRoad(sim, from, to, roadType);
+    assert.equal(preview.cost, price);
+    assert.equal(preview.upgrades.length, upgrades);
+    assert.equal(execute(sim, { type: "roadStroke", from, to, roadType }).ok, true);
+    assert.equal(sim.state.money, before.money - price);
+    for (const p of roadStroke(from, to)) assert.equal(roadTypeAt(sim.state.roadTypes, p), roadType);
+    for (const b of sim.state.buildings) {
+      const previous = before.buildings.find((old) => old.id === b.id);
+      assert.deepEqual(b.inventory, previous.inventory);
+      assert.equal(b.progress, previous.progress);
+    }
+    const loaded = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+    assert.deepEqual(loaded.state.roadTypes, sim.state.roadTypes);
+  }
+  assert.equal(sim.state.money, initialMoney - 4 * ROAD_TYPES.brick.cost);
+  const before = sim.snapshot();
+  for (const roadType of ["dirt", "stone", "brick"]) {
+    assert.equal(execute(sim, { type: "roadStroke", from, to, roadType }).ok, false);
+    assert.deepEqual(sim.snapshot(), before, "same or lower quality never charges or downgrades");
+  }
+  assert.equal(execute(sim, { type: "demolish", ...from }).ok, true);
+  assert.equal(sim.state.money, before.money + ROAD_TYPES.brick.cost / 2);
+  assert.ok(!Object.hasOwn(sim.state.roadTypes, key(from)));
+  assert.doesNotThrow(() => parseSave(JSON.stringify(sim.snapshot())));
+  assert.equal(execute(sim, { type: "place", kind: "road", ...from }).ok, true);
+  assert.equal(roadTypeAt(sim.state.roadTypes, from), "stone", "removed metadata cannot change a replacement road");
+});
+
+test("mixed upgrades and additions are atomic and bridge speeds remain unchanged", () => {
+  const sim = new Simulation();
+  const from = { x: 1, y: 1 }, to = { x: 5, y: 1 };
+  sim.state.terrain = { "3,1": { kind: "water", height: 0 } };
+  assert.equal(execute(sim, { type: "roadStroke", from, to: { x: 2, y: 1 }, roadType: "dirt" }).ok, true);
+  const plan = planRoad(sim, from, to, "brick");
+  assert.equal(plan.cost, 2 * (24 - 6) + 2 * 24 + 35);
+  assert.equal(plan.additions.length, 3);
+  assert.equal(plan.upgrades.length, 2);
+  assert.equal(plan.bridges, 1);
+  sim.state.money = plan.cost - 1;
+  const before = sim.snapshot();
+  assert.equal(execute(sim, { type: "roadStroke", from, to, roadType: "brick" }).ok, false);
+  assert.deepEqual(sim.snapshot(), before);
+  sim.state.money++;
+  assert.equal(execute(sim, { type: "roadStroke", from, to, roadType: "brick" }).ok, true);
+  assert.equal(sim.state.money, 0);
+  assert.equal(roadTypeAt(sim.state.roadTypes, { x: 3, y: 1 }), "stone");
+  assert.equal(planRoad(sim, { x: 3, y: 1 }, { x: 3, y: 1 }, "brick").cost, 0);
+});
+
+test("legacy roads stay stone and malformed surface metadata or commands are rejected", () => {
+  const sim = new Simulation();
+  const legacy = sim.snapshot();
+  delete legacy.roadTypes;
+  const loaded = new Simulation(parseSave(JSON.stringify(legacy)));
+  assert.deepEqual(loaded.state.roads, legacy.roads);
+  assert.equal(loaded.state.money, legacy.money);
+  for (const k of loaded.state.roads) {
+    const [x, y] = k.split(",").map(Number);
+    assert.equal(roadTypeAt(loaded.state.roadTypes, { x, y }), "stone");
+  }
+  for (const metadata of [null, [], { "1,1": "brick" }, { [legacy.roads[0]]: "highway" }, { [legacy.roads[0]]: "toString" }]) {
+    assert.throws(() => parseSave(JSON.stringify({ ...legacy, roadTypes: metadata })), /road surfaces/);
+  }
+  const before = sim.snapshot();
+  for (const roadType of ["highway", "toString", 3, {}]) {
+    assert.equal(execute(sim, { type: "roadStroke", from: { x: 1, y: 1 }, to: { x: 3, y: 1 }, roadType }).ok, false);
+    assert.deepEqual(sim.snapshot(), before);
+  }
 });
 
 test("touch drags and pinches never place buildings on release", () => {

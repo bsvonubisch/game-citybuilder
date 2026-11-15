@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { NightArt } from "./night-art.js";
 import { ShadowArt } from "./shadow-art.js";
 import { planRoad, type RoadPlan } from "./road-stroke.js";
+import { prepareRoadSurfaces } from "./road-art.js";
+import type { RoadType } from "./roads.js";
 import { isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
 import {
   setupArtworkScaling,
@@ -161,6 +163,7 @@ export class TownScene extends Phaser.Scene {
     this.drawOverlay();
   }
   onCancel: () => void = () => {};
+  roadType: RoadType = "stone";
   private roadDrag: { from: Point; to: Point; pointer: number } | null = null;
   onRoadPreview: (plan: RoadPlan | null) => void = () => {};
   onRoadApply: (from: Point, to: Point) => void = () => {};
@@ -250,6 +253,7 @@ export class TownScene extends Phaser.Scene {
   }
   create() {
     setupArtworkScaling(this.game);
+    prepareRoadSurfaces(this);
     this.nightArt = new NightArt(this);
     this.shadowArt = new ShadowArt(this);
     this.plotArt = new PlotArt(this);
@@ -841,12 +845,13 @@ export class TownScene extends Phaser.Scene {
     }
     if (this.tool === "road") {
       const end = this.roadDrag?.to ?? this.hover;
-      const plan = end ? planRoad(this.simulation, this.roadDrag?.from ?? end, end) : null;
+      const plan = end ? planRoad(this.simulation, this.roadDrag?.from ?? end, end, this.roadType) : null;
       this.onRoadPreview(plan);
       if (plan) for (const p of plan.tiles) {
-        const existing = this.simulation.roads.has(key(p));
+        const upgrading = plan.upgrades.some((q) => q.x === p.x && q.y === p.y);
+        const existing = this.simulation.roads.has(key(p)) && !upgrading;
         const water = terrainCell(p.x,p.y,this.simulation.state.terrain).kind === "water";
-        this.diamond(p, plan.error ? 0xe3947f : existing ? 0xbac9bc : water ? 0x72c8dd : 0x86d4a5, existing ? .14 : .4);
+        this.diamond(p, plan.error ? 0xe3947f : existing ? 0xbac9bc : upgrading ? 0xf0cc79 : water ? 0x72c8dd : 0x86d4a5, existing ? .14 : .4);
       }
       return;
     }

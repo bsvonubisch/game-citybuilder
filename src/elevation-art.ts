@@ -1,4 +1,6 @@
 import type Phaser from "phaser";
+import { roadSurface } from "./road-art.js";
+import { roadTypeAt } from "./roads.js";
 import { SIZE } from "./catalog.js";
 import { iso } from "./rendering.js";
 import { groundHeight, terrainCell } from "./terrain.js";
@@ -126,9 +128,7 @@ export class ElevationArt {
           pattern,
         );
         if (road) {
-          const source = this.scene.textures
-            .get("slate")
-            .getSourceImage() as HTMLImageElement;
+          const source = roadSurface(this.scene, roadTypeAt(sim.state.roadTypes, {x, y}), x, y);
           const corners = [
             [-0.5, -0.5],
             [0.5, -0.5],
