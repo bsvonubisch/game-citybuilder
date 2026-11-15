@@ -2,7 +2,8 @@ import {finishRoadFixture} from './roadwork-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Simulation, key } from "./legacy-town.mjs";
-import { BUILDINGS } from "../.test-dist/catalog.js";
+import { BUILDINGS, DELIVERY_CAPACITY } from "../.test-dist/catalog.js";
+import { Simulation as StarterSimulation } from "../.test-dist/simulation.js";
 import { nearbyDeposits } from "../.test-dist/deposits.js";
 import { buildingGuidance } from "../.test-dist/building-guidance.js";
 import {
@@ -14,6 +15,22 @@ import {
 
 const building = (sim, kind) =>
   sim.state.buildings.find((b) => b.kind === kind);
+
+test('delivery vehicles carry twelve goods, respect stock and include goods already en route',()=>{
+  for(const [sourceKind,targetKind,cargo] of [['warehouse','cattle','grain'],['warehouse','workshop','metal'],['warehouse','butcher','meat'],['warehouse','market','bread'],['sawmill','warehouse','planks']]){
+    const sim=new StarterSimulation(),source=building(sim,sourceKind),target=building(sim,targetKind);
+    sim.state.agents=[];for(const b of sim.state.buildings){b.enabled=b===source||b===target;b.inventory={};}
+    source.inventory[cargo]=30;sim.dispatch();
+    const shipment=sim.state.agents.find(a=>a.source===source.id&&a.target===target.id&&a.cargo===cargo);
+    assert.ok(shipment,`${cargo} shipment`);assert.equal(shipment.amount,DELIVERY_CAPACITY);assert.equal(source.inventory[cargo],18);
+    assert.equal(sim.totals()[cargo],30,'Loading never creates or loses goods');
+    sim.dispatch();assert.equal(sim.state.agents.filter(a=>a.source===source.id).length,1,'An existing trip is not duplicated');
+    sim.state.agents=[];source.inventory[cargo]=3;sim.dispatch();assert.equal(sim.state.agents.find(a=>a.source===source.id)?.amount,3,'Partial loads use available stock');
+  }
+  const sim=new StarterSimulation(),source=building(sim,'warehouse'),target=building(sim,'butcher');
+  sim.state.agents=[];for(const b of sim.state.buildings){b.enabled=b===source||b===target;b.inventory={};}
+  source.inventory.meat=40;target.inventory.meat=21;sim.dispatch();assert.equal(sim.state.agents.find(a=>a.cargo==='meat')?.amount,3,'Do not overfill a nearly stocked destination');
+});
 const execute = (sim, command) => {
   const result = sim.execute({
     id: `logistics-${sim.state.revision}`,
@@ -210,6 +227,12 @@ test("every dispatched shipment is represented by its source and destination pro
   assert.ok(deliveries.length > 0);
   for (const a of deliveries) {
     const from = productionConnections(sim, a.source);
+    if(sim.building(a.source).kind==='warehouse'){
+      assert.ok(canSupply(sim.building(a.source),sim.building(a.target),a.cargo));
+      const to=productionConnections(sim,a.target);
+      if(to)assert.ok(productionActivity(sim,to).incoming.some(truck=>truck.id===a.id));
+      continue;
+    }
     assert.ok(
       from.outputs.some(
         (l) => l.target === a.target && l.resource === a.cargo && l.path,

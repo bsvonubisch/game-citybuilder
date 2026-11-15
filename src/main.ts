@@ -23,6 +23,7 @@ import {
   SIZE,
   RESOURCES,
   RESOURCE_NAMES,
+  DELIVERY_CAPACITY,
   dimensions,
   frontage,
   FRONT_NAMES,
@@ -1148,7 +1149,7 @@ function updateAgentInspector() {
           ? "Walking to destination"
           : "Driving to destination";
   $("#traveller-detail").innerHTML =
-    `<div class="detail-row"><span>From</span><b>${escapeHtml(label(from))}</b></div><div class="detail-row"><span>Headed to</span><b>${escapeHtml(label(to))}</b></div>${a.cargo ? `<div class="detail-row"><span>Carrying</span><b>${a.amount} ${RESOURCE_NAMES[a.cargo]}</b></div>` : ""}<p class="muted">The gold line shows this journey on the map.</p>`;
+    `<div class="detail-row"><span>From</span><b>${escapeHtml(label(from))}</b></div><div class="detail-row"><span>Headed to</span><b>${escapeHtml(label(to))}</b></div>${a.cargo ? `<div class="detail-row"><span>Carrying</span><b>${a.amount} / ${DELIVERY_CAPACITY} ${RESOURCE_NAMES[a.cargo]}</b></div>` : ""}<p class="muted">The gold line shows this journey on the map.</p>`;
 }
 scene.onSelectRoadWork=(site)=>{
   site=roadWorkSites(simulation.state).find(s=>s.id===site.id)??site;

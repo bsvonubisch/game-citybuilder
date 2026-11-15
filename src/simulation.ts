@@ -71,6 +71,7 @@ import {
 export { DEPOSITS } from "./deposits.js";
 import { Traffic } from "./traffic.js";
 import {StoppedVehicles} from './vehicle-recovery.js';
+import {DELIVERY_CAPACITY} from './catalog.js';
 import { canSupply } from "./logistics.js";
 import { fisherySiteError } from "./shoreline.js";
 import {
@@ -1599,9 +1600,9 @@ export class Simulation {
     for(const source of this.state.buildings.filter(b=>warehouseReady(b)&&b.enabled&&b.connected&&(b.inventory.grain??0)>0)){
       if(this.state.agents.some(a=>a.kind==='truck'&&a.source===source.id))continue;
       for(const target of this.state.buildings.filter(b=>isLivestock(b.kind)&&!b.construction&&b.enabled&&b.connected).sort((a,b)=>(a.inventory.grain??0)-(b.inventory.grain??0))){
-        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==='grain').reduce((n,a)=>n+a.amount,0),room=Math.max(8,Math.ceil(ensureHerd(target).count/4)*3)-(target.inventory.grain??0)-incoming;
+        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==='grain').reduce((n,a)=>n+a.amount,0),room=Math.max(DELIVERY_CAPACITY*2,Math.ceil(ensureHerd(target).count/4)*3)-(target.inventory.grain??0)-incoming;
         if(room<=0)continue;const path=this.route(source,target,'truck');if(!path)continue;
-        const amount=Math.min(6,room,source.inventory.grain??0);source.inventory.grain!-=amount;
+        const amount=Math.min(DELIVERY_CAPACITY,room,source.inventory.grain??0);source.inventory.grain!-=amount;
         this.state.agents.push({id:this.state.nextId++,kind:'truck',source:source.id,target:target.id,path,segment:0,progress:0,resident:null,cargo:'grain',amount,returning:false,wait:0});break;
       }
     }
@@ -1609,24 +1610,25 @@ export class Simulation {
     for(const source of this.state.buildings.filter(b=>b.kind==="workshop"&&!b.construction&&b.connected&&(b.inventory.planks??0)>0)){
       if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
       const target=this.state.buildings.find(b=>b.kind==="warehouse"&&b.connected&&!b.construction&&this.route(source,b,"truck"));
-      if(!target)continue;const path=this.route(source,target,"truck")!,amount=Math.min(6,source.inventory.planks??0);source.inventory.planks!-=amount;
+      if(!target)continue;const path=this.route(source,target,"truck")!,amount=Math.min(DELIVERY_CAPACITY,source.inventory.planks??0);source.inventory.planks!-=amount;
       this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo:"planks",amount,returning:false,wait:0});
     }
     for(const warehouse of this.state.buildings.filter(b=>b.kind==="warehouse"&&!b.construction&&b.connected&&b.enabled&&(b.inventory.metal??0)>0)){
       if(this.state.agents.some(a=>a.kind==="truck"&&a.source===warehouse.id))continue;
       for(const target of this.state.buildings.filter(b=>b.kind==="workshop"&&!b.construction&&b.enabled&&b.connected)){
         const inbound=this.state.agents.filter(a=>a.target===target.id&&a.cargo==="metal").reduce((n,a)=>n+a.amount,0);
-        if((target.inventory.metal??0)+inbound>=6)continue;
+        const room=DELIVERY_CAPACITY*2-(target.inventory.metal??0)-inbound;
+        if(room<=0)continue;
         const path=this.route(warehouse,target,"truck");if(!path)continue;
-        const amount=Math.min(6,warehouse.inventory.metal??0);warehouse.inventory.metal!-=amount;
+        const amount=Math.min(DELIVERY_CAPACITY,room,warehouse.inventory.metal??0);warehouse.inventory.metal!-=amount;
         this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:warehouse.id,target:target.id,cargo:"metal",amount,returning:false,wait:0});break;
       }
     }
     for(const source of this.state.buildings.filter(b=>warehouseReady(b)&&b.connected&&b.enabled&&(b.inventory.meat??0)>0)){
       if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
       for(const target of this.state.buildings.filter(b=>b.kind==="butcher"&&!b.construction&&b.enabled&&b.connected)){
-        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==="meat").reduce((n,a)=>n+a.amount,0),room=8-(target.inventory.meat??0)-incoming;
-        if(room<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;const amount=Math.min(6,room,source.inventory.meat??0);source.inventory.meat!-=amount;
+        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==="meat").reduce((n,a)=>n+a.amount,0),room=DELIVERY_CAPACITY*2-(target.inventory.meat??0)-incoming;
+        if(room<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;const amount=Math.min(DELIVERY_CAPACITY,room,source.inventory.meat??0);source.inventory.meat!-=amount;
         this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo:"meat",amount,returning:false,wait:0});break;
       }
     }
@@ -1637,7 +1639,7 @@ export class Simulation {
         for(const cargo of [...MARKET_GOODS].sort((a,b)=>(target.inventory[a]??0)-(target.inventory[b]??0))){
           const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo===cargo).reduce((n,a)=>n+a.amount,0),room=marketStalls(target)*4-(target.inventory[cargo]??0)-incoming;
           if(room<=0||(source.inventory[cargo]??0)<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;
-          const amount=Math.min(6,room,source.inventory[cargo]??0);source.inventory[cargo]!-=amount;
+          const amount=Math.min(DELIVERY_CAPACITY,room,source.inventory[cargo]??0);source.inventory[cargo]!-=amount;
           this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo,amount,returning:false,wait:0});sent=true;break;
         }if(sent)break;
       }
@@ -1698,7 +1700,8 @@ export class Simulation {
           continue;
         const p = this.route(b, dest,"truck");
         if (!p) continue;
-        const amount = Math.min(6, b.inventory[r.output] ?? 0);
+        const room=dest.kind==='warehouse'?Infinity:(dest.kind==='market'?marketStalls(dest)*4:outputCapacity(dest)+4)-(dest.inventory[r.output]??0)-incoming;
+        const amount = Math.min(DELIVERY_CAPACITY, room, b.inventory[r.output] ?? 0);
         b.inventory[r.output]! -= amount;
         this.state.agents.push({
           id: this.state.nextId++,

@@ -201,12 +201,14 @@ export class Traffic {
       )
         this.junctionTiles.add(road);
     }
-    // Adjacent junction tiles form one crossing. Reserving them separately
-    // lets opposing cars each hold half of the crossing forever.
+    // A crossing may span adjacent tiles, but a wide street or plaza must not
+    // become one town-sized reservation. Keep each crossing within a 2x2 area.
     for (const tile of this.junctionTiles) {
       if (this.junctionGroups.has(tile)) continue;
       const queue = [tile],
         members: Point[] = [];
+      const [originX,originY]=tile.split(',').map(Number);
+      let minX=originX,maxX=originX,minY=originY,maxY=originY;
       this.junctionGroups.set(tile, tile);
       for (let i = 0; i < queue.length; i++) {
         const [x, y] = queue[i].split(",").map(Number);
@@ -219,6 +221,8 @@ export class Traffic {
         ]) {
           const next = `${x + dx},${y + dy}`;
           if (this.junctionTiles.has(next) && !this.junctionGroups.has(next)) {
+            if(Math.max(maxX,x+dx)-Math.min(minX,x+dx)>1||Math.max(maxY,y+dy)-Math.min(minY,y+dy)>1)continue;
+            minX=Math.min(minX,x+dx);maxX=Math.max(maxX,x+dx);minY=Math.min(minY,y+dy);maxY=Math.max(maxY,y+dy);
             this.junctionGroups.set(next, tile);
             queue.push(next);
           }

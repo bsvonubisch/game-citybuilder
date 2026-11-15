@@ -8,6 +8,7 @@ import {
   LANE_OFFSET,
 } from "../.test-dist/traffic.js";
 import { Simulation } from "./legacy-town.mjs";
+import { Simulation as StarterSimulation } from "../.test-dist/simulation.js";
 import { agentDistance } from "../.test-dist/rendering.js";
 import { STEP, AGENT_SPEED } from "../.test-dist/catalog.js";
 import { ROAD_TYPES, roadTravelTime, roadMovement } from "../.test-dist/roads.js";
@@ -294,6 +295,28 @@ test("opposing cars clear two nearby junctions instead of holding each other's c
     );
   }
 });
+test('distant traffic on a continuous two-tile-wide street does not reserve the entire street',()=>{
+  const roads=[...line(0,0,1,0,20),...line(0,1,1,0,20)];
+  const a={...vehicle(1,line(0,0,1,0,20)),active:true,segment:1};
+  const b={...vehicle(2,[{x:17,y:1},{x:17,y:0},{x:16,y:0},{x:15,y:0}]),active:true,progress:.1,queuedTicks:40};
+  const traffic=new Traffic();traffic.configure(new Set(roads.map(p=>`${p.x},${p.y}`)));
+  traffic.plan([a,b]);assert.ok(a.move>.3,'A distant turn cannot stop an unobstructed car');
+  complete([a,b],roads,300);
+});
+
+test('the current starter town keeps flowing over twenty minutes with only occasional recovery',()=>{
+  const sim=new StarterSimulation();let recoveries=0,stoppedTicks=0;
+  const recover=sim.recoverVehicle.bind(sim);sim.recoverVehicle=a=>{recoveries++;recover(a);};
+  for(let tick=0;tick<4800;tick++){
+    noCollisions(sim.state.agents,`starter tick ${tick}`);sim.step();
+    const cars=sim.state.agents.filter(a=>a.kind!=='person'&&a.active);
+    if(cars.filter(a=>a.trafficWait&&(a.move??0)<.001).length>=10)stoppedTicks++;
+  }
+  assert.ok(recoveries<30,`Recovery must remain exceptional, observed ${recoveries}`);
+  assert.ok(stoppedTicks<160,`No sustained town-wide queue, observed ${stoppedTicks} ticks`);
+  assert.ok(sim.state.delivered>2400,'Goods continue reaching their destinations');
+});
+
 test("the oldest queued departure gets the next safe gap instead of newer low-id cars", () => {
   const path = line(0, 0, 1, 0, 8),
     older = { ...vehicle(50, path, "truck"), queuedTicks: 30 },

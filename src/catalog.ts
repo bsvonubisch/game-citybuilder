@@ -492,6 +492,7 @@ export const STARTING_SIZE = 28;
 export const SIZE = 64;
 export const STEP = 0.25;
 export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;
+export const DELIVERY_CAPACITY = 12;
 
 export const buildingJobs=(b:{kind:BuildingKind;crop?:Crop|null;rotation:number;plot?:readonly[number,number]})=>isLivestock(b.kind)?livestockJobs(b.kind,b.plot):b.kind==="market"?marketStalls({x:0,y:0,...b}):b.kind==='farm'?(b.crop===null?0:farmJobs(b.plot)):BUILDINGS[b.kind].jobs;
 export const buildingPrice=(kind:BuildingKind,plot?:readonly[number,number])=>isLivestock(kind)?penPrice(kind,plot):kind==="market"?marketPrice(plot):kind==='farm'?farmPrice(plot):{cost:BUILDINGS[kind].cost,materials:BUILDINGS[kind].materials??{}};
