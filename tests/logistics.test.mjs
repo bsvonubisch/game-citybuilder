@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Simulation, key } from "../.test-dist/simulation.js";
 import { BUILDINGS } from "../.test-dist/catalog.js";
+import { nearbyDeposits } from "../.test-dist/deposits.js";
 import { buildingGuidance } from "../.test-dist/building-guidance.js";
 import {
   canSupply,
@@ -299,7 +300,7 @@ test("output and exhausted deposits suggest useful destinations and deeper excav
     { type: "build", kind: "mill" },
   );
   const quarry = building(sim, "quarry");
-  sim.state.deposits[key(quarry)] = 0;
+  for(const id of nearbyDeposits(quarry))sim.state.deposits[id] = 0;
   assert.deepEqual(buildingGuidance(sim, quarry).action, { type: "deepen" });
 });
 

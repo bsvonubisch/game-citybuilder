@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { nearbyDeposits } from "../.test-dist/deposits.js";
 import {
   facing,
   opaqueBounds,
@@ -523,7 +524,7 @@ test("depleted extractor alerts clear with a usable deposit and pauses take prio
     enabled: true,
     workers: 2,
   };
-  sim.state.deposits[key(b)] = 0;
+  for(const id of nearbyDeposits(b))sim.state.deposits[id] = 0;
   assert.equal(sim.alert(b).kind, "depleted");
   b.enabled = false;
   assert.equal(sim.alert(b).kind, "paused");
@@ -1284,6 +1285,7 @@ test("deterministic simulation produces identical results from the same starting
 });
 test("finite deposits stop extraction at depletion", () => {
   const sim = new Simulation();
+  for(const id of nearbyDeposits(sim.state.buildings.find(b=>b.kind==='quarry')))sim.state.deposits[id]=0;
   sim.state.deposits["19,4"] = 3;
   advance(sim, 180);
   const quarry = sim.state.buildings.find((b) => b.kind === "quarry");

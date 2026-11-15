@@ -23,7 +23,7 @@ import { prepareRoadSurfaces } from "./road-art.js";
 import { ForestryArt, prepareForestryFrames } from "./forestry-art.js";
 import {PlanterArt,planterMask} from "./planter-art.js";
 import { forestCenter, forestTargets, FOREST_RADIUS } from "./forestry.js";
-import { depositAt, exposedDeposit, depositTiles, buildingDeposit, MINING_RADIUS, isExtractor } from "./deposits.js";
+import { depositAt, exposedDeposit, depositTiles, nearbyDeposits, MINING_RADIUS, isExtractor } from "./deposits.js";
 import { miningTargets } from "./mining.js";
 import type { RoadType } from "./roads.js";
 import { isService as isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
@@ -1665,9 +1665,9 @@ export class TownScene extends Phaser.Scene {
   private drawMiningRange(b:Building) {
     const center=forestCenter(b),points=[];
     for(let i=0;i<=64;i++){const angle=i/64*Math.PI*2,p=iso(center.x+Math.cos(angle)*MINING_RADIUS,center.y+Math.sin(angle)*MINING_RADIUS);points.push({x:p.x,y:p.y-groundHeight(b.x,b.y,this.simulation.state.terrain)});}
-    const deposit=buildingDeposit(b),reachable=new Set(miningTargets(this.simulation,b).map(t=>key(t.rock)));
+    const reachable=new Set(miningTargets(this.simulation,b).map(t=>key(t.rock)));
     this.overlay.lineStyle(1.4,b.kind==="quarry"?0xbecfdb:0xe8ac78,.9).strokePoints(points,false);
-    if(deposit)for(const p of depositTiles(deposit))if(!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.roads.has(key(p)))this.diamond(p,reachable.has(key(p))?0x93d993:0xe6c17d,.3);
+    for(const deposit of nearbyDeposits(b))for(const p of depositTiles(deposit))if(exposedDeposit(this.simulation.state,p)&&!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.roads.has(key(p)))this.diamond(p,reachable.has(key(p))?0x93d993:0xe6c17d,.3);
   }
   replace(simulation: Simulation) {
     this.simulation = simulation;

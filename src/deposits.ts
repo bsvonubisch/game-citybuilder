@@ -50,13 +50,14 @@ for (const [anchor] of Object.entries(DEPOSITS)) {
 export const depositAt=(p:Point)=>DEPOSIT_TILES[`${p.x},${p.y}`];
 export const exposedDeposit=(world:Pick<World,"clearedDeposits">,p:Point)=>depositAt(p)&&!world.clearedDeposits?.includes(`${p.x},${p.y}`);
 export const depositTiles=(anchor:string):Point[]=>Object.entries(DEPOSIT_TILES).filter(([,a])=>a===anchor).map(([k])=>{const[x,y]=k.split(",").map(Number);return{x,y};});
-export function nearbyDeposit(b:Pick<Building,"kind"|"x"|"y"|"plot"> & {rotation:number}) {
-  if(!isExtractor(b.kind))return undefined;
+export function nearbyDeposits(b:Pick<Building,"kind"|"x"|"y"|"plot"> & {rotation:number}) {
+  if(!isExtractor(b.kind))return [];
   const [w,h]=dimensions(b.kind,b.rotation,b.plot),x=b.x+(w-1)/2,y=b.y+(h-1)/2;
   return Object.entries(DEPOSITS).filter(([,kind])=>kind===(b.kind==="quarry"?"stone":"metal"))
     .map(([id])=>({id,distance:Math.min(...depositTiles(id).map(p=>Math.hypot(p.x-x,p.y-y)))}))
-    .filter(d=>d.distance<=MINING_RADIUS).sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id))[0]?.id;
+    .filter(d=>d.distance<=MINING_RADIUS).sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id)).map(d=>d.id);
 }
+export const nearbyDeposit=(b:Parameters<typeof nearbyDeposits>[0])=>nearbyDeposits(b)[0];
 export function buildingDeposit(b:Building) {
   return b.deposit ?? (DEPOSITS[`${b.x},${b.y}`]===(b.kind==="quarry"?"stone":"metal")?`${b.x},${b.y}`:nearbyDeposit(b));
 }

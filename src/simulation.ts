@@ -9,7 +9,7 @@ import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
 import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
 import { stepMining, miningTargets, landOre, validMiningTrip, type MiningTrip } from "./mining.js";
-import { depositAt, exposedDeposit, nearbyDeposit, buildingDeposit, expandReserves } from "./deposits.js";
+import { depositAt, exposedDeposit, nearbyDeposit, nearbyDeposits, buildingDeposit, expandReserves } from "./deposits.js";
 import { ROCK_CLEARING_WORK } from "./construction.js";
 import {planRemoval} from "./removal.js";
 import {roadEdges,reconcileRoadLamps} from "./streetlights.js";
@@ -1761,7 +1761,7 @@ export class Simulation {
       };
     if (
       (b.kind === "quarry" || b.kind === "mine") &&
-      (this.state.deposits[buildingDeposit(b)!] ?? 0) <= 0
+      nearbyDeposits(b).every(id=>(this.state.deposits[id]??0)<=0)
     )
       return {
         kind: "depleted",
@@ -1916,7 +1916,7 @@ export function parseSave(raw: string): World {
     const clearance=b.construction?.clearance;
     if(clearance&&(!Array.isArray(clearance.tiles)||!clearance.tiles.length||clearance.tiles.length>25||!finite(clearance.work)||clearance.work>=ROCK_CLEARING_WORK||clearance.tiles.some(p=>!p||!Number.isInteger(p.x)||!Number.isInteger(p.y)||!exposedDeposit(s,p)||!footprint(b.kind,b.x,b.y,b.rotation,b.plot).some(q=>q.x===p.x&&q.y===p.y))||new Set(clearance.tiles.map(key)).size!==clearance.tiles.length))throw new Error("Invalid surface clearance.");
     if(b.deposit!==undefined&&(!isExtractor(b.kind)||DEPOSITS[b.deposit] !== (b.kind==="quarry"?"stone":"metal")))throw new Error("Invalid assigned deposit.");
-    if(b.mining!==undefined&&(!isExtractor(b.kind)||!Array.isArray(b.mining)||b.mining.length>4||!b.mining.every(t=>validMiningTrip(t)&&t.deposit===buildingDeposit(b))))throw new Error("Invalid mining work.");
+    if(b.mining!==undefined&&(!isExtractor(b.kind)||!Array.isArray(b.mining)||b.mining.length>4||!b.mining.every(t=>validMiningTrip(t)&&nearbyDeposits(b).includes(t.deposit))))throw new Error("Invalid mining work.");
     if (b.forestry !== undefined && (b.kind!=="forester" || !Array.isArray(b.forestry) || b.forestry.length>2 || !b.forestry.every(validForestTrip))) throw new Error("Invalid forestry work.");
     b.rotation ??= 0;
     if (b.kind === "house") b.houseTier ??= 1;

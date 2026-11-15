@@ -52,7 +52,7 @@ import {
   servicePreview,
   serviceOpen,
 } from "./proximity.js";
-import { deeperLayer, isExtractor, depositAt, DEPOSIT_TILES, buildingDeposit, MINING_RADIUS } from "./deposits.js";
+import { deeperLayer, isExtractor, depositAt, DEPOSIT_TILES, buildingDeposit, nearbyDeposits, MINING_RADIUS } from "./deposits.js";
 import { miningTargets } from "./mining.js";
 import {
   builderCapacity,
@@ -1122,7 +1122,7 @@ function updateInspector() {
             )
             .join(
               "",
-            )}${isExtractor(b.kind) ? `<div class="detail-row"><span>Deposit remaining</span><b>${(simulation.state.deposits[buildingDeposit(b)!]??0).toLocaleString()}</b></div>` : ""}`
+            )}${isExtractor(b.kind) ? `<div class="detail-row"><span>Resources within reach</span><b>${nearbyDeposits(b).reduce((n,id)=>n+(simulation.state.deposits[id]??0),0).toLocaleString()}</b></div>` : ""}`
         : isHome(b.kind)
           ? `<div class="detail-row"><span>Residents</span><b>${simulation.state.residents.filter((r) => r.home === b.id).length} / ${houseCapacity(b)}</b></div><div class="residents">${simulation.state.residents
               .filter((r) => r.home === b.id)
@@ -1160,7 +1160,7 @@ function updateInspector() {
   }
   if(isExtractor(b.kind)&&!b.construction) {
     const targets=miningTargets(simulation,b);
-    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Mining area · ${MINING_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable rock faces</span><b>${targets.length}</b></div><p class="muted">Miners walk to the highlighted deposit, break up rock and carry it back. Digging deeper extends this same deposit.</p>${(b.mining??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Miner")}</span><b>${t.phase==="mining"?"Mining":t.phase==="returning"?`Carrying ${t.cargo} ${b.kind==="quarry"?"stone":"metal"}`:"Walking to the deposit"}</b></div>`).join("")}`);
+    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Mining area · ${MINING_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable rock faces</span><b>${targets.length}</b></div><p class="muted">Miners use reachable matching deposits across this area and carry ore back. Green rocks can be reached. Dig deeper replenishes the assigned seam.</p>${(b.mining??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Miner")}</span><b>${t.phase==="mining"?"Mining":t.phase==="returning"?`Carrying ${t.cargo} ${b.kind==="quarry"?"stone":"metal"}`:"Walking to the deposit"}</b></div>`).join("")}`);
   }
   if (b.kind==="forester"&&!b.construction) {
     const reachable=forestTargets(simulation,b).length;
