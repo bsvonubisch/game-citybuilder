@@ -1626,6 +1626,10 @@ export class TownScene extends Phaser.Scene {
         const sprite = this.buildings.get(b.id);
         if (!sprite) return;
         const [w, h] = dimensions(b.kind, b.rotation, b.plot);
+        if(b.kind==='farm'){
+          const p=iso(b.x+(w-1)/2,b.y+(h-1)/2);
+          return{x:p.x,y:p.y-groundHeight(b.x,b.y,this.simulation.state.terrain),center:true};
+        }
         return {
           x: iso(b.x + (w - 1) / 2, b.y + (h - 1) / 2).x,
           y: sprite.y + (b.construction ? 16 : -4),

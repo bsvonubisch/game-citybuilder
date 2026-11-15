@@ -47,7 +47,7 @@ export class BuildingAlerts {
     sim: Simulation,
     camera: Phaser.Cameras.Scene2D.Camera,
     inspect: boolean,
-    anchor: (b: Building) => { x: number; y: number } | undefined,
+    anchor: (b: Building) => { x: number; y: number; center?: boolean } | undefined,
   ) {
     this.simulation = sim;
     const revision = `${sim.state.revision}:${sim.state.tick}:${inspect}`;
@@ -118,7 +118,7 @@ export class BuildingAlerts {
         !!p && x > 14 && x < camera.width - 14 && y > 28 && y < camera.height;
       badge.button.hidden = !visible;
       if (!visible) continue;
-      badge.button.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
+      badge.button.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, ${p?.center ? '-50%' : '-100%'})`;
       badge.button.dataset.edge =
         x < 130 ? "left" : x > camera.width - 130 ? "right" : "center";
     }
