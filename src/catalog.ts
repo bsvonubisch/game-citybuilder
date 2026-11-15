@@ -124,8 +124,8 @@ export const DECORATIONS: Record<
   streetlight: {
     name: "Copper streetlight",
     cost: 20,
-    texture: "props",
-    frame: 1,
+    texture: "streetlamp",
+    frame: 0,
     height: 33,
   },
   planter: {

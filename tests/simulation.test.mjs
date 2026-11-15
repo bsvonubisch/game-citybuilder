@@ -1466,7 +1466,7 @@ test("all decoration types can be placed, selected by tile, removed and saved wi
     );
     assert.equal(
       execute(restored, { type: "place", kind, x: 6, y: 20 }).ok,
-      false,
+      kind === "streetlight",
     );
   }
   const sim = new Simulation(),
@@ -2422,4 +2422,27 @@ test("upgrade help explains warehouse shortfalls without recommending duplicate 
     materialGuidance(sim, 180, { planks: 16 }).join(" "),
     /Earn 40 more gold/,
   );
+});
+
+
+test("road lamps share a tile on separate curbs, survive saving, and remove independently",async()=>{
+  const {roadEdges,lampPoint}=await import("../.test-dist/streetlights.js");
+  const sim=new Simulation();
+  const p=sim.state.roads.map(k=>{const[x,y]=k.split(',').map(Number);return{x,y};}).find(p=>roadEdges(sim.roads,p).length===2);
+  const edges=roadEdges(sim.roads,p),money=sim.state.money;
+  for(const rotation of edges)assert.equal(execute(sim,{type:"place",kind:"streetlight",...p,rotation}).ok,true);
+  const lamps=sim.state.decorations.filter(d=>d.edge!==undefined&&key(d)===key(p));
+  assert.equal(lamps.length,2);assert.equal(sim.state.money,money-40);
+  assert.equal(execute(sim,{type:"place",kind:"streetlight",...p,rotation:edges[0]}).ok,false);
+  assert.equal(lampPoint(lamps[0]).x===lampPoint(lamps[1]).x&&lampPoint(lamps[0]).y===lampPoint(lamps[1]).y,false);
+  assert.doesNotThrow(()=>parseSave(JSON.stringify(sim.snapshot())));
+  assert.equal(execute(sim,{type:"removeDecoration",id:lamps[1].id}).ok,true);
+  assert.ok(sim.roads.has(key(p)));assert.ok(sim.state.decorations.some(d=>d.id===lamps[0].id));
+});
+test("road widening moves lamps onto free curbs and clears posts trapped inside intersections",async()=>{
+  const {reconcileRoadLamps}=await import("../.test-dist/streetlights.js");
+  const lamps=[{id:1,kind:"streetlight",x:3,y:3,natural:false,edge:0},{id:2,kind:"streetlight",x:3,y:3,natural:false,edge:2}];
+  let kept=reconcileRoadLamps(lamps,new Set(['3,3','4,3','3,4','3,2']));
+  assert.equal(kept.length,1);assert.equal(kept[0].edge,2);
+  assert.equal(reconcileRoadLamps(kept,new Set(['3,3','4,3','3,4','3,2','2,3'])).length,0);
 });

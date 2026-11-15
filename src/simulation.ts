@@ -4,6 +4,7 @@ import { stepMining, miningTargets, landOre, validMiningTrip, type MiningTrip } 
 import { depositAt, exposedDeposit, nearbyDeposit, buildingDeposit, expandReserves } from "./deposits.js";
 import { ROCK_CLEARING_WORK } from "./construction.js";
 import {planRemoval} from "./removal.js";
+import {roadEdges,reconcileRoadLamps} from "./streetlights.js";
 import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType, type RoadTypes } from "./roads.js";
 import {
   BUILDINGS,
@@ -148,6 +149,7 @@ export interface World {
   clearedDeposits?: string[];
 }
 export type Command =
+  | {type:"removeDecoration";id:number}
   | {type:"removeStroke";from:Point;to:Point}
   | { type: "roadStroke"; from: Point; to: Point; roadType?: RoadType }
   | TerrainCommand
@@ -741,6 +743,11 @@ export class Simulation {
     rotation = 0,
   ): string | null {
     if (!inside(x, y)) return "Choose a tile inside the valley.";
+    const roadLamp=kind==="streetlight"&&this.roadSet.has(key({x,y}));
+    if(roadLamp) {
+      if(!roadEdges(this.roadSet,{x,y}).includes(rotation))return "Choose an outside curb, away from the crossing.";
+      if(this.state.decorations.some(d=>d.x===x&&d.y===y&&d.edge===rotation))return "This curb already has a streetlight.";
+    }
     if (kind === "fishery") {
       const error = fisherySiteError(x, y, rotation, this.state.terrain);
       if (error) return error;
@@ -789,21 +796,22 @@ export class Simulation {
     for (const p of cells) {
       if (!inside(p.x, p.y))
         return "The whole building must fit inside the valley.";
-      if (this.buildingAt(p.x, p.y) || this.roadSet.has(key(p)))
+      if (this.buildingAt(p.x, p.y) || (this.roadSet.has(key(p))&&!roadLamp))
         return "The building footprint overlaps a road or another building.";
-      if(exposedDeposit(this.state,p)&&!isBuilding(kind))return "Surface rocks need to be cleared by builders before this tile can be used.";
+      if(exposedDeposit(this.state,p)&&!isBuilding(kind)&&!roadLamp)return "Surface rocks need to be cleared by builders before this tile can be used.";
       if(exposedDeposit(this.state,p)&&isExtractor(kind))return "Place the workplace beside the rocks, within its mining area.";
       if (
         terrain(p.x, p.y, this.state.terrain) === "water" &&
         kind !== "road" &&
         kind !== "bridge" &&
         kind !== "fishery"
+        && !roadLamp
       )
         return "The whole building needs dry land. Roads can form bridges.";
     }
     if (
       isDecoration(kind) &&
-      (this.decorationAt(x, y) || exposedDeposit(this.state,{x,y}))
+      !roadLamp && (this.decorationAt(x, y) || exposedDeposit(this.state,{x,y}))
     )
       return "Choose an empty land tile for this decoration.";
     if (
@@ -892,6 +900,7 @@ export class Simulation {
         "place",
         "roadStroke",
         "removeStroke",
+        "removeDecoration",
         "demolish",
         "toggle",
         "rotate",
@@ -909,7 +918,13 @@ export class Simulation {
       };
     let message = "",
       networkChanged = true;
-    if(c.type==="removeStroke") {
+    if(c.type==="removeDecoration") {
+      const d=this.state.decorations.find(d=>d.id===c.id);
+      if(!d)return {ok:false,message:"This decoration is already gone.",revision:this.state.revision};
+      this.state.decorations=this.state.decorations.filter(other=>other.id!==d.id);
+      this.state.money+=d.natural?0:Math.floor(DECORATIONS[d.kind].cost/2);
+      networkChanged=false;message="Decoration removed.";
+    } else if(c.type==="removeStroke") {
       const plan=planRemoval(this,c.from,c.to);
       if(plan.error)return {ok:false,message:plan.error,revision:this.state.revision};
       networkChanged=plan.buildings.size>0||plan.roads.size>0;
@@ -927,7 +942,7 @@ export class Simulation {
       }
       this.state.roads=this.state.roads.filter(k=>!plan.roads.has(k));
       this.state.decorations=this.state.decorations.filter(d=>{
-        if(!plan.decorations.has(d.id))return true;
+        if(!plan.decorations.has(d.id)&&!(d.edge!==undefined&&plan.roads.has(key(d))))return true;
         this.state.money+=d.natural?0:Math.floor(DECORATIONS[d.kind].cost/2);return false;
       });
       message=`Removed ${plan.buildings.size} buildings, ${plan.roads.size} road tiles and ${plan.decorations.size} decorations. Stock recovered; half the build cost returned.`;
@@ -1025,7 +1040,7 @@ export class Simulation {
       const cells = isBuilding(c.kind)
         ? footprint(c.kind, c.x, c.y, c.rotation)
         : [c];
-      this.state.decorations = this.state.decorations.filter(
+      if(!(c.kind==="streetlight"&&this.roadSet.has(key(c))))this.state.decorations = this.state.decorations.filter(
         (d) => !cells.some((p) => p.x === d.x && p.y === d.y),
       );
       if (c.kind === "road" || c.kind === "bridge")
@@ -1037,6 +1052,7 @@ export class Simulation {
           x: c.x,
           y: c.y,
           natural: false,
+          ...(c.kind==="streetlight"&&this.roadSet.has(key(c))?{edge:c.rotation??0}:{}),
         });
         networkChanged = false;
       } else
@@ -1097,6 +1113,7 @@ export class Simulation {
         );
         this.state.money += Math.floor(buildingInvestment(b) / 2);
       } else if (this.roadSet.has(key(c))) {
+        this.state.decorations=this.state.decorations.filter(d=>{if(d.edge===undefined||key(d)!==key(c))return true;this.state.money+=Math.floor(DECORATIONS[d.kind].cost/2);return false;});
         this.state.roads = this.state.roads.filter((k) => k !== key(c));
         this.state.money +=
           terrain(c.x, c.y, this.state.terrain) === "water" ? 17 : Math.floor(ROAD_TYPES[roadTypeAt(this.state.roadTypes, c)].cost / 2);
@@ -1226,6 +1243,12 @@ export class Simulation {
         };
       b.enabled = !b.enabled;
       message = b.enabled ? "Production resumed." : "Production paused.";
+    }
+    if(networkChanged){
+      const before=this.state.decorations.length;
+      this.state.decorations=reconcileRoadLamps(this.state.decorations,new Set(this.state.roads));
+      const removed=before-this.state.decorations.length;
+      if(removed){this.state.money+=removed*DECORATIONS.streetlight.cost;message+=` ${removed} streetlights returned at full cost because their curbs became traffic lanes.`;}
     }
     this.state.revision++;
     if (networkChanged)
@@ -1948,24 +1971,27 @@ export function parseSave(raw: string): World {
     for (const k of taken) occupied.add(k);
   }
   if (s.decorations !== undefined) {
-    if (!Array.isArray(s.decorations) || s.decorations.length > SIZE * SIZE)
+    if (!Array.isArray(s.decorations) || s.decorations.length > SIZE * SIZE * 5)
       throw new Error("Invalid decorations.");
     for (const d of s.decorations) {
+      const roadLamp=d.kind==="streetlight"&&d.edge!==undefined&&[0,1,2,3].includes(d.edge)&&s.roads.includes(key(d));
+      const occupancyKey=roadLamp?`${key(d)}:lamp:${d.edge}`:key(d);
       if (
         !Number.isInteger(d.id) ||
         d.id < 1 ||
         ids.has(d.id) ||
         !inside(d.x, d.y) ||
-        terrain(d.x, d.y, s.terrain) === "water" ||
+        (terrain(d.x, d.y, s.terrain) === "water"&&!roadLamp) ||
         !isDecoration(d.kind) ||
         typeof d.natural !== "boolean" ||
         (d.cutAt !== undefined && (!harvestable(d) || !Number.isInteger(d.cutAt) || d.cutAt<0 || d.cutAt>s.tick)) ||
-        occupied.has(key(d)) ||
-        DEPOSITS[key(d)]
+        (d.edge!==undefined&&!roadLamp) ||
+        occupied.has(occupancyKey) ||
+        (!roadLamp&&DEPOSITS[key(d)]&&!s.clearedDeposits?.includes(key(d)))
       )
         throw new Error("Invalid decoration.");
       ids.add(d.id);
-      occupied.add(key(d));
+      occupied.add(occupancyKey);
     }
   }
   if (!s.buildings.some((b) => b.kind === "warehouse"))

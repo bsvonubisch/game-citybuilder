@@ -5,6 +5,7 @@ export interface Decoration extends Point {
   kind: DecorationKind;
   natural: boolean;
   cutAt?: number;
+  edge?: 0|1|2|3;
 }
 export const terrainNoise = (x: number, y: number) => {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;

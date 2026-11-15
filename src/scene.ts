@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import {planRemoval} from "./removal.js";
+import {lampPoint,nearestRoadEdge} from "./streetlights.js";
 import { NightArt } from "./night-art.js";
 import { ShadowArt } from "./shadow-art.js";
 import { planRoad, type RoadPlan } from "./road-stroke.js";
@@ -170,6 +171,8 @@ export class TownScene extends Phaser.Scene {
   }
   onCancel: () => void = () => {};
   onRemoveApply:(from:Point,to:Point)=>void=()=>{};
+  onSelectDecoration:(id:number)=>void=()=>{};
+  onDecorationRemove:(id:number)=>void=()=>{};
   onEyedropper:(kind:Tool,rotation:0|1|2|3)=>void=()=>{};
   onBuildingHover:(id:number|null,x:number,y:number)=>void=()=>{};
   private hoverArt?:Phaser.GameObjects.Image;
@@ -182,7 +185,7 @@ export class TownScene extends Phaser.Scene {
     this.onBuildingHover(id,x,y);
   }
   roadType: RoadType = "stone";
-  private roadDrag: { from: Point; to: Point; pointer: number } | null = null;
+  private roadDrag: { from: Point; to: Point; pointer: number; decoration?:number } | null = null;
   onRoadPreview: (plan: RoadPlan | null) => void = () => {};
   onRoadApply: (from: Point, to: Point) => void = () => {};
   cancelRoad() {
@@ -272,6 +275,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("forestry", "/forestry-workers.png");
     this.load.image("mining", "/mining-workers.png");
     this.load.image("planter-plants", "/planter-plants.png");
+    this.load.image("streetlamp", "/streetlight-copper.png");
     this.load.image("fishing-boats", "/fishing-boats.png");
   }
   create() {
@@ -316,6 +320,7 @@ export class TownScene extends Phaser.Scene {
     this.trimAtlas("shore", 4, 2);
     this.trimAtlas("garden", 4, 4);
     this.trimAtlas("props", 2, 2);
+    this.trimAtlas("streetlamp",1,1);
     this.trimAtlas("mill", 2, 1);
     this.trimAtlas("fishing-boats", 2, 2);
     this.fishingArt = new FishingArt(this);
@@ -388,7 +393,7 @@ export class TownScene extends Phaser.Scene {
         const hit=this.tool==="bulldoze"?over.find(o=>o.getData("buildingId")||o.getData("decoration")):undefined;
         const b=hit?.getData("buildingId")?this.simulation.building(hit.getData("buildingId")):undefined;
         const tile = b?{x:b.x,y:b.y}:hit?.getData("decoration")??this.pickTile(world.x,world.y);
-        if (inside(tile.x,tile.y)) { this.roadDrag = { from: tile, to: tile, pointer: p.id }; this.drawOverlay(); }
+        if (inside(tile.x,tile.y)) { this.roadDrag = { from: tile, to: tile, pointer: p.id,decoration:hit?.getData("decoration")?.edge!==undefined?hit?.getData("decoration")?.id:undefined }; this.drawOverlay(); }
         return;
       }
       if (p.wasTouch) return;
@@ -471,6 +476,11 @@ export class TownScene extends Phaser.Scene {
       }
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       const t = this.pickTile(wp.x, wp.y);
+      if(this.tool==="streetlight"&&this.simulation.roads.has(key(t))) {
+        const y=wp.y+groundHeight(t.x,t.y,this.simulation.state.terrain);
+        const edge=nearestRoadEdge(this.simulation.roads,t,{x:wp.x/64+y/32,y:y/32-wp.x/64}) as 0|1|2|3;
+        if(edge!==this.rotation){this.rotation=edge;this.drawOverlay();}
+      }
       const hover = inside(t.x, t.y) ? t : null;
       if (hover?.x !== this.hover?.x || hover?.y !== this.hover?.y) {
         this.hover = hover;
@@ -498,7 +508,10 @@ export class TownScene extends Phaser.Scene {
           this.onRoadPreview(null);
           if (p.event.type !== "touchcancel") {
             const world = this.cameras.main.getWorldPoint(p.x, p.y);
-            if(this.tool==="bulldoze")this.onRemoveApply(draft.from,draft.to);
+            if(this.tool==="bulldoze"){
+              if(draft.decoration&&key(draft.from)===key(draft.to))this.onDecorationRemove(draft.decoration);
+              else this.onRemoveApply(draft.from,draft.to);
+            }
             else this.onRoadApply(draft.from, this.pickTile(world.x, world.y));
           }
           this.drawOverlay();
@@ -539,12 +552,18 @@ export class TownScene extends Phaser.Scene {
           if (boatHit) this.onSelectBoat(boatHit.getData("boatId"));
           else if (agentHit) this.onSelectAgent(agentHit.getData("agentId"));
           else if (decorationHit)
-            this.onTile(decorationHit.getData("decoration"));
+            this.onSelectDecoration(decorationHit.getData("decoration").id);
           else if (hit) this.onSelect(hit.getData("buildingId"));
           else {
             const wp = this.cameras.main.getWorldPoint(p.x, p.y),
               t = this.pickTile(wp.x, wp.y);
-            if (inside(t.x, t.y)) this.onTile(t);
+            if (inside(t.x, t.y)) {
+              if(this.tool==="streetlight"&&this.simulation.roads.has(key(t))){
+                const y=wp.y+groundHeight(t.x,t.y,this.simulation.state.terrain);
+                this.rotation=nearestRoadEdge(this.simulation.roads,t,{x:wp.x/64+y/32,y:y/32-wp.x/64}) as 0|1|2|3;
+              }
+              this.onTile(t);
+            }
           }
         }
         this.dragging = false;
@@ -746,11 +765,12 @@ export class TownScene extends Phaser.Scene {
       }
     for (const d of this.simulation.state.decorations) {
       const def = DECORATIONS[d.kind],
-        p = iso(d.x, d.y);
+        position=d.kind==="streetlight"?lampPoint(d):d,
+        p = iso(position.x, position.y);
       const sprite = this.add
-        .image(p.x, p.y + 3, def.texture, def.frame)
+        .image(p.x, p.y + (d.kind==="streetlight"?0:3), def.texture, def.frame)
         .setOrigin(0.5, 1)
-        .setDepth((d.x + d.y) * 32 + 5)
+        .setDepth((position.x + position.y) * 32 + 5)
         .setData("decoration", d)
         .setInteractive({ pixelPerfect: true });
       sprite.setScale(def.height / sprite.frame.height);
@@ -811,8 +831,8 @@ export class TownScene extends Phaser.Scene {
     });
     for(const rock of this.trees) {
       const decoration=rock.getData("decoration");
-      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:undefined)) as Point|undefined;
-      if(point)rock.setDepth(travellerDepth(point,{left:rock.x,right:rock.x+rock.displayWidth,top:rock.y,bottom:rock.y+rock.displayHeight},this.occludingPlots)-.1);
+      const point=(rock.getData("depositPoint")??(decoration?.kind==="planter"?decoration:decoration?.kind==="streetlight"?lampPoint(decoration):undefined)) as Point|undefined;
+      if(point)rock.setDepth(travellerDepth(point,{left:rock.x-rock.displayWidth*rock.originX,right:rock.x+rock.displayWidth*(1-rock.originX),top:rock.y-rock.displayHeight*rock.originY,bottom:rock.y+rock.displayHeight*(1-rock.originY)},this.occludingPlots)-.1);
     }
     this.drawOverlay();
   }
@@ -963,7 +983,8 @@ export class TownScene extends Phaser.Scene {
           this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
       if (isDecoration(this.tool)) {
         const def = DECORATIONS[this.tool],
-          p = iso(this.hover.x, this.hover.y);
+          position=this.tool==="streetlight"&&this.simulation.roads.has(key(this.hover))?lampPoint({...this.hover,edge:this.rotation}):this.hover,
+          p = iso(position.x, position.y);
         this.decorationGhost ??= this.add
           .image(0, 0, def.texture, def.frame)
           .setDepth(5001)
@@ -974,7 +995,7 @@ export class TownScene extends Phaser.Scene {
           .setScale(
             def.height / this.textures.getFrame(def.texture, def.frame).height,
           )
-          .setPosition(p.x, p.y + 3)
+          .setPosition(p.x, p.y + (this.tool==="streetlight"?0:3))
           .setAlpha(0.6)
           .setTint(valid ? 0xffffff : 0xe99385)
           .setVisible(true);

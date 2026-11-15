@@ -313,6 +313,7 @@ function setTool(next: Tool) {
             ? `${icon("hammer")} Click or drag to remove a stretch · Release to apply · Half the gold returned <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if(next==="streetlight")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at either road edge to choose the curb · One post per click · 20 gold</span>');
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
   if(isExtractor(next))$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">Build beside the deposit · ${MINING_RADIUS}-tile reach · Green rocks are reachable from the entrance</span>`);
   if (next === "road") document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((button) => {
@@ -499,7 +500,7 @@ function renderPanel() {
       ? Object.entries(DECORATIONS)
           .map(
             ([kind, d]) =>
-              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
+              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "streetlight" ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' : kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
           )
           .join("")
       : (Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][])
@@ -544,6 +545,8 @@ function renderPanel() {
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
 scene.onEyedropper=(kind,rotation)=>{scene.rotation=rotation;setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
+scene.onSelectDecoration=(id)=>{selectedDecoration=id;selected=null;scene.selected=null;selectedAgent=null;scene.selectedAgent=null;scene.drawOverlay();renderDecorationInspector();};
+scene.onDecorationRemove=async(id)=>{const result=await gateway.command({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onRemoveApply=async(from,to)=>{const result=await gateway.command({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onTile = async (p: Point) => {
   if (tool === "terrain") {
@@ -933,7 +936,7 @@ function renderDecorationInspector() {
     `<button id="close-inspector" class="icon-button close" aria-label="Close decoration details">${icon("close")}</button><span class="eyebrow">GARDENS & STREETS</span><h3>${title}</h3><p>${detail}</p><button id="remove-decoration" class="primary">Remove ${growth==="mature"?"decoration":"stump permanently"}</button>`;
   $("#close-inspector").onclick = closeInspection;
   $("#remove-decoration").onclick = async () => {
-    const result = await gateway.command({ type: "demolish", x: d.x, y: d.y });
+    const result = await gateway.command({ type: "removeDecoration", id:d.id });
     toast(result.message);
     if (result.ok) {
       scene.redraw();
