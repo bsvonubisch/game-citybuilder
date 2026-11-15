@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import "./style.css";
 import { ROAD_TYPES, roadTypeAt, type RoadType } from "./roads.js";
+import { FOREST_RADIUS, REGROW_TICKS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
 import {
   BUILDINGS,
   SIZE,
@@ -301,6 +302,7 @@ function setTool(next: Tool) {
             ? `${icon("hammer")} Click to remove · Recover half the gold cost <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
+  if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
   if (next === "road") document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((button) => {
     button.onclick = () => {
       scene.cancelRoad();
@@ -902,9 +904,12 @@ function renderDecorationInspector() {
     (d) => d.id === selectedDecoration,
   );
   if (!d) return;
+  const growth=treeStage(d,simulation.state.tick);
+  const title=growth==="mature"?DECORATIONS[d.kind].name:growth==="stump"?"Regrowing tree stump":"Young woodland tree";
+  const detail=growth==="mature"?`A little detail at ${d.x}, ${d.y}.`:`${Math.ceil(Math.max(0,REGROW_TICKS-(simulation.state.tick-d.cutAt!))/4)} seconds until mature. Leave it to regrow; removing it clears the tree permanently.`;
   $("#inspector").hidden = false;
   $("#inspector").innerHTML =
-    `<button id="close-inspector" class="icon-button close" aria-label="Close decoration details">${icon("close")}</button><span class="eyebrow">GARDENS & STREETS</span><h3>${DECORATIONS[d.kind].name}</h3><p>A little detail at ${d.x}, ${d.y}.</p><button id="remove-decoration" class="primary">Remove decoration</button>`;
+    `<button id="close-inspector" class="icon-button close" aria-label="Close decoration details">${icon("close")}</button><span class="eyebrow">GARDENS & STREETS</span><h3>${title}</h3><p>${detail}</p><button id="remove-decoration" class="primary">Remove ${growth==="mature"?"decoration":"stump permanently"}</button>`;
   $("#close-inspector").onclick = closeInspection;
   $("#remove-decoration").onclick = async () => {
     const result = await gateway.command({ type: "demolish", x: d.x, y: d.y });
@@ -950,6 +955,14 @@ function updateAgentInspector() {
     : "Show destination";
   if (a.onsite) {
     const site = simulation.building(a.onsite);
+    if(site?.kind==="forester"&&!site.construction) {
+      const trip=site.forestry?.find(t=>t.resident===a.resident);
+      $("#traveller-name").textContent=person?.name??"Forester";
+      $("#traveller-kind").textContent="Forestry worker";
+      $("#traveller-status").textContent=trip?.phase==="chopping"?"Chopping a tree":trip?.phase==="returning"?"Carrying logs to the lodge":trip?"Walking to a tree":"At the forester lodge";
+      $("#traveller-detail").innerHTML=`<div class="detail-row"><span>Workplace</span><b>${escapeHtml(buildingName(site))}</b></div><div class="detail-row"><span>Carrying</span><b>${trip?.cargo??0} wood</b></div><p class="muted">Wood enters the lodge's inventory only when this worker returns. Cut trees leave stumps that regrow.</p>`;
+      return;
+    }
     $("#traveller-name").textContent = person?.name ?? "Builder";
     $("#traveller-kind").textContent = "Construction worker";
     $("#traveller-status").textContent =
@@ -1055,6 +1068,11 @@ function updateInspector() {
       `<div class="detail-row"><span>Level ${b.level ?? 1} · capacity</span><b>${Math.round(productionRate(b) * 100)}% pace · ${outputCapacity(b)} output</b></div>`,
     );
   if (d.recipe) updateLogistics(b);
+  if (b.kind==="forester"&&!b.construction) {
+    const reachable=forestTargets(simulation,b).length;
+    const regrowing=simulation.state.decorations.filter(d=>harvestable(d)&&forestInside(b,d)&&treeStage(d,simulation.state.tick)!=="mature").length;
+    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Woodland · ${FOREST_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable mature trees</span><b>${reachable}</b></div><div class="detail-row"><span>Regrowing stumps / saplings</span><b>${regrowing}</b></div><p class="muted">Foresters walk to natural oak, pine and birch trees, cut them, then carry 6 wood back. Stumps regrow in two days. Planted garden trees are protected.</p>${(b.forestry??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Forester")}</span><b>${t.phase==="chopping"?"Chopping":t.phase==="returning"?`Carrying ${t.cargo} wood`:"Walking to a tree"}</b></div>`).join("")}`);
+  }
   if (b.kind === "fishery" && !b.construction) {
     const trip = b.fishing,
       destination =

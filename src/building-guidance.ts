@@ -158,6 +158,8 @@ export function buildingGuidance(
           "Place an evening tavern within 14 road tiles of this home. Its preview highlights the homes it can serve; visits improve leisure after residents arrive.",
         );
   }
+  if (b.kind === "forester" && alert.kind === "input")
+    return {message:"Stumps regrow into mature trees after two days. Keep a clear land route to natural oak, pine or birch trees within the highlighted area, or move the lodge closer to woodland. Planted garden trees stay protected.",label:"Move near woodland",action:{type:"move"}};
   if (b.kind === "fishery" && alert.kind === "input")
     return {
       message:

@@ -3,6 +3,8 @@ import { NightArt } from "./night-art.js";
 import { ShadowArt } from "./shadow-art.js";
 import { planRoad, type RoadPlan } from "./road-stroke.js";
 import { prepareRoadSurfaces } from "./road-art.js";
+import { ForestryArt, prepareForestryFrames } from "./forestry-art.js";
+import { forestCenter, forestTargets, FOREST_RADIUS } from "./forestry.js";
 import type { RoadType } from "./roads.js";
 import { isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
 import {
@@ -181,6 +183,7 @@ export class TownScene extends Phaser.Scene {
   }
   private plotArt!: PlotArt;
   private constructionArt!: ConstructionArt;
+  private forestryArt!: ForestryArt;
   private buildingAlerts!: BuildingAlerts;
   private cameraKey = "";
   private bridgeArt!: BridgeArt;
@@ -249,11 +252,15 @@ export class TownScene extends Phaser.Scene {
     this.load.image("construction-props", "/construction-props.png");
     this.load.image("construction-earth", "/construction-earth.png");
     this.load.image("construction-workers", "/construction-workers.png");
+    this.load.image("forestry", "/forestry-workers.png");
     this.load.image("fishing-boats", "/fishing-boats.png");
   }
   create() {
     setupArtworkScaling(this.game);
     prepareRoadSurfaces(this);
+    prepareForestryFrames(this);
+    this.forestryArt=new ForestryArt(this);
+    this.events.once("shutdown",()=>this.forestryArt.clear());
     this.nightArt = new NightArt(this);
     this.shadowArt = new ShadowArt(this);
     this.plotArt = new PlotArt(this);
@@ -841,6 +848,7 @@ export class TownScene extends Phaser.Scene {
           this.diamond(p, 0xf3ce7b, 0.23);
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
         if (isLeisure(b.kind)) this.drawCoverage(b);
+        if (b.kind==="forester")this.drawForestRange(b);
       }
     }
     if (this.tool === "road") {
@@ -938,6 +946,7 @@ export class TownScene extends Phaser.Scene {
         );
       }
       if (isBuilding(kind)) {
+        if(kind==="forester")this.drawForestRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if (isLeisure(kind))
           this.drawCoverage(
             servicePreview(
@@ -1080,6 +1089,8 @@ export class TownScene extends Phaser.Scene {
     );
     if (!a) return;
     if (a.onsite) {
+      const trip=this.simulation.building(a.onsite)?.forestry?.find(t=>t.resident===a.resident);
+      if(trip) this.routeOverlay.lineStyle(1.5,0xffdf88,.85).strokePoints(trip.path.slice(Math.floor(trip.distance)).map(p=>{const v=iso(p.x,p.y);return{x:v.x,y:v.y-groundHeight(p.x,p.y,this.simulation.state.terrain)};}),false);
       this.highlightWorker(a, 0xffdf88);
       return;
     }
@@ -1423,6 +1434,7 @@ export class TownScene extends Phaser.Scene {
         );
     }
     const time = this.simulation.state.tick * STEP + this.acc;
+    this.forestryArt.update(this.simulation,this.acc,this.people,this.trees,this.occludingPlots);
     this.fishingArt.update(this.simulation, this.acc, time, this.selected);
     this.trafficAlerts.update(
       this.simulation,
@@ -1482,6 +1494,15 @@ export class TownScene extends Phaser.Scene {
         p.y + phase * 3,
       );
     }
+  }
+  private drawForestRange(b:Building) {
+    const center=forestCenter(b), points=[];
+    for(let i=0;i<=64;i++) {
+      const angle=i/64*Math.PI*2, p=iso(center.x+Math.cos(angle)*FOREST_RADIUS,center.y+Math.sin(angle)*FOREST_RADIUS);
+      points.push({x:p.x,y:p.y-groundHeight(b.x,b.y,this.simulation.state.terrain)});
+    }
+    this.overlay.lineStyle(1.4,0x98d7a0,.9).strokePoints(points,false);
+    for(const target of forestTargets(this.simulation,b)) this.diamond(target.tree,0x93d993,.25);
   }
   replace(simulation: Simulation) {
     this.simulation = simulation;

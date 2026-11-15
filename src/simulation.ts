@@ -1,4 +1,5 @@
 import { planRoad } from "./road-stroke.js";
+import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
 import { ROAD_TYPES, isRoadType, roadTypeAt, type RoadType, type RoadTypes } from "./roads.js";
 import {
   BUILDINGS,
@@ -74,6 +75,7 @@ export interface Point {
   y: number;
 }
 export interface Building extends Point {
+  forestry?: ForestTrip[];
   id: number;
   kind: BuildingKind;
   inventory: Partial<Record<Resource, number>>;
@@ -577,7 +579,7 @@ export class Simulation {
         existing &&
         this.retarget(existing, existing.returning ? home : destination)
       ) {
-        if (existing.onsite && !destination.construction) {
+        if (existing.onsite && !destination.construction && destination.kind !== "forester") {
           delete existing.onsite;
           existing.wait = 0;
           existing.path = this.route(destination, home) ?? existing.path;
@@ -591,7 +593,7 @@ export class Simulation {
       if (p)
         this.state.agents.push({
           id: this.state.nextId++,
-          kind: destination.construction
+          kind: destination.construction || destination.kind === "forester"
             ? "person"
             : r.id % 4 === 0
               ? "car"
@@ -1033,6 +1035,7 @@ export class Simulation {
         };
       if (b) {
         landCatch(b);
+        landTimber(b);
         const depot = this.state.buildings.find(
           (w) => w.kind === "warehouse" && w.id !== b.id,
         );
@@ -1073,6 +1076,7 @@ export class Simulation {
         return { ok: false, message: error, revision: this.state.revision };
       const b = this.building(c.id)!;
       landCatch(b);
+      landTimber(b);
       b.plot = this.relocationPlot(b, c.rotation ?? b.rotation);
       b.x = c.x;
       b.y = c.y;
@@ -1150,6 +1154,7 @@ export class Simulation {
       const b = this.building(c.id)!;
       const next = nextUpgrade(b)!,
         tier = next.level;
+      landTimber(b);
       this.state.money -= next.cost;
       for (const [r, n] of Object.entries(next.materials))
         this.consume(r as Resource, n);
@@ -1222,6 +1227,7 @@ export class Simulation {
     }
     for (const b of this.state.buildings) {
       const recipe = BUILDINGS[b.kind].recipe;
+      if (b.kind === "forester") { stepForestry(this,b); continue; }
       if (b.kind === "fishery") {
         stepFishing(this, b);
         continue;
@@ -1299,6 +1305,13 @@ export class Simulation {
         a.active = false;
         continue;
       }
+      if (a.onsite && this.building(a.onsite)?.kind === "forester") {
+        const lodge=this.building(a.onsite)!;
+        if (lodge.forestry?.some(t=>t.resident===a.resident) || (!day.night && lodge.enabled && lodge.connected && this.state.residents.some(r=>r.id===a.resident&&r.job===lodge.id))) {
+          a.wait=1; a.active=false; continue;
+        }
+        delete a.onsite; a.wait=0;
+      }
       if (a.wait > 0) {
         a.wait -= STEP;
         continue;
@@ -1355,7 +1368,7 @@ export class Simulation {
           a.active = false;
           if (
             a.returning &&
-            this.building(a.target)?.construction &&
+            (this.building(a.target)?.construction || this.building(a.target)?.kind === "forester") &&
             this.state.residents.some(
               (r) => r.id === a.resident && r.job === a.target,
             )
@@ -1469,7 +1482,8 @@ export class Simulation {
           (n, b) =>
             n +
             (b.inventory[r] ?? 0) +
-            (r === "fish" ? (b.fishing?.cargo ?? 0) : 0),
+            (r === "fish" ? (b.fishing?.cargo ?? 0) : 0) +
+            (r === "wood" ? (b.forestry??[]).reduce((total,t)=>total+t.cargo,0) : 0),
           0,
         ) +
           this.state.agents
@@ -1560,6 +1574,8 @@ export class Simulation {
         message:
           "Leave at least three connected open water tiles beyond the pier. Boats avoid land, bridges, other piers and occupied fishing routes.",
       };
+    if (b.kind === "forester" && !b.forestry?.length && !forestTargets(this,b).length)
+      return {kind:"input", title:"No reachable mature trees", message:"Wait for nearby stumps to regrow, clear a walking route, or move this lodge closer to woodland. Its highlighted area reaches 10 tiles. Planted garden trees are protected."};
     if (b.kind === "house") {
       const residents = this.state.residents.filter((r) => r.home === b.id);
       if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
@@ -1576,6 +1592,7 @@ export class Simulation {
     const alert = this.alert(b);
     if (alert) return alert.title;
     if (b.kind === "fishery") return fishingStatus(b);
+    if (b.kind === "forester") return b.forestry?.some(t=>t.phase==="returning") ? "Bringing logs to the lodge" : b.forestry?.some(t=>t.phase==="chopping") ? "Cutting trees" : daylight(this.state.tick).night ? "Foresters resting until morning" : "Workers walking to trees";
     if (isLeisure(b.kind))
       return serviceOpen(b.kind, daylight(this.state.tick).hour)
         ? "Open for nearby visitors"
@@ -1660,6 +1677,7 @@ export function parseSave(raw: string): World {
     })
   )) throw new Error("Invalid road surfaces.");
   for (const b of s.buildings) {
+    if (b.forestry !== undefined && (b.kind!=="forester" || !Array.isArray(b.forestry) || b.forestry.length>2 || !b.forestry.every(validForestTrip))) throw new Error("Invalid forestry work.");
     b.rotation ??= 0;
     if (b.kind === "house") b.houseTier ??= 1;
     if (s.version < 3) {
@@ -1873,6 +1891,7 @@ export function parseSave(raw: string): World {
         terrain(d.x, d.y, s.terrain) === "water" ||
         !isDecoration(d.kind) ||
         typeof d.natural !== "boolean" ||
+        (d.cutAt !== undefined && (!harvestable(d) || !Number.isInteger(d.cutAt) || d.cutAt<0 || d.cutAt>s.tick)) ||
         occupied.has(key(d)) ||
         DEPOSITS[key(d)]
       )
@@ -1898,6 +1917,8 @@ export function parseSave(raw: string): World {
     }
   }
   s.agents = [];
+  // Like delivery trucks, restore carried timber before resident journeys are rebuilt.
+  for (const b of s.buildings) landTimber(b);
   s.residents = s.residents.filter(
     (r) =>
       Number.isInteger(r.id) &&

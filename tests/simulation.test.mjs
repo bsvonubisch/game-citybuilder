@@ -35,6 +35,7 @@ import {
 import { Simulation, parseSave, key } from "../.test-dist/simulation.js";
 import { roadStroke, planRoad } from "../.test-dist/road-stroke.js";
 import { ROAD_TYPES, roadTypeAt } from "../.test-dist/roads.js";
+import { forestTargets, forestInside, treeStage, LOGS_PER_TREE, REGROW_TICKS } from "../.test-dist/forestry.js";
 import {
   DEPOSITS,
   INITIAL_RESERVE,
@@ -529,6 +530,8 @@ test("bridges connect people and deliveries across an inlet and survive a save r
   seed.agents = [];
   seed.decorations = [];
   seed.residents = [];
+  // This bridge test isolates transport; forestry now requires actual trees.
+  seed.buildings.find((b) => b.kind === "forester").inventory.wood = 12;
   const sim = new Simulation(seed),
     money = sim.state.money;
   assert.equal(sim.path({ x: 21, y: 10 }, { x: 21, y: 16 }), null);
@@ -1128,6 +1131,81 @@ test("both factory chains deliver real goods and export tools", () => {
   assert.ok(sim.state.deposits["19,4"] < INITIAL_RESERVE);
   for (const b of sim.state.buildings)
     for (const n of Object.values(b.inventory)) assert.ok(n >= 0);
+});
+
+test("foresters travel to different real trees, chop stumps, then deliver timber", () => {
+  const sim = new Simulation();
+  const lodge = sim.state.buildings.find((b) => b.kind === "forester");
+  lodge.inventory.wood = 0;
+  const phases = new Set();
+  let carried = false, delivered = false;
+  for (let i = 0; i < 800; i++) {
+    sim.step();
+    const trips = lodge.forestry ?? [];
+    const chopping = trips.filter(t => t.phase !== "returning");
+    assert.equal(new Set(chopping.map(t => t.tree)).size, chopping.length, "workers reserve separate trees");
+    for (const trip of trips) {
+      phases.add(trip.phase);
+      assert.ok(sim.state.agents.some(a => a.resident === trip.resident && a.onsite === lodge.id));
+      if (trip.cargo) {
+        carried = true;
+        const tree = sim.state.decorations.find(d => d.id === trip.tree);
+        assert.equal(treeStage(tree, sim.state.tick), "stump");
+        assert.equal(trip.cargo, LOGS_PER_TREE);
+        if (!lodge.produced) assert.equal(lodge.inventory.wood, 0, "carried logs are not usable inventory");
+      }
+    }
+    if (lodge.produced >= LOGS_PER_TREE) { delivered = true; break; }
+  }
+  assert.deepEqual([...phases].sort(), ["chopping", "outbound", "returning"]);
+  assert.ok(carried && delivered);
+});
+
+test("forestry reach respects woodland, buildings and regrowth, while garden trees are protected", () => {
+  const sim = new Simulation(), lodge = sim.state.buildings.find(b => b.kind === "forester");
+  const targets = forestTargets(sim, lodge);
+  assert.ok(targets.length > 0);
+  for (const {tree, path} of targets) {
+    assert.ok(tree.natural && forestInside(lodge, tree));
+    for (const p of path) assert.ok(!sim.buildingAt(p.x, p.y));
+  }
+  const tree = targets[0].tree;
+  tree.natural = false; sim.state.revision++;
+  assert.ok(!forestTargets(sim, lodge).some(t => t.tree.id === tree.id));
+  tree.natural = true; tree.cutAt = sim.state.tick; sim.state.revision++;
+  assert.ok(!forestTargets(sim, lodge).some(t => t.tree.id === tree.id));
+  assert.equal(treeStage(tree, tree.cutAt), "stump");
+  assert.equal(treeStage(tree, tree.cutAt + REGROW_TICKS * .6), "sapling");
+  assert.equal(treeStage(tree, tree.cutAt + REGROW_TICKS * .9), "young");
+  sim.state.tick += REGROW_TICKS;
+  assert.equal(treeStage(tree, sim.state.tick), "mature");
+  assert.ok(forestTargets(sim, lodge).some(t => t.tree.id === tree.id));
+});
+
+test("carried timber and stump age survive saves without duplicating goods", () => {
+  const sim = new Simulation(), lodge = sim.state.buildings.find(b => b.kind === "forester");
+  for (let i=0;i<600 && !lodge.forestry?.some(t=>t.cargo);i++) sim.step();
+  assert.ok(lodge.forestry.some(t=>t.cargo));
+  // Isolate the forestry load; delivery cargo has its own save tests.
+  sim.state.agents = sim.state.agents.filter(a=>a.kind!=="truck");
+  const timber = (lodge.inventory.wood??0) + lodge.forestry.reduce((n,t)=>n+t.cargo,0);
+  const cuts = sim.state.decorations.filter(d=>d.cutAt!==undefined).map(d=>[d.id,d.cutAt]);
+  let loaded = parseSave(JSON.stringify(sim.snapshot()));
+  assert.equal(loaded.buildings.find(b=>b.id===lodge.id).inventory.wood,timber);
+  assert.deepEqual(loaded.decorations.filter(d=>d.cutAt!==undefined).map(d=>[d.id,d.cutAt]),cuts);
+  loaded = parseSave(JSON.stringify(loaded));
+  assert.equal(loaded.buildings.find(b=>b.id===lodge.id).inventory.wood,timber);
+  const malformed=sim.snapshot(); malformed.buildings.find(b=>b.id===lodge.id).forestry[0].cargo=10000;
+  assert.throws(()=>parseSave(JSON.stringify(malformed)),/forestry/);
+});
+
+test("empty forest areas produce no free timber", () => {
+  const sim = new Simulation(), lodge=sim.state.buildings.find(b=>b.kind==="forester");
+  sim.state.decorations=sim.state.decorations.filter(d=>!forestInside(lodge,d));
+  sim.state.revision++;
+  advance(sim,130);
+  assert.equal(lodge.produced,0);
+  assert.equal(sim.alert(lodge)?.title,"No reachable mature trees");
 });
 test("disconnecting roads stops production and removes impossible routes", () => {
   const sim = new Simulation();
@@ -2089,16 +2167,16 @@ test("daylight is continuous, repeats daily and night production slows without c
       Math.abs(daylight(tick).light - daylight(tick + 0.25).light) < 0.03,
     );
   const sim = new Simulation(),
-    b = sim.state.buildings.find((b) => b.kind === "forester");
+    b = sim.state.buildings.find((b) => b.kind === "farm");
   b.progress = 0;
-  b.inventory.wood = 0;
+  b.inventory.grain = 0;
   sim.state.tick = 0;
   sim.step();
   assert.equal(b.progress, STEP);
   sim.state.tick = 150;
   sim.step();
   assert.equal(b.progress, STEP * 1.25);
-  assert.equal(b.inventory.wood, 0);
+  assert.equal(b.inventory.grain, 0);
   assert.equal(warmEmission(40, 85, 60, 255), 0, "green roof stays dark");
   assert.equal(warmEmission(180, 180, 170, 255), 0, "stone stays dark");
   assert.ok(warmEmission(255, 200, 50, 255) > 0.5, "warm window emits");
