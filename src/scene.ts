@@ -147,7 +147,7 @@ export class TownScene extends Phaser.Scene {
     const c=this.cameras.main,p=this.view.from({x:c.midPoint.x/64+c.midPoint.y/32,y:c.midPoint.y/32-c.midPoint.x/64});
     this.cancelPlacement();this.clearBuildingHover();this.hover=null;
     this.view.setTurn(this.view.turn+delta);this.rotation=quarter(this.rotation+delta);
-    this.animation.clear();this.nightArt.clear();this.shadowArt.clear();this.fishingArt.clear();this.huntingArt.clear();this.roadWorkAlerts.clear();this.trafficAlerts.clear();this.buildingAlerts.clear();
+    this.animation.clear();this.nightArt.clear();this.shadowArt.clear();this.huntingArt.clear();this.roadWorkAlerts.clear();this.trafficAlerts.clear();this.buildingAlerts.clear();
     this.logisticsView=null;this.logisticsDrawKey='';this.deliveryDrawKey='';this.cameraKey='';
     const center=this.view.to(p),v=iso(center.x,center.y);c.centerOn(v.x,v.y);this.redraw();this.onCamera();
     try{localStorage.setItem('littleworks-view-turn',String(this.view.turn));}catch{}

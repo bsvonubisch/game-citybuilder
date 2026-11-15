@@ -5,6 +5,7 @@ import { BUILDINGS, frontage } from "../.test-dist/catalog.js";
 import { fisheryCells, fisheryLayout } from "../.test-dist/shoreline.js";
 import { builderPosition } from "../.test-dist/construction.js";
 import { canSupply, productionConnections } from "../.test-dist/logistics.js";
+import {BoatWake,WAKE_LIFETIME} from '../.test-dist/boat-wake.js';
 import {
   fishingRoute,
   boatPose,
@@ -19,6 +20,26 @@ const execute = (sim, command) =>
     expectedRevision: sim.state.revision,
     command,
   });
+
+test('boat wakes follow travelled water, keep their trail through turns, and fade after stopping',()=>{
+ const wake=new BoatWake();wake.update({x:10,y:10},0,true);
+ for(let t=.05;t<=2;t+=.05)wake.update({x:10+t*.55,y:10},t,true);
+ assert.ok(wake.marks.length>5);assert.ok(wake.marks.every(p=>p.x<11.1&&p.y===10));
+ const existing=wake.marks.map(p=>({...p}));
+ wake.update({x:11.1,y:10.1},2.2,true);
+ for(const mark of existing)assert.ok(wake.marks.some(p=>p.x===mark.x&&p.y===mark.y&&p.born===mark.born),'Old foam stays in place at corners');
+ const paused=structuredClone(wake.marks);wake.update({x:11.1,y:10.1},2.2,true);assert.deepEqual(wake.marks,paused);
+ for(let t=2.4;t<2.3+WAKE_LIFETIME;t+=.2)wake.update({x:11.1,y:10.1},t,false);
+ assert.equal(wake.marks.length,0);assert.equal(wake.moving,false);
+});
+
+test('wake emission is frame-rate independent, bounded, and cannot streak across a relocated boat',()=>{
+ const run=hz=>{const wake=new BoatWake();for(let i=0;i<=hz*10;i++)wake.update({x:10+i/hz*.55,y:10},i/hz,true);return wake;};
+ const a=run(20),b=run(60);assert.equal(a.marks.length,b.marks.length);assert.ok(a.marks.length<=24);
+ a.marks.forEach((p,i)=>assert.ok(Math.hypot(p.x-b.marks[i].x,p.y-b.marks[i].y)<1e-6));
+ a.update({x:40,y:40},10.1,true);assert.equal(a.marks.length,0);
+ a.update({x:40.1,y:40},10.3,true);a.update({x:40.1,y:40},9,true);assert.equal(a.marks.length,0);
+});
 function shore(sim, x, y, rotation) {
   sim.state.terrain ??= {};
   for (const p of fisheryCells(x, y, rotation))

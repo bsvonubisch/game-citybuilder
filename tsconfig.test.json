@@ -8,6 +8,7 @@
     "outDir": ".test-dist"
   },
   "include": [
+    "src/boat-wake.ts",
     "src/view-world.ts",
     "src/roadwork-sites.ts",
     "src/sprite-ground.ts",
