@@ -12,7 +12,7 @@ export function marketVisit(b:Building,a:Agent){
  const key=`${b.x},${b.y},${w},${h},${b.rotation},${a.marketSlot},${entry.x},${entry.y}`;
  const old=cache.get(a);if(old?.key===key)return old;
  const cols=w*4,rows=h*4,point=(i:number)=>({x:b.x-.375+(i%cols)*.25,y:b.y-.375+Math.floor(i/cols)*.25});
- const open=(i:number)=>slots.every(s=>{const p=point(i),dx=p.x-s.stall.x,dy=p.y-s.stall.y;return b.rotation%2?Math.abs(dx)>.20||Math.abs(dy)>.35:Math.abs(dx)>.35||Math.abs(dy)>.20;});
+ const open=(i:number)=>slots.every(s=>{const p=point(i),dx=p.x-s.stall.x,dy=p.y-s.stall.y;return s.rotation%2?Math.abs(dx)>.20||Math.abs(dy)>.35:Math.abs(dx)>.35||Math.abs(dy)>.20;});
  const allowed=Array.from({length:cols*rows},(_,i)=>i).filter(open),boundary=allowed.filter(i=>i%cols===0||i%cols===cols-1||i<cols||i>=cols*(rows-1));
  const target=slot?.customer??entry;
  const goal=[...allowed].sort((a,c)=>distance(point(a),target)-distance(point(c),target))[0];

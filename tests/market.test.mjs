@@ -31,7 +31,8 @@ test('all 1–5 market dimensions keep stalls, vendors and customers within thei
   const b={x:10,y:10,rotation,plot:[w,h]},layout=marketLayout(b);
   assert.ok(layout.length);for(const slot of layout)for(const p of [slot.stall,slot.vendor,slot.customer])assert.ok(p.x>=9.5&&p.x<10+w-.5&&p.y>=9.5&&p.y<10+h-.5,JSON.stringify({w,h,rotation,p}));
  }
- assert.equal(marketLayout({x:0,y:0,rotation:0,plot:[1,1]}).length,1);assert.equal(marketLayout({x:0,y:0,rotation:0,plot:[5,5]}).length,12);
+ assert.equal(marketLayout({x:0,y:0,rotation:0,plot:[1,1]}).length,1);assert.equal(marketLayout({x:0,y:0,rotation:0,plot:[5,5]}).length,20);
+ const square=marketLayout({x:0,y:0,rotation:0,plot:[3,3]});assert.equal(square.length,6);assert.ok(new Set(square.map(s=>s.rotation)).size>=3,'mixed stall fronts');
  assert.equal(validMarketPlot([0,2]),false);assert.equal(validMarketPlot([6,5]),false);assert.equal(validMarketPlot([2.5,3]),false);
 });
 test('configured market placement pays matching materials, builds every tile, saves and rotates without losing stock',()=>{
@@ -48,7 +49,7 @@ test('real vendors arrive, shoppers buy delivered stock, and purchases create in
  const market=sim.state.buildings.find(b=>b.kind==='market');delete market.construction;sim.reconnect(true);
  let sawVendor=false,sawCustomer=false,sawDelivery=false;
  for(let i=0;i<1600;i++){sim.step();sawVendor||=marketVendors(sim,market).length>0;sawCustomer||=sim.state.agents.some(a=>a.marketSlot!==undefined);sawDelivery||=sim.state.agents.some(a=>a.kind==='truck'&&a.target===market.id);}
- assert.equal(buildingJobs(market),2);assert.ok(sawVendor);assert.ok(sawCustomer);assert.ok(sawDelivery);assert.ok(market.produced>0);assert.ok(sim.state.income.some(e=>e.source==='market'));assert.doesNotThrow(()=>new Simulation(parseSave(JSON.stringify(sim.snapshot()))));
+ assert.equal(buildingJobs(market),4);assert.ok(sawVendor);assert.ok(sawCustomer);assert.ok(sawDelivery);assert.ok(market.produced>0);assert.ok(sim.state.income.some(e=>e.source==='market'));assert.doesNotThrow(()=>new Simulation(parseSave(JSON.stringify(sim.snapshot()))));
 });
 test('unstaffed, closed, or empty markets cannot invent purchases',()=>{
  const sim=fixture();command(sim,{type:'place',kind:'market',x:7,y:21,plot:[1,1]});const b=sim.state.buildings.find(b=>b.kind==='market');delete b.construction;b.inventory={bread:4};sim.reconnect(true);sim.state.tick=100;

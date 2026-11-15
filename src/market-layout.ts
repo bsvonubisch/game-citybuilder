@@ -10,10 +10,15 @@ export function marketLayout(b:MarketPlot) {
   const [w,h]=b.plot??[2,2],r=b.rotation%4,cw=r%2?h:w,ch=r%2?w:h;
   const turn=(x:number,y:number)=>r===0?{x,y}:r===1?{x:ch-1-y,y:x}:r===2?{x:cw-1-x,y:ch-1-y}:{x:y,y:cw-1-x};
   const slots=[];
-  for(let y=0;y<ch;y+=2)for(let x=0;x<cw;x++) {
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++) {
     if(cw>=3&&x===Math.floor(cw/2))continue;
-    const place=(dx:number,dy:number)=>{const p=turn(x+dx,y+dy);return{x:b.x+p.x,y:b.y+p.y};};
-    slots.push({id:slots.length,variant:(x+y*2)%4,stall:place(-.08,-.12),vendor:place(.31,-.16),customer:place(-.06,.33)});
+    // Stable variation: reload and rotation never reshuffle a vendor's stall.
+    const orientation=(x*13+y*7+cw*11+ch*3)%4;
+    const place=(dx:number,dy:number)=>{
+      const local=orientation===0?{x:dx,y:dy}:orientation===1?{x:-dy,y:dx}:orientation===2?{x:-dx,y:-dy}:{x:dy,y:-dx};
+      const p=turn(x+local.x,y+local.y);return{x:b.x+p.x,y:b.y+p.y};
+    };
+    slots.push({id:slots.length,variant:(x+y*2)%4,rotation:(orientation+r)%4,stall:place(-.08,-.12),vendor:place(.31,-.16),customer:place(-.06,.33)});
   }
   return slots;
 }
