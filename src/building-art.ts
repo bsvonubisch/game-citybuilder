@@ -3,6 +3,8 @@ import { fisheryLayout } from "./shoreline.js";
 export type GroundPoint = readonly [number, number];
 export type PlotCorners = readonly [GroundPoint, GroundPoint, GroundPoint];
 export interface BuildingArt {
+  plazaSize?: 2|4;
+  sourceRect?:readonly[number,number,number,number];
   texture: string;
   frame: number;
   columns: number;
@@ -18,9 +20,10 @@ export interface BuildingArt {
 // Original ground contacts align the base-free cutouts without shearing them.
 // The shared raised foundation fills the exact occupied grid in every view.
 const grounds: Record<
-  Exclude<BuildingKind, "fishery">,
+  Exclude<BuildingKind, "fishery"|"garden">,
   readonly PlotCorners[]
 > = {
+  church:[[[28,450],[346,609],[558,503]],[[38,504],[250,610],[568,451]],[[47,472],[263,580],[587,418]],[[45,414],[369,576],[585,468]]],
   cottage:[[[234,320],[447,426],[660,320]],[[224,320],[437,426],[650,320]],[[237,346],[450,453],[663,346]],[[227,346],[440,453],[653,346]]],
   brickworks:[[[40,475],[320,615],[600,475]],[[25,480],[305,620],[585,480]],[[35,472],[315,612],[595,472]],[[35,472],[315,612],[595,472]]],
   tavern: [
@@ -357,6 +360,10 @@ export function buildingArt(
   rotation = 0,
   houseTier: HouseTier = 1,
 ): BuildingArt {
+  if(kind==="church"){
+    const frame=[1,0,2,3][rotation],y=frame<2?0:610,height=frame<2?610:637;
+    return {texture:"building-church",frame,columns:2,rows:2,size:[630,height],sourceRect:[frame%2*630,y,630,height],ground:grounds.church[frame].map(([x,y])=>[x,y+(frame>=2?25:12)]) as unknown as PlotCorners};
+  }
   if (kind === "fishery") {
     // Atlas frames are mirrored pairs; map them to the four road-facing edges.
     const frame = [1, 0, 3, 2][rotation];
@@ -392,9 +399,10 @@ export function buildingArt(
       land: fisheryLayout(rotation).land,
     };
   }
-  if (kind === "park")
+  if (kind === "park" || kind === "garden")
     return {
       texture: "park-parts",
+      plazaSize:kind==="garden"?4:2,
       frame: rotation,
       columns: 2,
       rows: 2,
@@ -404,7 +412,7 @@ export function buildingArt(
         [256, 384],
         [512, 256],
       ],
-      mechanism: [256, 132],
+      mechanism: [256, kind==="garden"?194:132],
     };
   if (kind === "house" && houseTier > 1) {
     const upgradedGrounds: Record<2 | 3, readonly PlotCorners[]> = {

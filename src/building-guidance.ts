@@ -144,6 +144,10 @@ export function buildingGuidance(
       label: "Dig deeper",
       action: { type: "deepen" },
     };
+  if (alert.kind === "leisure" && alert.title === "Needs nearby religion") {
+    const church=sim.state.buildings.find(s=>s.kind==="church"&&serviceCoverage(sim,s).homes.some(h=>h.home.id===b.id));
+    return church?inspect(church,"Check this church’s two staff, road connection and capacity. Visits run from 08:00 to 20:00; upgrade to serve more residents."):build("church","Build a church within 20 road tiles of this home. The placement preview highlights homes in reach; residents improve religion after arriving.");
+  }
   if (alert.kind === "leisure") {
     const nearby = sim.state.buildings.find(
       (s) =>

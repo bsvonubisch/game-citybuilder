@@ -1,4 +1,4 @@
-import {isHome} from "./catalog.js";
+import {isHome,isPark} from "./catalog.js";
 import {parkVisitor} from "./park-visitors.js";
 import Phaser from "phaser";
 import {townNeeds,buildingNeeds} from "./needs.js";
@@ -42,7 +42,7 @@ import {
   materialGuidance,
 } from "./upgrades.js";
 import {
-  isLeisure,
+  isService as isLeisure,
   serviceCoverage,
   servicePreview,
   serviceOpen,
@@ -429,10 +429,10 @@ function updateEntranceHint() {
           terrainCell(hovered!.x, hovered!.y, simulation.state.terrain).height,
     );
   el.textContent = connected
-    ? kind === "park"
+    ? isPark(kind)
       ? "Square connected to road"
       : "Front connected to road"
-    : kind === "park"
+    : isPark(kind)
       ? "Connect a road on any of the four sides"
       : "Front entrance needs a road";
   el.className = connected ? "front-connected" : "front-missing";
@@ -1022,7 +1022,7 @@ function updateAgentInspector() {
   }
   $("#traveller-name").textContent = person?.name ?? "Delivery truck";
   const visit=parkVisitor(a,simulation.building(a.target));
-  $("#traveller-kind").textContent = visit ? "Visiting the fountain square" :
+  $("#traveller-kind").textContent = visit ? `Visiting ${buildingName(simulation.building(a.target)!).toLowerCase()}` :
     a.kind === "person"
       ? "Walking around Pinehaven"
       : a.kind === "car"
@@ -1032,7 +1032,7 @@ function updateAgentInspector() {
     to = simulation.building(a.returning ? a.source : a.target);
   const label = (b: typeof from) =>
     b ? `${buildingName(b)} · ${b.x}, ${b.y}` : "No destination";
-  $("#traveller-status").textContent = visit ? visit.walking?"Strolling around the fountain":"Watching the water" :
+  $("#traveller-status").textContent = visit ? visit.walking?"Walking to a resting place":"Relaxing in the park" :
     a.wait > 0
       ? "At the building"
       : a.trafficWait
@@ -1172,7 +1172,7 @@ function updateInspector() {
       b.workers >= d.jobs &&
       serviceOpen(b.kind, daylight(simulation.state.tick).hour);
     $("#service-detail").innerHTML =
-      `<h4>Nearby leisure · level ${b.level ?? 1}</h4><p>${open ? "Open for visits" : b.kind === "tavern" ? "Evening hours: 17:00–02:00 · requires two staff" : "Daytime visits: 06:00–20:00"}</p><p>${coverage.residents} / ${coverage.capacity} nearby residents · maximum ${coverage.range} road tiles. Green homes are in reach; amber homes need more capacity.</p>${coverage.homes.map((h) => `<button class="goods-link" data-service-home="${h.home.id}"><span>${escapeHtml(buildingName(h.home))} · ${h.home.x}, ${h.home.y}</span><small>${h.served} served · ${h.tiles} road tiles · ~${Math.ceil(h.seconds)}s walk</small></button>`).join("") || '<p class="muted">No homes within walking distance. Place homes closer and connect their road entrances.</p>'}`;
+      `<h4>${b.kind==="church"?"Religion":"Nearby leisure"} · level ${b.level ?? 1}</h4><p>${open ? "Open for visits" : b.kind === "tavern" ? "Evening hours: 17:00–02:00 · requires two staff" : b.kind==="church"?"Visits: 08:00–20:00 · requires two staff":"Daytime visits: 06:00–20:00"}</p><p>${coverage.residents} / ${coverage.capacity} nearby residents · maximum ${coverage.range} road tiles. Green homes are in reach; amber homes need more capacity.</p>${coverage.homes.map((h) => `<button class="goods-link" data-service-home="${h.home.id}"><span>${escapeHtml(buildingName(h.home))} · ${h.home.x}, ${h.home.y}</span><small>${h.served} served · ${h.tiles} road tiles · ~${Math.ceil(h.seconds)}s walk</small></button>`).join("") || '<p class="muted">No homes within walking distance. Place homes closer and connect their road entrances.</p>'}`;
     $("#service-detail").onclick = (event) => {
       const el = (event.target as Element).closest<HTMLElement>(
         "[data-service-home]",
@@ -1197,7 +1197,7 @@ function updateInspector() {
         ),
     );
     $("#service-detail").innerHTML =
-      `<h4>Leisure · ${need}%</h4><p>${nearby.length ? nearby.map((s) => escapeHtml(buildingName(s))).join(" · ") : "No nearby leisure. Build a fountain square or tavern within walking distance and connect the roads."}</p><p class="muted">Leisure improves after a visit. Workplaces must be within 28 road tiles; nearby jobs are assigned first.</p>`;
+      `<h4>Leisure · ${need}% · Religion · ${people.length?Math.round(people.reduce((n,r)=>n+(r.faith??70),0)/people.length):0}%</h4><p>${nearby.length ? nearby.map((s) => escapeHtml(buildingName(s))).join(" · ") : "No nearby services. Add a park, tavern or church and connect it by a short road route."}</p><p class="muted">Needs improve after visits to the matching service. Workplaces must be within 28 road tiles; nearby jobs are assigned first.</p>`;
   }
   if (isExtractor(b.kind) && !b.construction) {
     const deposit=buildingDeposit(b)!;
@@ -1479,7 +1479,7 @@ function updateUI() {
   $("#happiness").textContent = simulation.happiness() + "%";
   $("#leisure").textContent = simulation.leisure() + "%";
   $(".resource.happiness").title =
-    `Food ${s.food}% · leisure ${simulation.leisure()}% · actual nearby visits improve leisure`;
+    `Food ${s.food}% · religion ${simulation.faith()}% · leisure ${simulation.leisure()}% · actual nearby visits improve leisure`;
   daylightUI.update(s.tick);
   $("#goal-progress").style.width =
     Math.min(100, (s.delivered / 30) * 100) + "%";

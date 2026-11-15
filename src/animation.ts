@@ -1,4 +1,4 @@
-import {isHome} from "./catalog.js";
+import {isHome,isPark} from "./catalog.js";
 import type Phaser from "phaser";
 import { BUILDINGS } from "./catalog.js";
 import { daylight } from "./daylight.js";
@@ -259,15 +259,15 @@ export class TownAnimation {
             0.28 * (1 - t),
           );
         }
-      if (b.kind === "park" && b.enabled) {
-        const center = art.mechanism!;
+      if (isPark(b.kind) && b.enabled) {
+        const center = art.mechanism!,ratio=b.kind==="garden"?.5:1;
         for (let i = 0; i < 8; i++) {
           const t = (time * 0.7 + i / 8) % 1,
             side = i % 2 ? 1 : -1;
           dot(
-            center[0] + side * (20 + t * 28),
-            center[1] + t * 78,
-            3,
+            center[0] + side * (20 + t * 28)*ratio,
+            center[1] + t * 78*ratio,
+            3*ratio,
             0xd9fbf2,
             0.55,
           );

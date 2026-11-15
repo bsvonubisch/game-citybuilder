@@ -3,12 +3,13 @@ import { houseCapacity, type BuildingKind } from "./catalog.js";
 import { roadTravelTime } from "./roads.js";
 import type { Building, Simulation } from "./simulation.js";
 export const MAX_COMMUTE = 28;
-export const isLeisure = (kind: string) => kind === "park" || kind === "tavern";
-export const serviceRange = (kind: string) => (kind === "tavern" ? 14 : 10);
+export const isLeisure = (kind: string) => kind === "park" || kind === "garden" || kind === "tavern";
+export const isService=(kind:string)=>isLeisure(kind)||kind==="church";
+export const serviceRange = (kind: string) => (kind === "church" ? 20 : kind === "tavern" ? 14 : kind === "garden" ? 18 : 10);
 export const serviceCapacity = (b: Building) =>
-  (b.kind === "tavern" ? 18 : 12) * (b.level ?? 1);
+  (b.kind === "church" ? 40 : b.kind === "tavern" ? 18 : b.kind === "garden" ? 40 : 12) * (b.level ?? 1);
 export const serviceOpen = (kind: string, hour: number) =>
-  kind === "tavern" ? hour >= 17 || hour < 2 : hour >= 6 && hour < 20;
+  kind === "church" ? hour >= 8 && hour < 20 : kind === "tavern" ? hour >= 17 || hour < 2 : hour >= 6 && hour < 20;
 export function serviceCoverage(sim: Simulation, b: Building) {
   const range = serviceRange(b.kind),
     capacity = serviceCapacity(b);

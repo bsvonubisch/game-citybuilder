@@ -1,5 +1,5 @@
-import {isHome} from "./catalog.js";
-import {parkVisitDuration} from "./park-visitors.js";
+import {isHome,isPark} from "./catalog.js";
+import {parkVisitDuration,parkVisitorLimit} from "./park-visitors.js";
 import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
 import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
@@ -43,6 +43,7 @@ import {
 import {
   MAX_COMMUTE,
   isLeisure,
+  isService,
   serviceCoverage,
   serviceOpen,
 } from "./proximity.js";
@@ -107,6 +108,7 @@ export interface Resident {
   home: number;
   job: number | null;
   leisure?: number;
+  faith?: number;
 }
 export interface Agent {
   id: number;
@@ -508,6 +510,7 @@ export class Simulation {
     for (const r of this.state.residents) {
       const h = this.building(r.home)!;
       r.leisure ??= 60;
+      r.faith ??= 70;
       const nearby = jobs
         .map((b) => ({ b, path: this.route(h, b) }))
         .filter((j) => j.path && j.path.length - 1 <= MAX_COMMUTE)
@@ -543,7 +546,7 @@ export class Simulation {
     this.leisureByResident.clear();
     for (const service of this.state.buildings.filter(
       (b) =>
-        isLeisure(b.kind) &&
+        isService(b.kind) &&
         !b.construction &&
         b.enabled &&
         b.connected &&
@@ -644,19 +647,23 @@ export class Simulation {
   }
   private residentDestination(r: Resident) {
     const hour = daylight(this.state.tick).hour;
-    const leisure = (this.leisureByResident.get(r.id) ?? []).filter((b) =>
-      serviceOpen(b.kind, hour)&&(b.kind!=="park"||this.state.agents.filter(a=>a.target===b.id&&a.parkSlot!==undefined&&a.returning&&a.wait>0).length<4),
+    const services = (this.leisureByResident.get(r.id) ?? []).filter((b) =>
+      serviceOpen(b.kind, hour)&&(!isPark(b.kind)||this.state.agents.filter(a=>a.target===b.id&&a.parkSlot!==undefined&&a.returning&&a.wait>0).length<parkVisitorLimit(b)),
     );
-    leisure.sort(
+    services.sort(
       (a, b) =>
         (this.route(this.building(r.home)!, a)?.length ?? Infinity) -
         (this.route(this.building(r.home)!, b)?.length ?? Infinity),
     );
+    const leisure=services.filter(b=>isLeisure(b.kind));
+    const worship=services.find(b=>b.kind==="church");
     const job = this.building(r.job ?? -1);
+    if(worship && (r.faith??70)<55 && !job?.construction) return worship;
     if ((r.leisure ?? 60) < 90 && (!job || hour >= 17 || hour < 6))
       return leisure[0] ?? job;
     return job ?? ((r.leisure ?? 60) < 90 ? leisure[0] : undefined);
   }
+  faith(){return this.state.residents.length?Math.round(this.state.residents.reduce((n,r)=>n+(r.faith??70),0)/this.state.residents.length):100;}
   leisure() {
     return this.state.residents.length
       ? Math.round(
@@ -1376,8 +1383,10 @@ export class Simulation {
         b.produced += recipe.count;
       }
     }
-    for (const r of this.state.residents)
+    for (const r of this.state.residents){
       r.leisure = Math.max(0, (r.leisure ?? 60) - 0.04);
+      r.faith=Math.max(0,(r.faith??70)-.025);
+    }
     for (const a of [...this.state.agents]) {
       if (
         a.resident !== null &&
@@ -1408,7 +1417,7 @@ export class Simulation {
         a.resident !== null &&
         a.resident % 4 !== 0 &&
         !(
-          isLeisure(this.building(a.target)?.kind ?? "") &&
+          isService(this.building(a.target)?.kind ?? "") &&
           serviceOpen(this.building(a.target)!.kind, day.hour)
         ) &&
         !a.returning &&
@@ -1454,22 +1463,24 @@ export class Simulation {
           const arrival = this.building(a.target),
             resident = this.state.residents.find((r) => r.id === a.resident);
           let parkSlot:number|undefined;
-          if(!a.returning&&arrival?.kind==="park"){const used=new Set(this.state.agents.filter(v=>v.id!==a.id&&v.target===arrival.id&&v.returning&&v.wait>0).map(v=>v.parkSlot));parkSlot=[0,1,2,3].find(slot=>!used.has(slot));}
+          if(!a.returning&&arrival&&isPark(arrival.kind)){const used=new Set(this.state.agents.filter(v=>v.id!==a.id&&v.target===arrival.id&&v.returning&&v.wait>0).map(v=>v.parkSlot));parkSlot=Array.from({length:parkVisitorLimit(arrival)},(_,i)=>i).find(slot=>!used.has(slot));}
           if (
             !a.returning &&
-            (arrival?.kind!=="park"||parkSlot!==undefined) &&
+            (!arrival||!isPark(arrival.kind)||parkSlot!==undefined) &&
             resident &&
             arrival &&
-            isLeisure(arrival.kind) &&
+            isService(arrival.kind) &&
             serviceOpen(arrival.kind, day.hour) &&
             this.leisureByResident
               .get(resident.id)
               ?.some((b) => b.id === arrival.id)
-          )
-            resident.leisure = Math.min(
+          ){
+            if(arrival.kind==="church")resident.faith=Math.min(100,(resident.faith??70)+60);
+            else resident.leisure = Math.min(
               100,
               (resident.leisure ?? 60) + (arrival.kind === "tavern" ? 45 : 22),
             );
+          }
           const home = this.building(a.source),
             destination = this.building(a.target);
           const reverse =
@@ -1485,7 +1496,7 @@ export class Simulation {
           a.progress = 0;
           a.returning = !a.returning;
           a.parkSlot=parkSlot;
-          a.wait = a.returning&&arrival?.kind==="park"?(parkSlot!==undefined?parkVisitDuration(a.id):0):4+(a.id%8);
+          a.wait = a.returning&&arrival&&isPark(arrival.kind)?(parkSlot!==undefined?parkVisitDuration(a.id):0):4+(a.id%8);
           a.active = false;
           if (
             a.returning &&
@@ -1618,7 +1629,7 @@ export class Simulation {
     return Math.min(
       100,
       55 +
-        Math.round(this.leisure() * 0.25) +
+        Math.round(this.leisure() * 0.2) + Math.round(this.faith() * .05) +
         Math.round(this.state.food * 0.2),
     );
   }
@@ -1640,7 +1651,7 @@ export class Simulation {
       return this.adjacent(b).length === 0
         ? {
             kind: "road",
-            title: b.kind === "park" ? "No road connection" : "No front road",
+            title: isPark(b.kind) ? "No road connection" : "No front road",
             message:
               b.kind === "park"
                 ? "Connect a road to any side of the fountain square."
@@ -1652,7 +1663,7 @@ export class Simulation {
             message:
               "Connect this entrance road to the front entrance of a warehouse.",
           };
-    if (!b.enabled && (d.recipe || isLeisure(b.kind)))
+    if (!b.enabled && (d.recipe || isService(b.kind)))
       return {
         kind: "paused",
         title: "Production paused",
@@ -1702,6 +1713,7 @@ export class Simulation {
     if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
     if (isHome(b.kind)) {
       const residents = this.state.residents.filter((r) => r.home === b.id);
+      if(residents.length&&residents.every(r=>(r.faith??70)<25))return{kind:"leisure",title:"Needs nearby religion",message:"Connect a staffed church within 20 road tiles. Residents visit between 08:00 and 20:00 to restore religion."};
       if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
         return {
           kind: "leisure",
@@ -1718,12 +1730,12 @@ export class Simulation {
     if (b.kind === "fishery") return fishingStatus(b);
     if(isExtractor(b.kind))return b.mining?.some(t=>t.phase==="returning")?"Carrying resources to the workplace":b.mining?.some(t=>t.phase==="mining")?"Mining the rock face":daylight(this.state.tick).night?"Miners resting until morning":"Miners walking to the deposit";
     if (b.kind === "forester") return b.forestry?.some(t=>t.phase==="returning") ? "Bringing logs to the lodge" : b.forestry?.some(t=>t.phase==="chopping") ? "Cutting trees" : daylight(this.state.tick).night ? "Foresters resting until morning" : "Workers walking to trees";
-    if (isLeisure(b.kind))
+    if (isService(b.kind))
       return serviceOpen(b.kind, daylight(this.state.tick).hour)
         ? "Open for nearby visitors"
         : b.kind === "tavern"
           ? "Opens at 17:00"
-          : "Opens at 06:00";
+          : b.kind==="church" ? "Opens at 08:00" : "Opens at 06:00";
     const d = BUILDINGS[b.kind];
     return d.recipe
       ? "Producing"
@@ -2068,8 +2080,10 @@ export function parseSave(raw: string): World {
       s.buildings.some((b) => b.id === r.home && isHome(b.kind)),
   );
   s.history = s.history.filter((x) => typeof x === "string").slice(0, 20);
-  for (const r of s.residents)
+  for (const r of s.residents){
     r.leisure = finite(r.leisure) ? Math.min(100, r.leisure!) : 60;
+    r.faith=finite(r.faith)?Math.min(100,r.faith!):70;
+  }
   s.nextId = Math.max(s.nextId, ...ids, ...s.residents.map((r) => r.id)) + 1;
   s.decorations ??= initialDecorations(
     new Set(s.roads),

@@ -21,12 +21,19 @@ const plan: readonly PlazaObject[] = [
   { id: "lamp-west", kind: "lamp", x: -0.3, y: 0.5, dx: 0, dy: 0 },
   { id: "lamp-east", kind: "lamp", x: 1.3, y: 0.5, dx: 0, dy: 0 },
 ];
-export function plazaLayout(rotation: number) {
-  return plan
+const gardenPlan: readonly PlazaObject[] = [
+ {id:"fountain",kind:"fountain",x:1.5,y:1.5,dx:0,dy:0},
+ ...[{x:1.5,y:0,dx:0,dy:1},{x:1.5,y:3,dx:0,dy:-1},{x:0,y:1.5,dx:1,dy:0},{x:3,y:1.5,dx:-1,dy:0}].map((p,i)=>({id:"bench-"+i,kind:"bench" as const,...p})),
+ ...[{x:.2,y:.2},{x:2.8,y:.2},{x:.2,y:2.8},{x:2.8,y:2.8}].map((p,i)=>({id:"tree-"+i,kind:"tree" as const,...p,dx:0,dy:0})),
+ ...[{x:.65,y:.65},{x:2.35,y:.65},{x:.65,y:2.35},{x:2.35,y:2.35}].map((p,i)=>({id:"flowers-"+i,kind:"flowers" as const,...p,dx:0,dy:0})),
+ ...[{x:.95,y:0},{x:2.05,y:3},{x:0,y:2.05},{x:3,y:.95}].map((p,i)=>({id:"lamp-"+i,kind:"lamp" as const,...p,dx:0,dy:0})),
+];
+export function plazaLayout(rotation: number,size:2|4=2) {
+  return (size===4?gardenPlan:plan)
     .map((item) => {
       let { x, y, dx, dy } = item;
       for (let i = 0; i < ((rotation % 4) + 4) % 4; i++) {
-        [x, y] = [y, 1 - x];
+        [x, y] = [y, size - 1 - x];
         [dx, dy] = [dy, -dx];
       }
       return { ...item, x, y, dx, dy };
@@ -79,9 +86,10 @@ export function drawPlaza(
   benches: HTMLImageElement,
   rotation: number,
   only?:string,
+  size:2|4=2,
 ) {
   ctx.imageSmoothingEnabled = false;
-  for (const item of plazaLayout(rotation)) {
+  for (const item of plazaLayout(rotation,size)) {
     if(only&&item.id!==only)continue;
     const image = item.kind === "bench" ? benches : parts;
     const m = metrics[item.kind],

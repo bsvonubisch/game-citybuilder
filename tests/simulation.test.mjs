@@ -1906,7 +1906,7 @@ test("invalid terrain, unaffordable edits, and occupied flood areas leave towns 
   );
 });
 
-test("all 52 building views share exact raised plot bounds and stone density", () => {
+test("all building views share exact raised plot bounds and stone density", () => {
   let count = 0;
   for (const kind of Object.keys(BUILDINGS))
     for (const tier of kind === "house" ? [1, 2, 3] : [1])
@@ -1925,7 +1925,7 @@ test("all 52 building views share exact raised plot bounds and stone density", (
         ]);
         assert.ok(
           buildingArt(kind, rotation, tier).texture.startsWith(
-            kind === "park" ? "park-" : "building-",
+            kind === "park" || kind === "garden" ? "park-" : "building-",
           ),
         );
         count++;
@@ -2572,4 +2572,43 @@ test("bridge lamps follow ramps and mount on masonry coping on both curbs",async
      assert.equal(p.bridge,true);
    }
  }
+});
+
+function serviceTown(){
+ const seed=new Simulation().snapshot(),template=seed.buildings.find(b=>b.kind==='house');
+ seed.buildings=[['warehouse',0,3],['house',3,3],['house',5,3],['house',7,3],['house',9,3],['church',12,2],['garden',17,1]].map(([kind,x,y],i)=>({...template,id:100+i,kind,x,y,rotation:0,plot:dimensions(kind),houseTier:kind==='house'?1:undefined,inventory:kind==='warehouse'?{wood:1000,stone:1000,planks:1000,metal:1000,bread:1000}:{},construction:undefined}));
+ seed.terrain=Object.fromEntries(Array.from({length:23*7},(_,i)=>[key({x:i%23,y:Math.floor(i/23)}),{kind:'land',height:0}]));seed.roads=Array.from({length:22},(_,x)=>key({x,y:5}));seed.roadTypes={};seed.agents=[];seed.residents=[];seed.decorations=[];seed.nextId=10000;seed.money=10000;
+ return new Simulation(seed);
+}
+test("religion requires a staffed nearby church and improves on actual arrival",()=>{
+ const sim=serviceTown(),church=sim.state.buildings.find(b=>b.kind==='church');
+ assert.equal(church.workers,2);assert.equal(church.connected,true);
+ assert.equal(townNeeds(sim).find(n=>n.id==='religion').have,12);
+ for(const r of sim.state.residents){r.faith=10;r.leisure=95;}
+ sim.step();assert.ok(sim.state.residents.every(r=>r.faith<=10),'coverage alone does not satisfy religion');
+ advance(sim,32);assert.ok(sim.state.residents.some(r=>r.faith>50),'visitors reach the church');
+ assert.equal(serviceOpen('church',7),false);assert.equal(serviceOpen('church',8),true);assert.equal(serviceOpen('church',20),false);
+ assert.equal(execute(sim,{type:'toggle',id:church.id}).ok,true);
+ for(const r of sim.state.residents)r.faith=10;
+ advance(sim,12);assert.ok(sim.state.residents.every(r=>r.faith<=10));
+ assert.equal(townNeeds(sim).find(n=>n.id==='religion').have,0);
+ assert.equal(sim.alert(church).kind,'paused');
+ const restored=new Simulation(parseSave(JSON.stringify(sim.snapshot())));
+ assert.deepEqual(restored.state.residents.map(r=>r.faith),sim.state.residents.map(r=>r.faith));
+ assert.equal(buildingNeeds(restored,restored.building(101)).find(n=>n.label==='Religion').ok,false);
+});
+test("church rotation keeps a six-tile plot and the large park admits eight spaced visitors",async()=>{
+ const {parkVisitor,parkVisitorLimit}=await import('../.test-dist/park-visitors.js');
+ for(let r=0;r<4;r++){assert.equal(footprint('church',10,10,r).length,6);assert.deepEqual([...dimensions('church',r)].sort(),[2,3]);assert.equal(footprint('garden',10,10,r).length,16);assert.equal(frontage('garden',10,10,r).length,16);assert.equal(plazaLayout(r,4).filter(p=>p.kind==='bench').length,4);}
+ const sim=serviceTown(),park=sim.state.buildings.find(b=>b.kind==='garden');
+ assert.equal(parkVisitorLimit(park),8);assert.equal(serviceCoverage(sim,park).capacity,40);assert.equal(serviceCoverage(sim,park).range,18);
+ for(const a of sim.state.agents.filter(a=>a.resident!==null)){
+  const path=sim.route(sim.building(a.source),park);if(!path)continue;
+  Object.assign(a,{kind:'person',target:park.id,path,segment:path.length-1,progress:0,returning:false,wait:0,active:true,move:1});
+ }
+ sim.step();const visitors=sim.state.agents.filter(a=>a.target===park.id&&a.parkSlot!==undefined&&a.returning&&a.wait>0);
+ assert.equal(visitors.length,8);assert.equal(new Set(visitors.map(a=>a.parkSlot)).size,8);
+ for(const a of visitors){const p=parkVisitor(a,park);assert.ok(p.x>=park.x-.5&&p.x<=park.x+3.5&&p.y>=park.y-.5&&p.y<=park.y+3.5);}
+ assert.equal(townNeeds(sim).find(n=>n.id==='parks').have,12);
+ const saved=parseSave(JSON.stringify(sim.snapshot()));assert.deepEqual(saved.buildings.find(b=>b.kind==='garden').plot,[4,4]);
 });

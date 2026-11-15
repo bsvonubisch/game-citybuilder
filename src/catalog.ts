@@ -10,6 +10,8 @@ export type Resource =
   | "planks"
   | "tools";
 export type BuildingKind =
+  | "church"
+  | "garden"
   | "cottage"
   | "brickworks"
   | "house"
@@ -67,6 +69,7 @@ export const buildingName = (b: {
   b.kind === "house"
     ? HOUSE_TIERS[b.houseTier ?? 1].name
     : BUILDINGS[b.kind].name;
+export const isPark = (kind: string) => kind === "park" || kind === "garden";
 export const isHome = (kind: string) => kind === "house" || kind === "cottage";
 export const houseCapacity = (b: {
   kind: BuildingKind;
@@ -178,6 +181,8 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
+  church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{planks:16,stone:30},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors from 08:00 to 20:00; religion improves after a visit."},
+  garden:{name:"Town park",cost:380,jobs:0,frame:0,materials:{wood:12,stone:20},category:"town",description:"A spacious 4×4 garden with lawns, shaded benches and a fountain. Daytime leisure for 40 residents within 18 road tiles."},
   cottage: {name:"Little cottage", cost:55, jobs:0, frame:0, materials:{wood:3}, category:"homes", description:"A compact 1×1 home for two residents. Upgrade for more room without enlarging the plot."},
   brickworks:{name:"Village brickworks",cost:260,jobs:2,frame:0,materials:{wood:10,stone:12},category:"production",description:"Fires stone into bricks for faster roads and sturdy bridges.",recipe:{input:"stone",amount:2,output:"bricks",count:4,seconds:10}},
   house: {
@@ -358,6 +363,8 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   tools: "Tools",
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
+  church:[2,3],
+  garden:[4,4],
   cottage:[1,1],
   brickworks:[2,2],
   house: [2, 2],
@@ -417,7 +424,7 @@ export function frontage(
 ) {
   const [w, h] = dimensions(kind, rotation, plot),
     d = FRONT_DIRECTIONS[rotation];
-  if (kind === "park")
+  if (isPark(kind))
     return [
       ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y - 1 })),
       ...Array.from({ length: w }, (_, i) => ({ x: x + i, y: y + h })),

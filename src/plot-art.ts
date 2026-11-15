@@ -35,13 +35,19 @@ export function drawPlot(
   stone?: HTMLImageElement,
   wood?: HTMLImageElement,
   plaza=true,
+  meadow?: HTMLImageElement,
 ) {
   if (art.land && wood) {
     const rotation = [1, 0, 3, 2].indexOf(art.frame);
     drawFisheryPlatform(ctx, rotation, stone, wood);
   } else drawFoundation(ctx, w, h, stone);
   if (art.texture === "park-parts") {
-    if (benches && plaza) drawPlaza(ctx, source, benches, art.frame);
+    if(art.plazaSize===4 && meadow){
+      ctx.save();ctx.transform(32,16,-32,16,0,-FOUNDATION_HEIGHT);
+      for(const x of [-.35,2.1])for(const y of [-.35,2.1])ctx.drawImage(meadow,0,0,meadow.width/2,meadow.height/2,x,y,1.25,1.25);
+      ctx.restore();
+    }
+    if (benches && plaza) drawPlaza(ctx, source, benches, art.frame,undefined,art.plazaSize);
     return;
   }
   const t = artTransform(art, w, h),
@@ -58,10 +64,10 @@ export function drawPlot(
   const top = t.point(0, 0);
   ctx.drawImage(
     source,
-    sx,
-    sy,
-    sw,
-    sh,
+    art.sourceRect?.[0]??sx,
+    art.sourceRect?.[1]??sy,
+    art.sourceRect?.[2]??sw,
+    art.sourceRect?.[3]??sh,
     top.x,
     top.y,
     cw * t.scale,
@@ -133,6 +139,7 @@ export class PlotArt {
           .get("bridge-wood")
           .getSourceImage() as HTMLImageElement,
         false,
+        this.scene.textures.get("meadow").getSourceImage() as HTMLImageElement,
       );
       texture.refresh();
       fit = { texture: key, x: left, y: top };

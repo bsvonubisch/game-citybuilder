@@ -79,8 +79,8 @@ export function nextUpgrade(b: Building) {
     } as Partial<Record<Resource, number>>,
     labour: constructionWork(b.kind) * next,
     benefit:
-      b.kind === "tavern" || b.kind === "park"
-        ? `Serves ${next * (b.kind === "tavern" ? 18 : 12)} nearby residents; walking range stays the same.`
+      b.kind === "church" || b.kind === "tavern" || b.kind === "park" || b.kind === "garden"
+        ? `Serves ${next * (b.kind === "church" || b.kind === "garden" ? 40 : b.kind === "tavern" ? 18 : 12)} nearby residents; walking range stays the same.`
         : b.kind === "warehouse"
           ? `Tool exports earn ${Math.round(35 * (1 + (next - 1) * 0.1))} gold each. Stock and road network stay here.`
           : `Production ${Math.round((1 + (next - 1) * 0.35) * 100)}% · output storage ${20 * next} · same workers and footprint.`,

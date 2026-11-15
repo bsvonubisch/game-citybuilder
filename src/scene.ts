@@ -1,3 +1,4 @@
+import {isPark} from "./catalog.js";
 import {PlazaArt} from "./plaza-art.js";
 import {parkVisitor} from "./park-visitors.js";
 import {FOUNDATION_HEIGHT} from "./foundation.js";
@@ -15,7 +16,7 @@ import { forestCenter, forestTargets, FOREST_RADIUS } from "./forestry.js";
 import { depositAt, exposedDeposit, depositTiles, buildingDeposit, MINING_RADIUS, isExtractor } from "./deposits.js";
 import { miningTargets } from "./mining.js";
 import type { RoadType } from "./roads.js";
-import { isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
+import { isService as isLeisure, serviceCoverage, servicePreview } from "./proximity.js";
 import {
   setupArtworkScaling,
   updateArtworkScaling,
@@ -252,10 +253,7 @@ export class TownScene extends Phaser.Scene {
     this.simulation = simulation;
   }
   preload() {
-    for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) {
-      const art = buildingArt(kind);
-      this.load.image(art.texture, `/${art.texture}.png`);
-    }
+    for (const texture of new Set((Object.keys(BUILDINGS) as BuildingKind[]).map(kind=>buildingArt(kind).texture)))this.load.image(texture,`/${texture}.png`);
     this.load.image("building-house-2", "/building-house-2.png");
     this.load.image("building-house-3", "/building-house-3.png");
     this.load.image("park-benches", "/park-benches.png");
@@ -818,7 +816,7 @@ export class TownScene extends Phaser.Scene {
       );
     }
     this.lightSources = [
-      ...[...this.buildings.values()].filter(s=>this.simulation.building(s.getData("buildingId"))?.kind!=="park"),
+      ...[...this.buildings.values()].filter(s=>!isPark(this.simulation.building(s.getData("buildingId"))?.kind??"")),
       ...this.plazaArt.sync(this.simulation),
       ...this.trees.filter((t) => t.getData("streetlight")),
     ];
@@ -1080,7 +1078,7 @@ export class TownScene extends Phaser.Scene {
     plot?: readonly [number, number],
     oneEdge = false,
   ) {
-    if (kind === "park" && !oneEdge) {
+    if (isPark(kind) && !oneEdge) {
       for (let edge = 0; edge < 4; edge++)
         this.drawFront(kind, x, y, edge, plot, true);
       return;
@@ -1089,7 +1087,7 @@ export class TownScene extends Phaser.Scene {
     const [w, h] = dimensions(kind, rotation, plot),
       d = FRONT_DIRECTIONS[rotation];
     const connected = frontage(
-      kind === "park" ? "house" : kind,
+      isPark(kind) ? "house" : kind,
       x,
       y,
       rotation,
@@ -1508,7 +1506,7 @@ export class TownScene extends Phaser.Scene {
         const heading=travelFacing(visit.dx,visit.dy),turn=heading%2===1,texture=turn?'walkers-turns':'walkers',pose=walkFrame(Math.floor(heading/2),a.id%2,visit.elapsed*.45,!visit.walking,turn),v=iso(visit.x,visit.y);
         s.setTexture(texture,pose.frame).setScale(this.travellerScale({...a,kind:'person'},a.id%2,texture)).setOrigin(.5,1).setFlipX(pose.flip)
           .setPosition(v.x,v.y-groundHeight(visiting.x,visiting.y,this.simulation.state.terrain)-FOUNDATION_HEIGHT)
-          .setDepth((visiting.x+visiting.y+2)*32+12.1+(visit.x-visiting.x+visit.y-visiting.y)*.08).setVisible(true).setData('sized',false);
+          .setDepth((visiting.x+visiting.y+(visiting.kind==="garden"?6:2))*32+12.1+(visit.x-visiting.x+visit.y-visiting.y)*.08).setVisible(true).setData('sized',false);
       }
       if (a.kind !== "person"&&!visit)
         this.animation.vehicle(
