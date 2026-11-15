@@ -9,7 +9,7 @@ export type GuidanceAction =
   | { type: "build"; kind: BuildingKind | "road" }
   | { type: "inspect"; id: number }
   | { type: "agent"; id: number }
-  | { type: "toggle" | "move" | "water" | "workforce" | "deepen" };
+  | { type: "toggle" | "move" | "water" | "workforce" | "deepen" | "crop" };
 export interface BuildingGuidance {
   message: string;
   label: string;
@@ -25,6 +25,7 @@ export function buildingGuidance(
 ): BuildingGuidance | null {
   const alert = sim.alert(b);
   if (!alert) return null;
+  if(alert.kind==='crop')return{message:'Select wheat, potatoes or carrots in this farm’s Crop section to start planting.',label:'Choose a crop',action:{type:'crop'}};
   const build = (
     kind: BuildingKind | "road",
     message: string,

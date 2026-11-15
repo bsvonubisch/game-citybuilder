@@ -1169,8 +1169,8 @@ test("people have homes and workplaces; cars and walkers take valid road routes"
 });
 test("both factory chains deliver real goods and export tools", () => {
   const sim = new Simulation();
-  // Include the first physical harvesting trips before downstream exports.
-  advance(sim, 360);
+  // Include the five-times-longer crop growth and physical harvesting trips.
+  advance(sim, 900);
   assert.ok(sim.state.delivered > 60);
   assert.ok(sim.state.exported > 0);
   assert.ok(sim.state.buildings.find((b) => b.kind === "bakery").produced > 0);

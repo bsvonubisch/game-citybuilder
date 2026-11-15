@@ -1,6 +1,6 @@
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
-import {CROPS,isCrop,validFarmPlot,farmWork,type Crop} from './farm-layout.js';
-import {ensureField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
+import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
+import {ensureField,prepareField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
 import {buildingRecipe,FOOD_RESOURCES} from './catalog.js';
 import {marketDestination,marketOpen,buyAtMarket,marketStock,marketVendors,MARKET_GOODS} from "./market.js";
 import {validMarketPlot,marketStalls} from "./market-layout.js";
@@ -92,7 +92,8 @@ export interface Point {
   y: number;
 }
 export interface Building extends Point {
-  crop?:Crop;
+  crop?:Crop|null;
+  nextCrop?:Crop;
   field?:Field;
   hunting?:HuntTrip[];
   forestry?: ForestTrip[];
@@ -172,6 +173,7 @@ export interface World {
   clearedDeposits?: string[];
 }
 export type Command =
+  | {type:'crop';id:number;crop:Crop}
   | {type:"removeDecoration";id:number}
   | {type:"removeStroke";from:Point;to:Point}
   | { type: "roadStroke"; from: Point; to: Point; roadType?: RoadType }
@@ -205,6 +207,7 @@ export interface Result {
 }
 export interface BuildingAlert {
   kind:
+    | "crop"
     | "road"
     | "warehouse"
     | "paused"
@@ -352,8 +355,8 @@ export class Simulation {
         this.state.history.unshift("A replacement warehouse has opened to restore town access. Stored materials were kept.");
       }
     }
+    for(const b of this.state.buildings)if(b.kind==='farm')prepareField(b);
     this.reconnect(!!saved);
-    for(const b of this.state.buildings)if(b.kind==='farm')ensureField(b);
     ensureWildlife(this);
   }
   private seed() {
@@ -981,6 +984,7 @@ export class Simulation {
       !c ||
       ![
         "place",
+        "crop",
         "roadStroke",
         "removeStroke",
         "removeDecoration",
@@ -1159,12 +1163,13 @@ export class Simulation {
           produced: 0,
           rotation: c.rotation ?? 0,
           plot: dimensions(c.kind, c.rotation,c.plot),
-          ...(c.kind==='farm'?{crop:c.crop??'wheat'}:{}),
+          ...(c.kind==='farm'?{crop:c.crop??null}:{}),
           ...(c.kind === "house" ? { houseTier: 1 as const } : {}),
           ...(isExtractor(c.kind)?{deposit:nearbyDeposit({kind:c.kind,x:c.x,y:c.y,rotation:c.rotation??0})}:{}),
           construction: (()=>{
             const tiles=footprint(c.kind,c.x,c.y,c.rotation??0,c.plot).filter(p=>exposedDeposit(this.state,p));
-            return {required:(c.kind==="market"?80+dimensions(c.kind,c.rotation,c.plot).reduce((a,b)=>a*b,1)*35:c.kind==='farm'?farmWork(c.plot):constructionWork(c.kind))+tiles.length*ROCK_CLEARING_WORK,completed:0,...(tiles.length?{clearance:{tiles,work:0}}:{})};
+            if(c.kind==='farm'&&!tiles.length)return undefined;
+            return {required:(c.kind==="market"?80+dimensions(c.kind,c.rotation,c.plot).reduce((a,b)=>a*b,1)*35:c.kind==='farm'?0:constructionWork(c.kind))+tiles.length*ROCK_CLEARING_WORK,completed:0,...(tiles.length?{clearance:{tiles,work:0}}:{})};
           })(),
         });
       message =
@@ -1174,6 +1179,8 @@ export class Simulation {
             : "Road laid."
           : isDecoration(c.kind)
             ? `${DECORATIONS[c.kind].name} placed.`
+            : c.kind==='farm'
+              ? this.buildingAt(c.x,c.y)?.construction?'Farm marked. Builders will clear the rocks. Select the farm to choose a crop.':'Farm ready. Select it to choose a crop.'
             : `${BUILDINGS[c.kind].name} construction started. Available residents will build it.`;
     } else if (c.type === "demolish") {
       const b = this.buildingAt(c.x, c.y),
@@ -1328,6 +1335,13 @@ export class Simulation {
         ...(b.kind === "house" ? { upgradeTo: tier } : { upgradeLevel: tier }),
       };
       message = `Upgrading to ${next.name.toLowerCase()}. ${isHome(b.kind) ? "Residents keep their home" : "Stored inventory stays here"} while builders work.`;
+    } else if (c.type === 'crop') {
+      const b=this.building(c.id);
+      if(!b||b.kind!=='farm'||!isCrop(c.crop))return{ok:false,message:'Choose a farm and a valid crop.',revision:this.state.revision};
+      const field=ensureField(b),old=b.crop??'wheat';
+      if(b.crop===c.crop){delete b.nextCrop;message=`Keeping ${CROPS[c.crop].name.toLowerCase()} for the next sowing.`;}
+      else if(field.cells.some(cell=>cell.sownAt!==undefined)||field.tasks.some(t=>t.cargo>0)||(b.inventory[CROPS[old].output]??0)>0){b.nextCrop=c.crop;if(!field.tasks.length&&field.cells.every(cell=>cell.sownAt===undefined))field.phase='harvesting';message=`${CROPS[c.crop].name} selected for the next sowing, after this harvest is collected.`;}
+      else {landHarvest(b);b.crop=c.crop;delete b.nextCrop;field.phase='sowing';message=`Farm will grow ${CROPS[c.crop].name.toLowerCase()}.`;}
     } else if (c.type === "toggle") {
       const b = this.building(c.id);
       if (!b)
@@ -1749,6 +1763,7 @@ export class Simulation {
               ? "Waiting for residents without an assigned job. Free up workers or connect more homes."
               : `${b.workers} builders assigned · ${this.state.agents.filter((a) => a.onsite === b.id).length} on site · ${Math.ceil(b.construction.required - b.construction.completed)} worker-seconds remaining.`,
       };
+    if(b.kind==='farm'&&b.crop===null)return{kind:'crop',title:'Choose a crop',message:'Open this farm and select wheat, potatoes or carrots to assign farmers and start planting.'};
     const d = {...BUILDINGS[b.kind],recipe:buildingRecipe(b)};
     if (!b.connected)
       return this.adjacent(b).length === 0
@@ -1831,7 +1846,7 @@ export class Simulation {
   status(b: Building) {
     const alert = this.alert(b);
     if (alert) return alert.title;
-    if(b.kind==='farm'){const fields=farmSummary(b,this.state.tick);return daylight(this.state.tick).night?'Farmers resting · crops growing':`${fields.ripe} ready to harvest · ${fields.growing+fields.seeded} growing`;}
+    if(b.kind==='farm'){const fields=farmSummary(b,this.state.tick);return daylight(this.state.tick).night?'Farmers resting · crops growing':b.field?.phase==='sowing'?`Sowing · ${b.field.cells.length-fields.soil} / ${b.field.cells.length} planted`:`${fields.ripe} ready to harvest · ${fields.growing+fields.seeded} growing`;}
     if(b.kind==="market")return marketOpen(this.state.tick)?`${marketVendors(this,b).length} vendors serving · ${b.produced} sales`:"Opens at 07:00";
     if(b.kind==="hunter")return b.hunting?.some(t=>t.phase==="returning"&&t.cargo)?"Carrying meat home":b.hunting?.some(t=>t.phase==="aiming")?"Hunting wildlife":daylight(this.state.tick).night?"Hunters resting until morning":"Looking for wildlife";
     if (b.kind === "fishery") return fishingStatus(b);

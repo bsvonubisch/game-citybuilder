@@ -36,7 +36,7 @@ export function buildingPreview(
   kind: BuildingKind,
   rotation = 0,
   tier: HouseTier = 1,
-  crop:Crop='wheat',
+  crop:Crop|null='wheat',
 ) {
   const key = `${kind}-${rotation}-${tier}-${crop}`;
   let promise = previews.get(key);

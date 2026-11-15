@@ -3,7 +3,7 @@ import {HuntingArt,prepareHuntingFrames} from "./hunting-art.js";
 import {HUNT_RADIUS,huntTargets} from "./hunting.js";
 import {MarketArt,prepareVendorFrames} from "./market-art.js";
 import {FarmArt} from './farm-art.js';
-import {farmRectangle,type Crop} from './farm-layout.js';
+import {farmRectangle} from './farm-layout.js';
 import {marketRectangle} from "./market-layout.js";
 import {marketActor} from "./market.js";
 import {edgeDepth,type EdgeOccluder} from "./edge-occlusion.js";
@@ -190,7 +190,7 @@ export class TownScene extends Phaser.Scene {
   onRemoveApply:(from:Point,to:Point)=>void=()=>{};
   onSelectDecoration:(id:number)=>void=()=>{};
   onDecorationRemove:(id:number)=>void=()=>{};
-  onEyedropper:(kind:Tool,rotation:0|1|2|3,plot?:readonly[number,number],crop?:Crop)=>void=()=>{};
+  onEyedropper:(kind:Tool,rotation:0|1|2|3,plot?:readonly[number,number])=>void=()=>{};
   onBuildingHover:(id:number|null,x:number,y:number)=>void=()=>{};
   private hoverArt?:Phaser.GameObjects.Image;
   clearBuildingHover(){this.hoverArt?.setVisible(false);this.onBuildingHover(null,0,0);}
@@ -225,7 +225,6 @@ export class TownScene extends Phaser.Scene {
   private marketArt!:MarketArt;
   private farmArt!:FarmArt;
   farmPlot:[number,number]=[1,1];
-  farmCrop:Crop='wheat';
   marketPlot: [number,number]=[1,1];
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
@@ -515,7 +514,7 @@ export class TownScene extends Phaser.Scene {
       (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
         if(!p.wasTouch&&p.button===1&&this.moved<6){
           const hit=over.find(o=>o.getData("buildingId")),b=hit&&this.simulation.building(hit.getData("buildingId"));
-          if(b)this.onEyedropper(b.kind,b.rotation,b.plot,b.crop);
+          if(b)this.onEyedropper(b.kind,b.rotation,b.plot);
           else {const d=over.find(o=>o.getData("decoration"))?.getData("decoration");if(d)this.onEyedropper(d.kind,d.side??d.edge??0);}
         }
         if (!p.wasTouch && p.button !== 0) {
@@ -683,7 +682,7 @@ export class TownScene extends Phaser.Scene {
     plot?: readonly [number, number],
     houseTier: Building["houseTier"] = 1,
   ) {
-    if(kind==='farm'){if(sprite.getData('buildingId'))this.farmArt.place(sprite,{kind,x,y,rotation,plot});else this.farmArt.preview(sprite,x,y,plot??[2,2],this.tool==='move'?this.simulation.building(this.movingBuilding!)?.crop??'wheat':this.farmCrop);}
+    if(kind==='farm'){if(sprite.getData('buildingId'))this.farmArt.place(sprite,{kind,x,y,rotation,plot});else this.farmArt.preview(sprite,x,y,plot??[2,2],this.tool==='move'?this.simulation.building(this.movingBuilding!)?.crop??null:null);}
     else this.plotArt.place(sprite, kind, x, y, rotation, plot, houseTier);
     sprite.y -= groundHeight(x, y, this.simulation.state.terrain);
   }

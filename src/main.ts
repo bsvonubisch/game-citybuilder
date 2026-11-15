@@ -162,7 +162,7 @@ const frame = (
   cls = "",
   rotation = 0,
   houseTier: HouseTier = 1,
-  crop:Crop='wheat',
+  crop:Crop|null='wheat',
 ) => {
   const { key, promise } = buildingPreview(kind, rotation, houseTier,crop);
   void promise.then((src) =>
@@ -336,8 +336,7 @@ function setTool(next: Tool) {
     updateMarketPreview();
   }
   if(next==='farm'){
-    $('#placement-hint').innerHTML='<b>Drag a crop field</b><div class="crop-choices" role="group" aria-label="Field crop">'+Object.entries(CROPS).map(([id,c])=>'<button data-crop="'+id+'" aria-pressed="'+(scene.farmCrop===id)+'">'+c.name+'</button>').join('')+'</div><span id="market-drag-size"></span><small>1×1 to 10×10 · Release to build · Road access on any side</small>';
-    document.querySelectorAll<HTMLButtonElement>('[data-crop]').forEach(button=>button.onclick=()=>{scene.farmCrop=button.dataset.crop as Crop;document.querySelectorAll('[data-crop]').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));scene.drawOverlay();updateMarketPreview();});
+    $('#placement-hint').innerHTML='<b>Drag a farm</b><span id="market-drag-size"></span><small>1×1 to 10×10 · Choose a crop in the farm details after placing</small>';
     updateMarketPreview();
   }
   if(next==="fence")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at a tile edge · Fences join at shared corners · The tile stays usable</span>');
@@ -594,7 +593,7 @@ $(".world").addEventListener("pointermove",event=>{if(!(event.target instanceof 
 $(".world").addEventListener("pointerleave",()=>{costPointer=null;placementCost.hidden=true;});
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
-scene.onEyedropper=(kind,rotation,plot,crop)=>{scene.rotation=rotation;if(kind==="farm")scene.farmCrop=crop??"wheat";if(kind==='farm'&&plot)scene.farmPlot=[...plot];if(kind==="market"&&plot)scene.marketPlot=[...plot];setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
+scene.onEyedropper=(kind,rotation,plot)=>{scene.rotation=rotation;if(kind==='farm'&&plot)scene.farmPlot=[...plot];if(kind==="market"&&plot)scene.marketPlot=[...plot];setTool(kind);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
 scene.onSelectDecoration=(id)=>{selectedDecoration=id;selected=null;scene.selected=null;selectedAgent=null;scene.selectedAgent=null;scene.drawOverlay();renderDecorationInspector();};
 scene.onDecorationRemove=async(id)=>{const result=await gateway.command({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onRemoveApply=async(from,to)=>{const result=await gateway.command({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
@@ -629,7 +628,7 @@ scene.onTile = async (p: Point) => {
         }
       : tool === "bulldoze"
         ? { type: "demolish", ...p }
-        : { type: "place", kind: tool, rotation: scene.rotation, ...(tool==='farm'?{plot:scene.farmPlot,crop:scene.farmCrop}:tool==="market"?{plot:scene.marketPlot}:{}), ...p },
+        : { type: "place", kind: tool, rotation: scene.rotation, ...(tool==='farm'?{plot:scene.farmPlot}:tool==="market"?{plot:scene.marketPlot}:{}), ...p },
   );
   toast(result.message);
   if (result.ok) {
@@ -641,7 +640,8 @@ scene.onTile = async (p: Point) => {
     scene.redraw();
     if (isBuilding(tool)) {
       const site = simulation.buildingAt(p.x, p.y);
-      if (site?.construction) scene.onSelect(site.id);
+      if (site?.kind==='farm'){setTool('inspect');scene.onSelect(site.id);}
+      else if (site?.construction) scene.onSelect(site.id);
     }
     save(false);
     updateUI();
@@ -726,10 +726,14 @@ function renderInspector() {
   const panel = $("#inspector");
   panel.hidden = !b;
   if (!b) return;
-  panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}`;
+  panel.dataset.buildingView = `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}:${b.crop}:${b.nextCrop}`;
   panel.scrollTop = 0;
   const d = {...BUILDINGS[b.kind],recipe:buildingRecipe(b)};
   panel.innerHTML = `<button id="close-inspector" class="icon-button close" aria-label="Close building details">${icon("close")}</button><span class="eyebrow">${isHome(b.kind) ? `HOME · TIER ${b.houseTier ?? b.level ?? 1} OF 3` : d.category === "production" ? "LITTLE INDUSTRIES" : "AROUND TOWN"}</span>${frame(b.kind, "inspector-art", b.rotation, b.houseTier,b.crop)}<h3>${buildingName(b)}</h3><div id="building-status" class="building-status"></div><section id="building-needs" class="building-needs" aria-label="Building needs"></section>${b.kind === "farm" ? '<section id="farm-growth" aria-label="Crop growth stages"></section>' : ""}${b.kind === "fishery" && !b.construction ? '<section id="boat-detail" class="boat-detail"></section>' : ""}${b.kind === "house" ? '<div id="house-upgrade"></div>' : ""}${d.recipe ? '<section id="production-logistics" class="production-logistics" aria-label="Goods routes and workers"></section>' : ""}<div id="building-detail"></div>${d.recipe || isLeisure(b.kind) || b.kind === "market" ? '<button id="toggle-production" class="primary"></button>' : ""}`;
+  if(b.kind==='farm'){
+    $('#building-status').insertAdjacentHTML('afterend','<section id="farm-crop" aria-label="Choose farm crop"><h4>Crop</h4><div class="crop-choices" role="group" aria-label="Farm crop">'+Object.entries(CROPS).map(([id,c])=>'<button data-farm-crop="'+id+'" aria-pressed="'+((b.nextCrop??b.crop)===id)+'">'+c.name+'<small>'+Math.floor(c.grow/60)+'m '+c.grow%60+'s</small></button>').join('')+'</div><p class="muted">'+(b.nextCrop?'Growing '+CROPS[b.crop??'wheat'].name.toLowerCase()+' now. '+CROPS[b.nextCrop].name+' next, after this harvest is collected.':b.crop?'Plant the whole field, then harvest. Changing crops applies after the current harvest.':'Choose what to grow. Farmers will start once the land is clear and connected.')+'</p></section>');
+    $('#farm-crop').onclick=async event=>{const choice=(event.target as Element).closest<HTMLButtonElement>('[data-farm-crop]');if(!choice)return;const result=await gateway.command({type:'crop',id:b.id,crop:choice.dataset.farmCrop as Crop});toast(result.message);if(result.ok){scene.redraw();save(false);renderInspector();updateUI();}};
+  }
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
       const link = (event.target as Element).closest<HTMLButtonElement>(
@@ -951,7 +955,8 @@ function updateBuildingActions(b: Building) {
   );
 }
 function runGuidance(b: Building, action: GuidanceAction) {
-  if (action.type === "toggle") $("#toggle-production").click();
+  if(action.type==='crop'){const choices=$('#farm-crop');choices.scrollIntoView({block:'nearest'});choices.querySelector<HTMLButtonElement>('button')?.focus();}
+  else if (action.type === "toggle") $("#toggle-production").click();
   else if (action.type === "deepen") $("#deepen-deposit").click();
   else if (action.type === "move") $("#move-building").click();
   else if (action.type === "inspect") {
@@ -1117,7 +1122,7 @@ function updateInspector() {
   const alert = simulation.alert(b);
   if (
     $("#inspector").dataset.buildingView !==
-    `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}`
+    `${b.id}:${b.houseTier ?? 1}:${b.level ?? 1}:${!!b.construction}:${b.crop}:${b.nextCrop}`
   ) {
     renderInspector();
     return;
@@ -1159,11 +1164,11 @@ function updateInspector() {
                 .join("")
             : ""
     }`;
-  if(b.kind==='farm'&&!b.construction){
+  if(b.kind==='farm'&&!b.construction&&b.crop){
     const counts=farmSummary(b,simulation.state.tick),crop=CROPS[b.crop??'wheat'];
     $('#building-needs').before($('#farm-growth'));
     $('#farm-growth').innerHTML='<div class="field-stages">'+Object.entries(counts).map(([stage,n])=>'<div class="field-stage '+stage+'"><b>'+n+'</b><span>'+({soil:'Soil',seeded:'Seeded',growing:'Growing',ripe:'Ready'}[stage])+'</span></div>').join('')+'</div>';
-    $('#building-detail').innerHTML='<div class="detail-row"><span>Field size</span><b>'+(b.plot??[2,2]).join('×')+'</b></div><div class="detail-row"><span>Farmers on site</span><b>'+simulation.state.agents.filter(a=>a.onsite===b.id).length+' / '+buildingJobs(b)+'</b></div><div class="detail-row"><span>Harvest in storage</span><b>'+(b.inventory[crop.output]??0)+' '+RESOURCE_NAMES[crop.output]+'</b></div><p class="muted">'+crop.grow+' seconds to grow after planting. Farmers harvest each patch and replant it. '+(b.crop==='wheat'||!b.crop?'Grain goes to flour mills.':'Vegetables go to warehouses and markets for food.')+'</p>';
+    $('#building-detail').innerHTML='<div class="detail-row"><span>Field size</span><b>'+(b.plot??[2,2]).join('×')+'</b></div><div class="detail-row"><span>Farmers on site</span><b>'+simulation.state.agents.filter(a=>a.onsite===b.id).length+' / '+buildingJobs(b)+'</b></div><div class="detail-row"><span>Harvest in storage</span><b>'+(b.inventory[crop.output]??0)+' '+RESOURCE_NAMES[crop.output]+'</b></div><p class="muted">'+crop.grow+' seconds to grow after planting. Farmers sow the whole field before harvesting. '+(b.crop==='wheat'?'Grain goes to flour mills.':'Vegetables go to warehouses and markets for food.')+'</p>';
   }
   if(b.kind==="market"&&!b.construction){$("#building-detail").innerHTML=`<div class="detail-row"><span>Plot / stalls</span><b>${(b.plot??[2,2]).join("×")} / ${marketStalls(b)}</b></div><div class="detail-row"><span>Vendors on site</span><b>${marketVendors(simulation,b).length} / ${buildingJobs(b)}</b></div><div class="detail-row"><span>Customers browsing</span><b>${simulation.state.agents.filter(a=>a.target===b.id&&a.marketSlot!==undefined).length}</b></div><div class="detail-row"><span>Goods sold</span><b>${b.produced}</b></div>${MARKET_GOODS.map(r=>`<div class="detail-row"><span>${RESOURCE_NAMES[r]}</span><b>${b.inventory[r]??0}</b></div>`).join("")}<p class="muted">Open 07:00–19:00. Food purchases feed the town; sales earn gold. Nearby residents walk here, and trucks replenish stock.</p>`;}
   if (d.recipe || isLeisure(b.kind) || b.kind === "market")

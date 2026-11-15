@@ -2,17 +2,27 @@ import {STEP,dimensions} from './catalog.js';
 import {CROPS,farmArea,farmPatch,isCrop,type Crop} from './farm-layout.js';
 import {daylight} from './daylight.js';
 import {outputCapacity,productionRate} from './upgrades.js';
+import {ROCK_CLEARING_WORK} from './construction.js';
 import type {Building,Point,Simulation} from './simulation.js';
 
 export interface FarmCell {sownAt?:number}
-export interface FarmTask {resident:number;patch:number;action:'sow'|'harvest';phase:'walking'|'working'|'returning';path:Point[];distance:number;work:number;cargo:number}
-export interface Field {cells:FarmCell[];tasks:FarmTask[]}
+export interface FarmTask {resident:number;patch:number;action:'sow'|'harvest';phase:'walking'|'working'|'returning';path:Point[];entry?:Point;distance:number;work:number;cargo:number}
+export interface Field {cells:FarmCell[];tasks:FarmTask[];phase?:'sowing'|'harvesting'}
 export const FARM_WORK_SECONDS=2;
-export function ensureField(b:Building):Field{return b.field??={cells:Array.from({length:farmArea(b.plot)*4},()=>({})),tasks:[]};}
+export function ensureField(b:Building):Field{const f:Field=b.field??={cells:Array.from({length:farmArea(b.plot)*4},()=>({})),tasks:[]};f.phase??='sowing';return f;}
+/** Old fields may still be waiting for the former area-based construction timer. */
+export function prepareField(b:Building){
+  if(b.crop===undefined)b.crop='wheat';
+  ensureField(b);const c=b.construction;
+  if(!c||c.upgradeLevel||c.upgradeTo||c.deeperTo!==undefined)return;
+  if(!c.clearance){delete b.construction;return;}
+  c.required=c.clearance.tiles.length*ROCK_CLEARING_WORK;
+  c.completed=c.clearance.work;
+}
 export function cropStage(cell:FarmCell,crop:Crop,tick:number){
   if(cell.sownAt===undefined)return 'soil';
   const age=(tick-cell.sownAt)*STEP;
-  return age<12?'seeded':age<CROPS[crop].grow?'growing':'ripe';
+  return age<60?'seeded':age<CROPS[crop].grow?'growing':'ripe';
 }
 export function farmPosition(t:FarmTask,elapsed=0){
   const distance=Math.min(t.path.length-1,t.distance+(t.phase==='working'?0:elapsed*.9)),i=Math.min(Math.floor(distance),Math.max(0,t.path.length-2));
@@ -34,7 +44,18 @@ function fieldPath(from:Point,to:Point){
   for(const axis of ['x','y'] as const){const start={...at},steps=Math.ceil(Math.abs(to[axis]-at[axis])/.5);for(let i=1;i<=steps;i++){at={...start,[axis]:start[axis]+(to[axis]-start[axis])*i/steps};result.push(at);}}
   return result;
 }
+function patchStand(patch:number,b:Building){const p=farmPatch(patch,b.plot);return{x:p.x+.13,y:p.y+.13};}
+function closestPatch(b:Building,from:Point,stage:'soil'|'ripe',tick:number){
+  const reserved=new Set(b.field!.tasks.map(t=>t.patch));let best:number|undefined,distance=Infinity;
+  for(let i=0;i<b.field!.cells.length;i++){
+    if(reserved.has(i)||cropStage(b.field!.cells[i],b.crop??'wheat',tick)!==stage)continue;
+    const p=patchStand(i,b),d=Math.abs(p.x-from.x)+Math.abs(p.y-from.y);
+    if(d<distance){distance=d;best=i;}
+  }
+  return best;
+}
 export function stepFarm(sim:Simulation,b:Building){
+  if(b.crop===null){ensureField(b);return;}
   const field=ensureField(b),crop=b.crop??'wheat',def=CROPS[crop],night=daylight(sim.state.tick).night;
   const crew=sim.state.agents.filter(a=>a.onsite===b.id&&sim.state.residents.some(r=>r.id===a.resident&&r.job===b.id));
   for(const t of [...field.tasks]){
@@ -43,9 +64,14 @@ export function stepFarm(sim:Simulation,b:Building){
       if(!b.enabled||!b.connected||b.construction)continue;
       t.work+=STEP*productionRate(b);
       if(t.work>=FARM_WORK_SECONDS){
+        const at=t.path.at(-1)!,entry=t.entry??t.path[0];
         if(t.action==='sow')field.cells[t.patch].sownAt=sim.state.tick;
         else {delete field.cells[t.patch].sownAt;t.cargo=def.yield;}
-        t.phase='returning';t.path.reverse();t.distance=0;
+        // Seed adjacent patches in one pass, instead of walking back to the
+        // entrance after every handful. Never replant during this harvest.
+        const next=t.action==='sow'&&!night?closestPatch(b,at,'soil',sim.state.tick):undefined;
+        if(next!==undefined){t.patch=next;t.path=fieldPath(at,patchStand(next,b));t.entry=entry;t.phase='walking';t.distance=0;t.work=0;}
+        else {t.phase='returning';t.path=fieldPath(at,entry);t.entry=entry;t.distance=0;}
       }
     }else{
       t.distance=Math.min(t.path.length-1,t.distance+STEP*.9);
@@ -55,27 +81,39 @@ export function stepFarm(sim:Simulation,b:Building){
       }
     }
   }
+  if(field.phase==='sowing'&&field.cells.every(c=>c.sownAt!==undefined))field.phase='harvesting';
+  if(field.phase==='harvesting'&&!field.tasks.length&&field.cells.every(c=>c.sownAt===undefined)){
+    if(b.nextCrop){
+      // Dispatch the old harvest under its original resource before switching.
+      if((b.inventory[def.output]??0)>0)return;
+      b.crop=b.nextCrop;delete b.nextCrop;field.phase='sowing';return;
+    }
+    field.phase='sowing';
+  }
   if(night||!b.enabled||!b.connected||b.construction||!crew.length)return;
-  const [w,h]=dimensions(b.kind,b.rotation,b.plot),reserved=new Set(field.tasks.map(t=>t.patch));
+  const [w,h]=dimensions(b.kind,b.rotation,b.plot);
   const room=()=>outputCapacity(b)-(b.inventory[def.output]??0)-field.tasks.filter(t=>t.action==='harvest').length*def.yield;
-  const order=field.cells.map((cell,i)=>({i,stage:cropStage(cell,crop,sim.state.tick)})).filter(v=>!reserved.has(v.i)&&(v.stage==='soil'||v.stage==='ripe')).sort((a,c)=>(a.stage==='ripe'?0:1)-(c.stage==='ripe'?0:1)||a.i-c.i);
   for(const agent of crew){
     if(field.tasks.some(t=>t.resident===agent.resident))continue;
-    const next=order.find(v=>!reserved.has(v.i)&&(v.stage!=='ripe'||room()>=def.yield));if(!next)break;
+    if(field.phase==='harvesting'&&room()<def.yield)break;
     const road=agent.path.at(-1)??{x:b.x,y:b.y+h};
     const entry={x:Math.max(-.4,Math.min(w-.6,road.x-b.x)),y:Math.max(-.4,Math.min(h-.6,road.y-b.y))};
-    const at=farmPatch(next.i,b.plot),stand={x:at.x+.13,y:at.y+.13};
-    field.tasks.push({resident:agent.resident!,patch:next.i,action:next.stage==='ripe'?'harvest':'sow',phase:'walking',path:fieldPath(entry,stand),distance:0,work:0,cargo:0});reserved.add(next.i);
+    const next=closestPatch(b,entry,field.phase==='sowing'?'soil':'ripe',sim.state.tick);if(next===undefined)break;
+    field.tasks.push({resident:agent.resident!,patch:next,action:field.phase==='sowing'?'sow':'harvest',phase:'walking',path:fieldPath(entry,patchStand(next,b)),entry,distance:0,work:0,cargo:0});
   }
 }
 export function farmSummary(b:Building,tick:number){const counts={soil:0,seeded:0,growing:0,ripe:0};for(const cell of ensureField(b).cells)counts[cropStage(cell,b.crop??'wheat',tick)]++;return counts;}
 export function validateField(b:Building,tick:number){
-  if(b.crop!==undefined&&(b.kind!=='farm'||!isCrop(b.crop)))throw Error('Invalid farm crop.');
+  if(b.crop!==undefined&&(b.kind!=='farm'||(b.crop!==null&&!isCrop(b.crop))))throw Error('Invalid farm crop.');
+  if(b.nextCrop!==undefined&&(b.kind!=='farm'||!isCrop(b.nextCrop)||b.crop===null))throw Error('Invalid next crop.');
   if(!b.field)return;
   const f=b.field,[w,h]=dimensions(b.kind,b.rotation,b.plot),crop=CROPS[b.crop??'wheat'];
+  if(f.phase!==undefined&&!['sowing','harvesting'].includes(f.phase))throw Error('Invalid field cycle.');
   if(b.kind!=='farm'||!Array.isArray(f.cells)||f.cells.length!==w*h*4||f.cells.some(c=>!c||(c.sownAt!==undefined&&(!Number.isInteger(c.sownAt)||c.sownAt<0||c.sownAt>tick)))||!Array.isArray(f.tasks)||f.tasks.length>12)throw Error('Invalid farm field.');
+  if(b.crop===null&&(f.tasks.length||f.cells.some(c=>c.sownAt!==undefined)))throw Error('Unselected farm contains crops.');
   const workers=new Set<number>(),patches=new Set<number>();
   for(const t of f.tasks){
+    if(t?.entry&&(!Number.isFinite(t.entry.x)||!Number.isFinite(t.entry.y)||t.entry.x<-.5||t.entry.y<-.5||t.entry.x>=w-.5||t.entry.y>=h-.5))throw Error('Invalid farm entrance.');
     if(!t||!Number.isInteger(t.resident)||t.resident<=0||workers.has(t.resident)||!Number.isInteger(t.patch)||t.patch<0||t.patch>=f.cells.length||patches.has(t.patch)||!['sow','harvest'].includes(t.action)||!['walking','working','returning'].includes(t.phase)||!Number.isFinite(t.work)||t.work<0||t.work>FARM_WORK_SECONDS+1||![0,crop.yield].includes(t.cargo)|| (t.cargo>0&&(t.action!=='harvest'||t.phase!=='returning'))||!Array.isArray(t.path)||!t.path.length||t.path.length>45||!Number.isFinite(t.distance)||t.distance<0||t.distance>t.path.length-1||t.path.some((p,i)=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<-.5||p.y<-.5||p.x>=w-.5||p.y>=h-.5||(i>0&&Math.hypot(p.x-t.path[i-1].x,p.y-t.path[i-1].y)>.501)))throw Error('Invalid farm worker.');
     workers.add(t.resident);patches.add(t.patch);
   }

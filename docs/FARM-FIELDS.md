@@ -1,17 +1,29 @@
 # Crop fields
 
-Fields replace the old wheat-farm sprite and automatic production timer. Choose
-wheat, potatoes or carrots, then drag an inclusive 1×1 through 10×10 rectangle.
+The single Farm build item replaces the old wheat-farm sprite and automatic
+production timer. Drag an inclusive 1×1 through 10×10 rectangle, then choose
+wheat, potatoes or carrots in the farm details. A new farm has no selected crop
+and shows an amber leaf badge linking to this choice; it assigns no farmers yet.
 The complete plot must be level, dry and clear of roads or other buildings.
 Surface deposits are cleared by builders before the field opens. Any edge can
-connect to the warehouse road network. Gold, wood and preparation labour scale
-with area; staffing grows to at most twelve farmers.
+connect to the warehouse road network. Gold and wood scale with area; staffing
+grows to at most twelve farmers. Clear land opens immediately. A rocky field
+opens after its remaining rocks are cleared, with no additional construction
+timer. Loading old farms removes that extra wait while retaining unfinished
+rock clearing and its partial progress. Equipment upgrades keep their own labour.
 
 Each tile has four independent patches. An assigned resident must reach the
 field, walk to a patch and plant it. Seeded patches grow with simulation time,
-including overnight. A farmer then harvests each ripe patch and carries its yield
+including overnight. Growth takes five times the initial release: wheat 375,
+potatoes 475 and carrots 325 seconds at 1×, including 60 seconds as seedlings.
+Farmers plant adjacent patches without returning to the entrance each time.
+They finish sowing the entire plot before starting its harvest pass. A farmer
+then harvests each ripe patch and carries its yield
 back to the field entrance before it enters inventory. Harvested patches return
-to soil for replanting. Storage reservations prevent workers from overfilling it.
+to soil; replanting waits until this harvest pass finishes. This prevents a big
+farm from repeatedly growing only its first row. Storage reservations prevent
+workers from overfilling it. Crop changes apply at the next sowing after the
+existing harvest is collected, preserving its identity, cargo and inventory.
 Wheat enters the grain/flour/bread chain. Potatoes and carrots go to warehouses
 or market stalls and satisfy the same daily food demand as other food.
 
@@ -47,4 +59,7 @@ preview has a replaceable composite texture. Offscreen crop sprites are hidden.
   malformed-save rejection are covered.
 - Browser checks exercise the real build menu, crop choice and 3×2 drag, inspect
   growing fields and working farmers, and check a 10×10 field at mobile size.
+- A fully staffed 10×10 simulation must sow all 400 patches before harvesting.
+  New unselected fields, queued crop changes and removal of the old preparation
+  wait are covered by save/reload checks.
 - These are desktop browser and mobile-viewport checks, not physical-phone tests.

@@ -73,12 +73,12 @@ export const HOUSE_TIERS: Record<
 };
 export const buildingName = (b: {
   kind: BuildingKind;
-  crop?:Crop;
+  crop?:Crop|null;
   houseTier?: HouseTier;
 }) =>
   b.kind === "house"
     ? HOUSE_TIERS[b.houseTier ?? 1].name
-    : b.kind==='farm'?`${CROPS[b.crop??'wheat'].name} field`:BUILDINGS[b.kind].name;
+    : BUILDINGS[b.kind].name;
 export const isPark = (kind: string) => kind === "park" || kind === "garden";
 export const isHome = (kind: string) => kind === "house" || kind === "cottage";
 export const houseCapacity = (b: {
@@ -210,13 +210,13 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
       "A warm place for three residents. Connect to a warehouse by road.",
   },
   farm: {
-    name: "Crop field",
+    name: "Farm",
     cost: 110,
     jobs: 1,
     frame: 1,
     materials:{"wood":4},
     category: "production",
-    description: "Drag a field from 1×1 to 10×10. Farmers plant and harvest each patch. Wheat feeds flour mills; potatoes and carrots feed citizens.",
+    description: "Drag a farm from 1×1 to 10×10, then choose a crop in its details. Wheat feeds flour mills; potatoes and carrots feed citizens.",
     recipe: { output: "grain", count: 3, seconds: 8 },
   },
   fishery: {
@@ -476,7 +476,7 @@ export const SIZE = 64;
 export const STEP = 0.25;
 export const AGENT_SPEED = { person: 0.75, car: 1.4, truck: 1.05 } as const;
 
-export const buildingJobs=(b:{kind:BuildingKind;rotation:number;plot?:readonly[number,number]})=>b.kind==="market"?marketStalls({x:0,y:0,...b}):b.kind==='farm'?farmJobs(b.plot):BUILDINGS[b.kind].jobs;
+export const buildingJobs=(b:{kind:BuildingKind;crop?:Crop|null;rotation:number;plot?:readonly[number,number]})=>b.kind==="market"?marketStalls({x:0,y:0,...b}):b.kind==='farm'?(b.crop===null?0:farmJobs(b.plot)):BUILDINGS[b.kind].jobs;
 export const buildingPrice=(kind:BuildingKind,plot?:readonly[number,number])=>kind==="market"?marketPrice(plot):kind==='farm'?farmPrice(plot):{cost:BUILDINGS[kind].cost,materials:BUILDINGS[kind].materials??{}};
-export const buildingRecipe=(b:{kind:BuildingKind;crop?:Crop}):Definition['recipe']=>b.kind==='farm'?{output:CROPS[b.crop??'wheat'].output,count:CROPS[b.crop??'wheat'].yield,seconds:CROPS[b.crop??'wheat'].grow}:BUILDINGS[b.kind].recipe;
+export const buildingRecipe=(b:{kind:BuildingKind;crop?:Crop|null}):Definition['recipe']=>b.kind==='farm'?(b.crop===null?undefined:{output:CROPS[b.crop??'wheat'].output,count:CROPS[b.crop??'wheat'].yield,seconds:CROPS[b.crop??'wheat'].grow}):BUILDINGS[b.kind].recipe;
 export const FOOD_RESOURCES:Resource[]=['bread','fish','sausages','meat','potatoes','carrots'];

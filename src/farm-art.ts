@@ -29,8 +29,8 @@ export function drawFarmGround(ctx:CanvasRenderingContext2D,earth:HTMLImageEleme
   for(let y=.25;y<h;y+=.5){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
   ctx.restore();
 }
-export function drawFarmPreview(ctx:CanvasRenderingContext2D,crops:HTMLImageElement,earth:HTMLImageElement,w:number,h:number,crop:Crop='wheat'){
-  drawFarmGround(ctx,earth,w,h);const f=cropFrames(crops)[CROPS[crop].row*3+2];
+export function drawFarmPreview(ctx:CanvasRenderingContext2D,crops:HTMLImageElement,earth:HTMLImageElement,w:number,h:number,crop:Crop|null='wheat'){
+  drawFarmGround(ctx,earth,w,h);if(!crop)return;const f=cropFrames(crops)[CROPS[crop].row*3+2];
   const patches=Array.from({length:w*h*4},(_,i)=>farmPatch(i,[w,h])).sort((a,b)=>a.x+a.y-b.x-b.y);
   for(const p of patches){const v=iso(p.x,p.y);ctx.drawImage(crops,f.x,f.y,f.width,f.height,v.x-f.width*f.scale/2,v.y-f.height*f.scale,f.width*f.scale,f.height*f.scale);}
 }
@@ -52,7 +52,7 @@ export class FarmArt{
     const [w,h]=dimensions(b.kind,b.rotation,b.plot),v=iso(b.x,b.y);
     sprite.setTexture('field-empty').setOrigin(0).setDisplaySize((w+h)*32,(w+h)*16).setPosition(v.x-h*32,v.y-16);
   }
-  preview(sprite:Phaser.GameObjects.Image,x:number,y:number,plot:readonly[number,number],crop:Crop){
+  preview(sprite:Phaser.GameObjects.Image,x:number,y:number,plot:readonly[number,number],crop:Crop|null){
     const [w,h]=plot,key=`${w}:${h}:${crop}`,left=-h*32,top=-32;
     if(this.previewKey!==key){
       this.scene.textures.remove('field-preview');const texture=this.scene.textures.createCanvas('field-preview',(w+h)*64,((w+h)*16+48)*2)!,ctx=texture.context;
