@@ -1,4 +1,5 @@
 import { WATER_DROP } from './water-level.js';
+import {shorePlant} from './shore-bank.js';
 import {RoadWorkAlerts} from './roadwork-alerts.js';
 import {ViewWorld} from './view-world.js';
 import {deliveryVehicle} from './delivery-vehicles.js';
@@ -813,6 +814,7 @@ export class TownScene extends Phaser.Scene {
     this.trees.forEach((t) => t.destroy());
     this.trees = [];
     this.waterPoints = [];
+    const decoratedTiles=new Set(this.simulation.state.decorations.map(d=>key(d)));
     for (let y = 0; y < SIZE; y++)
       for (let x = 0; x < SIZE; x++) {
         const p = iso(x, y),
@@ -820,29 +822,6 @@ export class TownScene extends Phaser.Scene {
           water = terrain(x, y, this.simulation.state.terrain) === "water",
           road = this.simulation.roads.has(key({ x, y }));
         const occupied = this.simulation.buildingAt(x, y);
-        if (water && !road && h > 0.78) {
-          const bank = [
-            { x: x - 1, y },
-            { x, y: y - 1 },
-            { x: x + 1, y },
-            { x, y: y + 1 },
-          ].find(
-            (n) =>
-              inside(n.x, n.y) &&
-              terrain(n.x, n.y, this.simulation.state.terrain) === "land" &&
-              !this.simulation.roads.has(key(n)),
-          );
-          if (bank) {
-            const foot = iso(x + (bank.x - x) * 0.4, y + (bank.y - y) * 0.4);
-            const reeds = this.add
-              .image(foot.x, foot.y + WATER_DROP, "shore", 4 + Math.floor(h * 4))
-              .setOrigin(0.5, 1);
-            reeds
-              .setScale((12 + h * 8) / reeds.frame.height)
-              .setDepth((x + y) * 32 + 5);
-            this.trees.push(reeds);
-          }
-        }
         if (water && !road && h > 0.45) this.waterPoints.push(p);
         if (water || road || (occupied&&!occupied.construction?.clearance)) continue;
         const deposit=depositAt(this.view.from({x,y}));
@@ -870,6 +849,17 @@ export class TownScene extends Phaser.Scene {
             .setDepth((x + y) * 32 + 6).setData("depositPoint",{x,y});
           this.trees.push(rock);
           continue;
+        }
+        if (!occupied && !decoratedTiles.has(key({x,y}))) {
+          const source=this.view.source;
+          const plant=shorePlant(this.view.from({x,y}),source.roads,source.state.terrain);
+          if (plant) {
+            const position=this.view.to(plant.point),foot=iso(position.x,position.y);
+            const sprite=this.add.image(foot.x,foot.y-plant.ground,"shore",plant.frame).setOrigin(.5,1);
+            sprite.setScale(plant.height/sprite.frame.height)
+              .setDepth((position.x+position.y)*32+5).setData('shorePlant',plant);
+            this.trees.push(sprite);
+          }
         }
       }
     for (const d of this.simulation.state.decorations) {

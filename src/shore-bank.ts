@@ -18,6 +18,27 @@ export function shoreBanks(tile:Point, roads:ReadonlySet<string>, map?:TerrainMa
   });
 }
 
+/** Root bank vegetation in dry turf, not on the lowered water surface. Resolve
+ * this in canonical map coordinates so a camera turn cannot move the plants. */
+export function shorePlant(tile:Point, roads:ReadonlySet<string>, map?:TerrainMap) {
+  const banks=shoreBanks(tile,roads,map).filter(bank=>!bank.stone&&bank.drop>0);
+  if(!banks.length)return;
+  const random=(salt:number)=>{
+    const n=Math.sin(tile.x*127.1+tile.y*311.7+salt*74.7)*43758.5453;
+    return n-Math.floor(n);
+  };
+  // Spread clumps along straight shores without long empty runs; their exact
+  // position, size and species still vary independently below.
+  if((tile.x*.754877666+tile.y*.569840291)%1>.42)return;
+  const bank=banks[Math.floor(random(1)*banks.length)],d=directions[bank.side];
+  // Stay inside the land tile, including the small root/stone cluster in the
+  // artwork. One varied clump per tile also avoids crowded concave corners.
+  const along=(random(2)-.5)*.38;
+  const point={x:tile.x+d.x*.3-d.y*along,y:tile.y+d.y*.3+d.x*along};
+  const frame=4+Math.floor(random(3)*4);
+  return {point,ground:bank.height,frame,height:(frame===5?10:12)+random(4)*4};
+}
+
 /** Bank faces use the actual tile boundaries. Shared corners have identical
  * endpoints, so channels, islands and inside corners need no overlapping props. */
 export function drawShoreBank(ctx:CanvasRenderingContext2D, bank:ReturnType<typeof shoreBanks>[number],

@@ -21,3 +21,21 @@ fishery piers and boats; a concave inlet and small island through all four view
 turns. Regression tests cover shared corner endpoints, roads becoming/removing
 embankments, raised land and open bridge landings. Bank pixels are baked into
 the existing terrain chunks on edits, with no per-frame bank texture uploads.
+
+## Vegetation placement correction
+
+Natural shoreline plants are rooted slightly inside the dry turf at the land's
+actual elevation. They no longer use the water's lowered datum. Vegetation stays
+off roads, bridge entrances, building plots (including fisheries), deposits and
+occupied decoration tiles. The stone road embankments are unchanged.
+
+Placement, size and atlas-frame selection are independent: the old spawn threshold
+always selected the fourth reed image. All four existing grass/flower/reed clumps
+now appear, with varied heights and sparse, evenly distributed spacing. Positions
+are calculated in canonical map space, so camera turns do not reroll the shore.
+No new textures or per-frame work were added.
+
+Verified around the starter fisheries, shoreline corners and raised banks, with
+four camera views and a narrow mobile viewport. Browser checks confirm roots use
+land elevation, avoid buildings/roads and retain their world positions through
+rotation. Six shoreline/bridge regression tests and the production build pass.
