@@ -7,7 +7,7 @@ import {sourceImage} from './source-images.js';
 import type {EdgeOccluder} from './edge-occlusion.js';
 import {roadTypeAt} from './roads.js';
 import type Phaser from 'phaser';
-import {BRIDGE_PARAPET_HEIGHT,bridgeRails,bridgeLandings,deckHeight,isBridge} from './bridges.js';
+import {BRIDGE_HEIGHT,BRIDGE_PARAPET_HEIGHT,bridgeRails,bridgeLandings,deckHeight,isBridge} from './bridges.js';
 import {bridgeProfile} from './bridge-profile.js';
 import {sourcePoint,sourceObject} from './view-space.js';
 import {iso} from './rendering.js';
@@ -31,6 +31,7 @@ export class BridgeArt {
  private waterMask:Phaser.GameObjects.Graphics;
  private variants=new Map<string,{deck:string;supports:(string|null)[];abutments:string;vault:string|null;rails:(string|null)[]}>();
  private images:Phaser.GameObjects.Image[]=[];
+ private archContours=new Map<string,number[]>();
  constructor(private scene:Phaser.Scene){
   this.shadow=new BridgeShadow(scene);
   this.waterMask=scene.make.graphics({x:0,y:0});
@@ -95,16 +96,49 @@ export class BridgeArt {
   const cap=[p(u-r,v-r,top),p(u+r,v-r,top),p(u+r,v+r,top),p(u-r,v+r,top)];
   this.quad(ctx,cap,wood?64:92,wood?659:698,wood?450:285,18,image);
  }
+ /** The inside of a vault follows the actual painted opening. An approximate
+  * parabola left disconnected wedges visible through the arch at the ramps. */
+ private archContour(kind:'stone'|'brick'){
+  const cached=this.archContours.get(kind);if(cached)return cached;
+  const m=MATERIALS[kind],canvas=document.createElement('canvas');canvas.width=257;canvas.height=m.bottom-m.deckTop;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true})!;
+  ctx.drawImage(sourceImage(this.scene,m.key),m.profileX,m.deckTop,m.profileWidth,canvas.height,0,0,canvas.width,canvas.height);
+  const data=ctx.getImageData(0,0,canvas.width,canvas.height).data,depth=BRIDGE_HEIGHT+WATER_DROP+2;
+  const contour=Array.from({length:257},(_,x)=>{
+   // Ignore translucent fringe and isolated mortar marks: an opening has at
+   // least four transparent source rows beneath its solid masonry edge.
+   for(let y=4;y<canvas.height-4;y++)if([0,1,2,3].every(d=>data[((y+d)*257+x)*4+3]<64))return y/canvas.height*depth;
+   return depth;
+  });
+  this.archContours.set(kind,contour);return contour;
+ }
+ /** A timber member has two side faces and a top, with all joints shared in
+  * world space. This also lets a diagonal brace end exactly inside its pile. */
+ private timber(ctx:CanvasRenderingContext2D,a:Vec,b:Vec,za:number,zb:number,width:number,height:number){
+  const image=sourceImage(this.scene,'bridge-woodland'),dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=-dy/len*width/2,ny=dx/len*width/2;
+  const project=(p:Vec,z:number)=>{const s=iso(p.x,p.y);return{x:s.x,y:s.y-z}};
+  const corners=[{x:a.x+nx,y:a.y+ny},{x:b.x+nx,y:b.y+ny},{x:b.x-nx,y:b.y-ny},{x:a.x-nx,y:a.y-ny}];
+  const top=corners.map((p,i)=>project(p,i===0||i===3?za:zb)),bottom=top.map(p=>({x:p.x,y:p.y+height}));
+  for(const i of [0,1,2,3]){
+   const j=(i+1)%4,edge={x:corners[j].x-corners[i].x,y:corners[j].y-corners[i].y};
+   if(edge.x-edge.y<=0)continue;
+   const ps=[top[i],top[j],bottom[j],bottom[i]];this.quad(ctx,ps,72,663,480,34,image);
+   ctx.beginPath();ps.forEach((p,k)=>k?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fillStyle='#22271532';ctx.fill();
+  }
+  this.quad(ctx,top,72,663,480,26,image);
+ }
  private variant(sim:Simulation,tile:Point,profiles:{from:number;to:number}[]){
   const open=bridgeRails(sim.roads,tile,sim.state.buildings,sim.state.terrain),land=bridgeLandings(sim.roads,tile,sim.state.buildings,sim.state.terrain);
   const road=roadTypeAt(sim.state.roadTypes,tile),kind=road==='stone'||road==='brick'?road:'wood',material=MATERIALS[kind],image=sourceImage(this.scene,material.key);
   const id=kind+open.map(Number).join('')+land.map(Number).join('')+profiles.map(p=>p.from+':'+p.to).join('_'),existing=this.variants.get(id);if(existing)return existing;
   const point=(u:number,v:number)=>{const p=iso(u,v);return{x:p.x,y:p.y-deckHeight(sim.roads,tile,u,v,sim.state.buildings,sim.state.terrain)}};
   const at=(e:number,t:number)=>{const[a,b]=CORNERS[e];return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t}};
-  const profile=(ctx:CanvasRenderingContext2D,e:number,top:number,bottom:number,height:number,offset:number,inset=0)=>{
+  const profile=(ctx:CanvasRenderingContext2D,e:number,top:number,bottom:number,height:number,offset:number,inset=0,fixed=false)=>{
    // Split only where ramp slope changes; source UVs continue through the join.
    for(let i=0;i<2;i++){
-    const u=at(e,i/2),v=at(e,(i+1)/2),n=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}][e],p=point(u.x-n.x*inset,u.y-n.y*inset),q=point(v.x-n.x*inset,v.y-n.y*inset),uv=profiles[e];
+    const u=at(e,i/2),v=at(e,(i+1)/2),n=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}][e];
+    const surface=(a:Vec)=>{if(!fixed)return point(a.x-n.x*inset,a.y-n.y*inset);const p=iso(a.x-n.x*inset,a.y-n.y*inset);return{x:p.x,y:p.y-BRIDGE_HEIGHT}};
+    const p=surface(u),q=surface(v),uv=profiles[e];
     const a=uv.from+(uv.to-uv.from)*i/2,b=uv.from+(uv.to-uv.from)*(i+1)/2;
     let ps=[{x:p.x,y:p.y+offset},{x:q.x,y:q.y+offset},{x:q.x,y:q.y+offset+height},{x:p.x,y:p.y+offset+height}];
     if(b<a)ps=[ps[1],ps[0],ps[3],ps[2]];
@@ -123,45 +157,48 @@ export class BridgeArt {
   });
   const supports=open.map((closed,e)=>!closed?null:this.canvas('bridge-supports-'+id+'-'+e,ctx=>{
     const ps=[0,.5,1].map(t=>{const u=at(e,t),p=point(u.x,u.y);return{...u,p}});
-    // Supports are volumes with two visible faces and a cap, not flat cutouts.
-    for(const t of (kind==='wood'?[0,1]:[])){
-     const uv=profiles[e].from+(profiles[e].to-profiles[e].from)*t;
-     if(kind!=='wood'&&Math.abs(uv-.5)<.01)continue;
-     const q=at(e,t),n=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}][e];
-     if(land.some((l,i)=>l&&[q.x,q.y,-q.x,-q.y][i]>.49))continue;
-     const top=iso(q.x,q.y).y-point(q.x,q.y).y;
-     const cx=q.x-n.x*.035,cy=q.y-n.y*.035;
-     this.pier(ctx,cx,cy,kind==='wood'?.045:.08,kind==='wood'?top:top-2,-WATER_DROP+1,kind==='wood');
-     this.pier(ctx,cx,cy,kind==='wood'?.065:.1,-WATER_DROP+2.5,-WATER_DROP-.6,false);
+    if(kind==='wood'){
+     const n=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}][e],a=at(e,0),b=at(e,1);
+     for(const p of [a,b]){p.x-=n.x*.045;p.y-=n.y*.045;}
+     const h=(p:Vec)=>deckHeight(sim.roads,tile,p.x,p.y,sim.state.buildings,sim.state.terrain);
+     // One coherent trestle per tile, without a second painted pile/brace layer.
+     for(const p of [a,b]){
+      if(land.some((l,i)=>l&&[p.x,p.y,-p.x,-p.y][i]>.45))continue;
+      this.pier(ctx,p.x,p.y,.045,h(p)-1,-WATER_DROP-1,true);
+     }
+     const nearBank=(p:Vec)=>land.some((l,i)=>l&&[p.x,p.y,-p.x,-p.y][i]>.45);
+     const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+     if(!nearBank(a))this.timber(ctx,a,mid,-WATER_DROP+2,h(mid)-2,.055,1.6);
+     if(!nearBank(b))this.timber(ctx,mid,b,h(mid)-2,-WATER_DROP+2,.055,1.6);
+     this.timber(ctx,a,b,h(a)-.6,h(b)-.6,.09,2.4);
+     return;
     }
     ctx.save();ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.p.x,q.p.y):ctx.moveTo(q.p.x,q.p.y));
     for(const q of [...ps].reverse()){
-     // The hidden end of a support stops at land, never sticks out above a ramp.
-     const taper=Math.min(1,...land.flatMap((l,i)=>l?[Math.max(0,1-2*[q.x,q.y,-q.x,-q.y][i])]:[]));
-     const bottom=iso(q.x,q.y);ctx.lineTo(bottom.x,bottom.y+(WATER_DROP+2)*taper);
+     const bottom=iso(q.x,q.y);ctx.lineTo(bottom.x,bottom.y+WATER_DROP+2);
     }
-    ctx.closePath();ctx.clip();profile(ctx,e,material.deckTop,material.bottom,6+WATER_DROP+2,0);ctx.restore();
+    // Crop the top of upright masonry at the sloping deck. Do not bend the
+    // entire arch and its feet down with the ramp or taper the pier to a point.
+    ctx.closePath();ctx.clip();profile(ctx,e,material.deckTop,material.bottom,BRIDGE_HEIGHT+WATER_DROP+2,0,0,true);ctx.restore();
   }));
   // The arch is a vault across the FULL road width. Its soffit and the
   // inner sides of shared piers sit between the two painted outer faces.
   const alongX=Number(!open[0])+Number(!open[2])>=Number(!open[1])+Number(!open[3]);
   const e=alongX?1:0,uv=profiles[e],bodyDepth=6+WATER_DROP+2;
   const vault=kind==='wood'?null:this.canvas('bridge-vault-'+id,ctx=>{
-   const p=(t:number,far:boolean,drop:number)=>{const q=at(e,t),v=alongX?{x:q.x,y:far?-.5:.5}:{x:far?-.5:.5,y:q.y},s=point(v.x,v.y);return{x:s.x,y:s.y+drop}};
-   const depth=(phase:number)=>bodyDepth*(.22+.45*((phase-.5)/.37)**2);
+   const p=(t:number,far:boolean,drop:number)=>{const q=at(e,t),v=alongX?{x:q.x,y:far?-.5:.5}:{x:far?-.5:.5,y:q.y},s=iso(v.x,v.y);return{x:s.x,y:s.y-BRIDGE_HEIGHT+drop}};
+   const contour=this.archContour(kind);
+   const depth=(phase:number)=>{const x=Math.max(0,Math.min(256,phase*256)),i=Math.floor(x);return contour[i]+(contour[Math.min(256,i+1)]-contour[i])*(x-i)};
    const face=(ps:Vec[],shade:string)=>{
     this.quad(ctx,ps,20,material.deckTop+4,420,58,image);
     ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fillStyle=shade;ctx.fill();
    };
-   const cuts=[0,1];for(let i=0;i<=16;i++){const t=(.13+i*.74/16-uv.from)/(uv.to-uv.from);if(t>0&&t<1)cuts.push(t);}cuts.sort((a,b)=>a-b);
+   const cuts=[0,1];for(let i=0;i<=256;i++){const t=(i/256-uv.from)/(uv.to-uv.from);if(t>0&&t<1)cuts.push(t);}cuts.sort((a,b)=>a-b);
    for(let i=1;i<cuts.length;i++){
-    const a=cuts[i-1],b=cuts[i],phase=uv.from+(uv.to-uv.from)*(a+b)/2;if(phase<.13||phase>.87)continue;
+    const a=cuts[i-1],b=cuts[i];
     const da=depth(uv.from+(uv.to-uv.from)*a),db=depth(uv.from+(uv.to-uv.from)*b);
+    if(Math.min(da,db)>=bodyDepth-.1)continue;
     face([p(a,false,da),p(b,false,db),p(b,true,db),p(a,true,da)],'#162f2d80');
-   }
-   for(const boundary of [.13,.87]){
-    const t=(boundary-uv.from)/(uv.to-uv.from);if(t<0||t>1)continue;
-    face([p(t,false,depth(boundary)),p(t,true,depth(boundary)),p(t,true,bodyDepth),p(t,false,bodyDepth)],'#132d2b70');
    }
   });
   const abutments=this.canvas('bridge-abutments-'+id,ctx=>{
@@ -174,20 +211,22 @@ export class BridgeArt {
 
   });
   const rails=open.map((closed,e)=>!closed?null:this.canvas('bridge-rail-'+id+'-'+e,ctx=>{
+   if(kind==='wood'){
+    const n=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}][e];
+    const a=at(e,0),b=at(e,1);for(const p of [a,b]){p.x-=n.x*.045;p.y-=n.y*.045;}
+    const h=(p:Vec)=>deckHeight(sim.roads,tile,p.x,p.y,sim.state.buildings,sim.state.terrain);
+    for(const z of [3.4,7.8])this.timber(ctx,a,b,h(a)+z,h(b)+z,.065,1.6);
+    for(const p of [a,b])this.pier(ctx,p.x,p.y,.045,h(p)+BRIDGE_PARAPET_HEIGHT,h(p),true);
+    return;
+   }
    // Inner and outer faces give railings real thickness; the top cap joins them.
-   const thickness=kind==='wood'?.075:kind==='stone'?.1:.045;
+   const thickness=kind==='stone'?.1:.045;
    profile(ctx,e,material.railTop,material.deckTop,BRIDGE_PARAPET_HEIGHT,-BRIDGE_PARAPET_HEIGHT,thickness);
    profile(ctx,e,material.railTop,material.deckTop,BRIDGE_PARAPET_HEIGHT,-BRIDGE_PARAPET_HEIGHT);
    const n=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}][e];
    if(kind!=='brick')for(let i=0;i<2;i++){
     const a=at(e,i/2),b=at(e,(i+1)/2),ps=[point(a.x,a.y),point(b.x,b.y),point(b.x-n.x*thickness,b.y-n.y*thickness),point(a.x-n.x*thickness,a.y-n.y*thickness)].map(p=>({x:p.x,y:p.y-BRIDGE_PARAPET_HEIGHT+1.1}));
-    this.quad(ctx,ps,kind==='wood'?60:90,kind==='wood'?659:698,450,18,image);
-   }
-   if(kind==='wood')for(const t of [0,1]){
-    const q=at(e,t),r=.045,top=point(q.x,q.y).y-iso(q.x,q.y).y-BRIDGE_PARAPET_HEIGHT;
-    const ps=[iso(q.x-r,q.y-r),iso(q.x+r,q.y-r),iso(q.x+r,q.y+r),iso(q.x-r,q.y+r)];
-    for(const k of [1,2]){const a=ps[k],b=ps[(k+1)%4];this.quad(ctx,[{x:a.x,y:a.y+top},{x:b.x,y:b.y+top},{x:b.x,y:b.y+top+BRIDGE_PARAPET_HEIGHT},{x:a.x,y:a.y+top+BRIDGE_PARAPET_HEIGHT}],5,650,45,200,image);}
-    ctx.fillStyle='#be8749';ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(p.x,p.y+top):ctx.moveTo(p.x,p.y+top));ctx.closePath();ctx.fill();
+    this.quad(ctx,ps,90,698,450,18,image);
    }
   }));
   const result={deck,supports,abutments,vault,rails};this.variants.set(id,result);return result;

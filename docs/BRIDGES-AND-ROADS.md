@@ -17,15 +17,18 @@ Measured crops (x,y,w,h): wood deck (1,1,1252,599); stone/brick deck
 Stone profile x=12..1242, railing y=672..824, supports to1200.
 Brick profile x=16..1238, railing y=639..850, supports to1220.
 The opaque profile intervals exclude transparent edge margins that had created
-vertical gaps. Each arch spans two real grid tiles; phase is resolved against
-the authoritative map before applying a camera turn.
+vertical gaps. Arches normally span two real grid tiles. Odd-length crossings
+finish with a three-tile arch (one for a single-tile channel), so both shore ends
+finish on a pier. Phase is resolved against the authoritative map before a turn.
 
 Stone and brick roads sample exactly the same material at the same density as
 their bridge decks. Dirt uses the existing painted earth with a warmer tint.
 The road kinds, costs and speeds are unchanged. Timber stays the footbridge type.
 
-Rails have inner faces and coping. Piers/posts have upright side faces, top caps,
-shading and wider stone feet. Abutments close the land/water gap at shore ramps.
+Masonry rails have inner faces and coping. Timber rails, braces and piles have
+upright side faces and top caps, sampled from the painted timber material. The
+old second flat layer of wooden braces/piles is no longer drawn over them.
+Abutments close the land/water gap at shore ramps.
 Entrance lanterns use the existing copper light artwork on explicit solid posts;
 player-placed masonry bridge lights also get a mount. Lanterns join the existing
 night illumination system. Occlusion still keeps far rails behind travellers and
@@ -64,12 +67,24 @@ build pass. Comparison captures were rendered by the game, not regenerated
 illustrations. The original freeform concept shore scenery is not baked into
 any bridge; the game's real terrain and lighting supply its surroundings.
 
-## Current review build
+## Shore-ramp and timber revision
 
-The user requested publication to inspect the bridges in the actual town.
-The underside remains a work in progress, not a final art acceptance. The added
-block-shaped masonry columns were removed. Continuous inner vault faces now
-connect the original side profiles across the road width. Under-deck faces sort
-independently and share a water mask so they cannot paint over foreground land.
-A native painted stone bridge section is the next art revision; keep the accepted
-road materials while reviewing its support geometry.
+After viewing release 6354945, the user liked the masonry bridges overall and
+asked for better ramps and a revised wooden bridge. Preserve that accepted art.
+Masonry profiles now remain upright at one fixed datum. Only their upper edge
+is cropped by the ramp; the arch, mortar courses and pier feet do not shear down
+with the road. The internal vault follows the actual alpha contour of each
+painted arch, sampled once per material, replacing the mismatched parabola that
+left detached wedges beneath the ramps. Under-deck faces sort independently and
+share a water mask so they cannot paint over foreground land.
+
+Timber uses two open rail beams, continuous side girders, upright piles reaching
+the water and braces ending inside the same joints. Bank-end braces are omitted
+where they would run into the abutment. Existing deck material, road textures,
+traffic elevations, lanterns and water shadows remain shared with the game.
+
+Verification: 247 tests pass, including both-axis short/odd bridge closure and
+all four camera turns. Browser review covers all materials, one/three/five/six
+tile crossings, all four views, the starter waterfront in daylight and at night,
+and a narrow mobile viewport. Production build passes. Visual acceptance remains
+the user's judgement; captures are actual game renders.
