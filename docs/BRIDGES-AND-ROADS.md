@@ -88,3 +88,15 @@ all four camera turns. Browser review covers all materials, one/three/five/six
 tile crossings, all four views, the starter waterfront in daylight and at night,
 and a narrow mobile viewport. Production build passes. Visual acceptance remains
 the user's judgement; captures are actual game renders.
+
+## Ramp overlap correction
+
+The shore abutment used a fixed foreground depth, so its pale stone face painted
+across the nearer brick/stone arch at the landing. Abutments now sort at their
+far shore edge within the same under-deck container as the supports and vault.
+They remain visible through openings, behind the nearer structural faces. The
+existing artwork and ramp geometry are unchanged.
+
+Verified in the browser at both banks for all three materials and all four view
+rotations, with before/after comparison of the reported brick-bridge overlap.
+Five bridge-profile/shoreline regression checks and the production build pass.

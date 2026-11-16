@@ -267,7 +267,10 @@ export class BridgeArt {
    // Near faces win a shared-depth tie; a far pier cannot draw over a near arch.
    art.supports.forEach((texture,e)=>{if(texture)add(texture,-997+((x+y)*32+(e<2?32:0))*.0001+(e<2?.000001:0));});
    if(art.vault)add(art.vault,-997+((x+y)*32+16)*.0001);
-   add(art.abutments,-996.5);add(art.deck,-996);
+   // Abutments occupy the far shore edge, behind the vault and near arch.
+   // A fixed foreground depth made their pale stone cut across the ramp's
+   // brick/stone support instead of staying inside the bridge opening.
+   add(art.abutments,-997+(x+y)*32*.0001);add(art.deck,-996);
    const land=bridgeLandings(sim.roads,tile,sim.state.buildings,sim.state.terrain);
    art.rails.forEach((texture,edge)=>{
     if(!texture)return;const depth=(x+y)*32+(edge<2?32:0);add(texture,depth);
