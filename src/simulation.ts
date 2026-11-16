@@ -59,6 +59,7 @@ import {
   LEISURE_DECAY,
   FAITH_DECAY,
   isLeisure,
+  isReligion,
   isService,
   serviceCoverage,
   serviceOpen,
@@ -663,7 +664,7 @@ export class Simulation {
         (this.route(this.building(r.home)!, b)?.length ?? Infinity),
     );
     const leisure=services.filter(b=>isLeisure(b.kind));
-    const worship=services.find(b=>b.kind==="church");
+    const worship=services.find(b=>isReligion(b.kind));
     const job = this.building(r.job ?? -1);
     if(job?.kind==="market"&&marketOpen(this.state.tick))return job;
     if(!job?.construction){const market=marketDestination(this,r);if(market)return market;}
@@ -1541,7 +1542,7 @@ export class Simulation {
               .get(resident.id)
               ?.some((b) => b.id === arrival.id)
           ){
-            if(arrival.kind==="church")resident.faith=Math.min(100,(resident.faith??70)+60);
+            if(isReligion(arrival.kind))resident.faith=Math.min(100,(resident.faith??70)+60);
             else resident.leisure = Math.min(
               100,
               (resident.leisure ?? 60) + (arrival.kind === "tavern" ? 45 : 35),
@@ -1840,7 +1841,7 @@ export class Simulation {
     if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
     if (isHome(b.kind)) {
       const residents = this.state.residents.filter((r) => r.home === b.id);
-      if(residents.length&&residents.every(r=>(r.faith??70)<25))return{kind:"leisure",title:"Needs nearby religion",message:"Connect a staffed church within 32 road tiles. Residents visit between 06:00 and 23:00 to restore religion."};
+      if(residents.length&&residents.every(r=>(r.faith??70)<25))return{kind:"leisure",title:"Needs nearby religion",message:"Connect a staffed chapel within 16 road tiles (open 24 hours), or a church within 32 road tiles. Religion improves after a visit."};
       if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
         return {
           kind: "leisure",

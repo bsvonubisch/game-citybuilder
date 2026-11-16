@@ -37,7 +37,7 @@ export class TownStatusLog {
       if(state==='paused'){this.known.delete(topic);continue;}
       this.observe(sim,topic,{state,message,kind:state?'shortage':'recovery',b});
     }
-    for(const [need,field,advice] of [['leisure','leisure','Connect a park or tavern to their homes.'],['religion','faith','Connect a staffed church to their homes.']] as const){
+    for(const [need,field,advice] of [['leisure','leisure','Connect a park or tavern to their homes.'],['religion','faith','Connect a staffed chapel or church to their homes.']] as const){
       const affected=sim.state.residents.filter(r=>(r[field]??70)<25),b=sim.building(affected[0]?.home??-1);
       this.observe(sim,`town:${need}`,{state:affected.length?'low':'',kind:affected.length?'leisure':'recovery',b,message:affected.length?`${affected.length} residents need ${need}. ${advice}`:`Residents’ ${need} has recovered.`});
     }

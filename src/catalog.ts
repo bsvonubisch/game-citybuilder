@@ -28,6 +28,7 @@ export type BuildingKind =
   | "hunter"
   | "market"
   | "church"
+  | "chapel"
   | "garden"
   | "cottage"
   | "brickworks"
@@ -208,6 +209,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
   hunter:{name:"Hunter’s lodge",cost:200,jobs:2,frame:0,materials:{wood:12,stone:8,metal:2},category:"production",description:"Two hunters follow wildlife within 12 tiles. They carry meat back to the lodge for food deliveries. Keep nearby woodland open.",recipe:{output:"meat",count:6,seconds:20}},
   market:{name:"Marketplace",cost:260,jobs:2,frame:0,materials:{wood:12,stone:12,planks:4},category:"town",description:"Choose a 1×1 to 5×5 plot. Vendors sell delivered food and tools to nearby residents. Open 07:00–19:00."},
   church:{name:"Village church",cost:480,jobs:2,frame:0,materials:{"planks":16,"stone":30,"metal":4},category:"town",description:"A 3×2 parish church for nearby homes. Two staff welcome visitors within 32 road tiles from 06:00 to 23:00; religion improves after a visit."},
+  chapel:{name:"Wayside chapel",cost:160,jobs:1,frame:0,materials:{planks:5,stone:10,metal:2},category:"town",description:"A small 1×1 chapel, open 24 hours. One worker welcomes 32 residents within 16 road tiles. Religion improves after a visit."},
   garden:{name:"Town park",cost:380,jobs:0,frame:0,materials:{"wood":12,"stone":20,"metal":4},category:"town",description:"A spacious 4×4 garden with lawns, shaded benches and a fountain. Daytime leisure for 100 residents within 28 road tiles."},
   cottage: {name:"Little cottage", cost:55, jobs:0, frame:0, materials:{"wood":3,"stone":2}, category:"homes", description:"A compact 1×1 home for two residents. Upgrade for more room without enlarging the plot."},
   brickworks:{name:"Village brickworks",cost:260,jobs:2,frame:0,materials:{"wood":10,"stone":12,"metal":4},category:"production",description:"Fires stone into bricks for faster roads and sturdy bridges.",recipe:{input:"stone",amount:2,output:"bricks",count:4,seconds:10}},
@@ -411,6 +413,7 @@ export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
   hunter:[2,2],
     market:[2,2],
   church:[2,3],
+  chapel:[1,1],
   garden:[4,4],
   cottage:[1,1],
   brickworks:[2,2],

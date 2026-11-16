@@ -3,7 +3,8 @@
 The new-game layout is the played local Pinehaven town captured on 2026-11-16.
 `src/starter-layout.ts` contains only its buildings, rotations, plot sizes, upgrades,
 crop choices, roads and materials, terrain edits, cleared deposits and decorations.
-It contains 73 buildings, 273 road tiles and 1,593 decorations. The old shore fishery
+It contains the 73 captured buildings plus one 1×1 wayside chapel on the empty
+roadside tile (19,26): 74 buildings, 273 road tiles and 1,593 decorations. The old shore fishery
 already marked for demolition in the captured save is omitted.
 
 `seedStarterTown` makes a fresh copy for each new game. It starts in the first

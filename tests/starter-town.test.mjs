@@ -44,13 +44,13 @@ test('captured town keeps its actual service coverage and closed services stop c
  assert.ok(serviceOpen('church',21),'workers can visit after their shift');
  assert.ok(100-FAITH_DECAY*DAY_TICKS*5>=60,'worship lasts several days');
  assert.ok(100-LEISURE_DECAY*DAY_TICKS*3>=60,'leisure lasts several days');
- for(const church of s.state.buildings.filter(b=>b.kind==='church'))church.enabled=false;s.reconnect();
+ for(const church of s.state.buildings.filter(b=>b.kind==='church'||b.kind==='chapel'))church.enabled=false;s.reconnect();
  assert.equal(townNeeds(s).find(n=>n.id==='religion').have,0,'a closed church is still an actual unmet need');
 });
 
 test('new games reproduce the captured layout with independent fresh state',()=>{
  const a=new Simulation(),b=new Simulation();
- assert.equal(a.state.buildings.length,73);
+ assert.equal(a.state.buildings.length,74);
  assert.equal(a.state.roads.length,273);
  assert.equal(a.state.decorations.length,1593);
  assert.deepEqual(a.state.buildings.map(v=>Object.fromEntries(Object.keys(STARTER_LAYOUT.buildings[a.state.buildings.indexOf(v)]).map(k=>[k,v[k]]))),STARTER_LAYOUT.buildings);
@@ -69,7 +69,7 @@ test('new games reproduce the captured layout with independent fresh state',()=>
 });
 
 test('loading an existing town never inserts the new starter layout or resets its progress',()=>{
- const s=new Simulation();s.state.buildings=s.state.buildings.filter(b=>b.kind!=='garden');
+ const s=new Simulation();s.state.buildings=s.state.buildings.filter(b=>b.kind!=='garden'&&b.kind!=='chapel');
  s.state.money=123456;s.state.tick=54321;s.state.decorations.pop();
  const saved=s.snapshot(),restored=new Simulation(parseSave(JSON.stringify(saved)));
  assert.equal(restored.state.money,123456);assert.equal(restored.state.tick,54321);

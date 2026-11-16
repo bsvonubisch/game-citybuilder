@@ -2603,6 +2603,28 @@ test("religion requires a staffed nearby church and improves on actual arrival",
  assert.deepEqual(restored.state.residents.map(r=>r.faith),sim.state.residents.map(r=>r.faith));
  assert.equal(buildingNeeds(restored,restored.building(101)).find(n=>n.label==='Religion').ok,false);
 });
+
+test("a one-tile chapel welcomes actual visitors overnight and keeps its capacity after saving",async()=>{
+ const {serviceCapacity,serviceRange}=await import('../.test-dist/proximity.js');
+ const {nextUpgrade}=await import('../.test-dist/upgrades.js');
+ const seed=serviceTown().snapshot(),chapel=seed.buildings.find(b=>b.kind==='church');
+ Object.assign(chapel,{kind:'chapel',x:12,y:4,plot:[1,1],level:1});
+ seed.tick=640;seed.residents.forEach(r=>{r.faith=10;r.leisure=95;r.job=null});seed.agents=[];
+ const sim=new Simulation(seed),built=sim.building(chapel.id);
+ for(const hour of [0,2,5,12,20,23.99])assert.equal(serviceOpen('chapel',hour),true);
+ for(let rotation=0;rotation<4;rotation++)assert.deepEqual(dimensions('chapel',rotation),[1,1]);
+ assert.equal(built.connected,true);assert.equal(built.workers,1);assert.equal(serviceRange('chapel'),16);assert.equal(serviceCapacity(built),32);
+ assert.equal(townNeeds(sim).find(n=>n.id==='religion').have,12);
+ sim.step();assert.ok(sim.state.residents.every(r=>r.faith<=10),'religion requires a visit, not coverage alone');
+ advance(sim,45);assert.ok(sim.state.residents.some(r=>r.faith>50),'visitors reach the chapel after midnight');
+ assert.match(nextUpgrade(built).benefit,/64 nearby residents/);
+ const saved=JSON.stringify(sim.snapshot()),restored=new Simulation(parseSave(saved));
+ assert.equal(restored.building(chapel.id).kind,'chapel');assert.equal(serviceCapacity(restored.building(chapel.id)),32);
+ assert.equal(execute(sim,{type:'toggle',id:chapel.id}).ok,true);
+ for(const r of sim.state.residents)r.faith=10;
+ advance(sim,12);assert.ok(sim.state.residents.every(r=>r.faith<=10));
+ assert.equal(townNeeds(sim).find(n=>n.id==='religion').have,0);
+});
 test("church rotation keeps a six-tile plot and the large park admits eight spaced visitors",async()=>{
  const {parkVisitor,parkVisitorLimit}=await import('../.test-dist/park-visitors.js');
  for(let r=0;r<4;r++){assert.equal(footprint('church',10,10,r).length,6);assert.deepEqual([...dimensions('church',r)].sort(),[2,3]);assert.equal(footprint('garden',10,10,r).length,16);assert.equal(frontage('garden',10,10,r).length,16);assert.equal(plazaLayout(r,4).filter(p=>p.kind==='bench').length,4);}

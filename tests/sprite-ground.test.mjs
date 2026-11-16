@@ -35,7 +35,7 @@ test('all four orientations keep one scale and include the projecting doorstep i
  assert.ok(scales.every(s=>s===scales[0]));
 });
 test('hunter frontage maps to the entrance views and modular parks retain their own geometry',()=>{
- for(const kind of ['hunter','church','cottage','warehouse','forester','sawmill','workshop','brickworks'])for(let r=0;r<4;r++){
+ for(const kind of ['hunter','church','chapel','cottage','warehouse','forester','sawmill','workshop','brickworks'])for(let r=0;r<4;r++){
   const art=buildingArt(kind,r);assert.equal(art.frame,r);assert.deepEqual(art.size,kind==='forester'?[887,443]:[627,627]);assert.equal(art.sourceRect,undefined);
  }
  const park=buildingArt('park',0);assert.strictEqual(groundedArt(park,{width:1024,height:1024}),park);

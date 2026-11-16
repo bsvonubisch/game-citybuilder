@@ -3,7 +3,7 @@ import {buildingRecipe} from './catalog.js';
 import { BUILDINGS, type BuildingKind } from "./catalog.js";
 import type { Building, Simulation } from "./simulation.js";
 import type { ProductionConnections } from "./logistics.js";
-import { isLeisure, serviceCoverage } from "./proximity.js";
+import { isLeisure, isReligion, serviceCoverage } from "./proximity.js";
 
 export type GuidanceAction =
   | { type: "build"; kind: BuildingKind | "road" }
@@ -147,8 +147,8 @@ export function buildingGuidance(
       action: { type: "deepen" },
     };
   if (alert.kind === "leisure" && alert.title === "Needs nearby religion") {
-    const church=sim.state.buildings.find(s=>s.kind==="church"&&serviceCoverage(sim,s).homes.some(h=>h.home.id===b.id));
-    return church?inspect(church,"Check this church’s two staff, road connection and capacity. Visits run from 06:00 to 23:00; upgrade to serve more residents."):build("church","Build a church within 32 road tiles of this home. The placement preview highlights homes in reach; residents improve religion after arriving.");
+    const church=sim.state.buildings.find(s=>isReligion(s.kind)&&serviceCoverage(sim,s).homes.some(h=>h.home.id===b.id));
+    return church?inspect(church,church.kind==='chapel'?"Check this chapel’s worker, road connection and capacity. It stays open 24 hours; upgrade to serve more residents.":"Check this church’s two staff, road connection and capacity. Visits run from 06:00 to 23:00; upgrade to serve more residents."):build("chapel","Build a chapel within 16 road tiles of this home for 24-hour visits, or a church for a larger area. The placement preview highlights homes in reach.");
   }
   if (alert.kind === "leisure") {
     const nearby = sim.state.buildings.find(

@@ -60,6 +60,7 @@ import {
 } from "./upgrades.js";
 import {
   isService as isLeisure,
+  isReligion,
   serviceCoverage,
   servicePreview,
   serviceOpen,
@@ -128,7 +129,7 @@ const scene = new TownScene(simulation);
 function sendCommand(command:Command){return gateway.command(scene.view.command(command));}
 const cloud = new CloudSaves();
 const catalogGroups={homes:"Homes",food:"Food & farms",gather:"Gathering",industry:"Workshops",town:"Services",parks:"Parks",trees:"Trees",decorations:"Street furniture"};
-const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom"],decorations:["bench","streetlight","planter","fence"]};
+const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","chapel","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom"],decorations:["bench","streetlight","planter","fence"]};
 let category: keyof typeof catalogGroups = "homes",
   tab: "build" | "town" = "build",
   selected: number | null = null,
@@ -1325,10 +1326,11 @@ function updateInspector() {
     const open =
       !b.construction &&
       b.enabled &&
+      b.connected &&
       b.workers >= buildingJobs(b) &&
       serviceOpen(b.kind, daylight(simulation.state.tick).hour);
     $("#service-detail").innerHTML =
-      `<h4>${b.kind==="church"?"Religion":"Nearby leisure"} · level ${b.level ?? 1}</h4><p>${open ? "Open for visits" : b.kind === "tavern" ? "Evening hours: 17:00–02:00 · requires two staff" : b.kind==="church"?"Visits: 08:00–20:00 · requires two staff":"Daytime visits: 06:00–20:00"}</p><p>${coverage.residents} / ${coverage.capacity} nearby residents · maximum ${coverage.range} road tiles. Green homes are in reach; amber homes need more capacity.</p>${coverage.homes.map((h) => `<button class="goods-link" data-service-home="${h.home.id}"><span>${escapeHtml(buildingName(h.home))} · ${h.home.x}, ${h.home.y}</span><small>${h.served} served · ${h.tiles} road tiles · ~${Math.ceil(h.seconds)}s walk</small></button>`).join("") || '<p class="muted">No homes within walking distance. Place homes closer and connect their road entrances.</p>'}`;
+      `<h4>${isReligion(b.kind)?"Religion":"Nearby leisure"} · level ${b.level ?? 1}</h4><p>${b.kind==='chapel'?(open?'Open for visits · 24 hours':'Open 24 hours when connected and staffed · requires one worker'):open ? "Open for visits" : b.kind === "tavern" ? "Evening hours: 17:00–02:00 · requires two staff" : b.kind==="church"?"Visits: 06:00–23:00 · requires two staff":"Daytime visits: 06:00–20:00"}</p><p>${coverage.residents} / ${coverage.capacity} nearby residents · maximum ${coverage.range} road tiles. Green homes are in reach; amber homes need more capacity.</p>${coverage.homes.map((h) => `<button class="goods-link" data-service-home="${h.home.id}"><span>${escapeHtml(buildingName(h.home))} · ${h.home.x}, ${h.home.y}</span><small>${h.served} served · ${h.tiles} road tiles · ~${Math.ceil(h.seconds)}s walk</small></button>`).join("") || '<p class="muted">No homes within walking distance. Place homes closer and connect their road entrances.</p>'}`;
     $("#service-detail").onclick = (event) => {
       const el = (event.target as Element).closest<HTMLElement>(
         "[data-service-home]",

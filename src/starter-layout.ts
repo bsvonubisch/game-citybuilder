@@ -1,7 +1,8 @@
 import type {Building,World} from './simulation.js';
 import type {Decoration} from './decorations.js';
 
-/** Layout captured from the played town on 2026-11-16; no residents, trips or save history. */
+/** Layout captured from the played town on 2026-11-16, plus a wayside chapel
+ * on an empty roadside tile. No residents, trips or save history. */
 type StarterLayout = Pick<World,'roads'|'roadTypes'|'terrain'|'clearedDeposits'> & {
  buildings: Pick<Building,'kind'|'x'|'y'|'rotation'|'plot'|'houseTier'|'level'|'crop'>[];
  decorations: Omit<Decoration,'id'|'cutAt'>[];
@@ -81,7 +82,8 @@ export const STARTER_LAYOUT:StarterLayout = {
   {"kind":"house","x":11,"y":12,"rotation":2,"plot":[2,2],"houseTier":1},
   {"kind":"warehouse","x":3,"y":38,"rotation":1,"plot":[2,2]},
   {"kind":"fishery","x":27,"y":23,"rotation":1,"plot":[2,2]},
-  {"kind":"fishery","x":22,"y":24,"rotation":3,"plot":[2,2]}
+  {"kind":"fishery","x":22,"y":24,"rotation":3,"plot":[2,2]},
+  {"kind":"chapel","x":19,"y":26,"rotation":2,"plot":[1,1]}
  ],
  roads: [
   "6,3",

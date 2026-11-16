@@ -53,6 +53,7 @@ const LABOUR: Record<BuildingKind, number> = {
   hunter:240,
   market:220,
   church:500,
+  chapel:140,
   garden:450,
   cottage:80,
   brickworks:280,

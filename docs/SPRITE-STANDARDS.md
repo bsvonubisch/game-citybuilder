@@ -15,6 +15,13 @@ mismatches do not recur. This applies to new art and replacements.
 - Start with a correctly projected geometry blockout. Examples are in
   `docs/art-guides/`. Paint material/detail onto those planes. Do not copy a
   distorted old sprite's geometry as the reference for a new one.
+- Carry that same projection guide into every subsequent structural image edit.
+  A successful first generation does not make a later regeneration safe. Compare
+  the wall/base axes, parallel edges, roof planes, physical proportions and four
+  views again before replacing it. Do not sacrifice correct projection to meet a
+  single measurement. The November 16 chapel door-height revision flattened the
+  roof, altered proportions and drifted from the earlier isometric geometry; the
+  user explicitly rejected it. Keep the earlier steep-roof source, not that edit.
 - Compare at **one fixed world zoom**, never separately fit each picture to a
   thumbnail. Pedestrians are about 22 world pixels tall. Ordinary entrance clear
   height should be about 24–28 world pixels and ordinary windows about 10–14.

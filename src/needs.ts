@@ -36,7 +36,7 @@ export function townNeeds(sim:Simulation):Need[] {
     {id:"builders",label:"Construction crew",have:sites.reduce((n,b)=>n+b.workers,0),need:sites.reduce((n,b)=>n+builderCapacity(b),0),unit:"builders",action:site?{label:"Check construction site",building:site.id}:undefined},
     {id:"homes",label:"Housing",have:buildings.filter(b=>isHome(b.kind)&&(!b.construction||b.construction.upgradeTo||b.construction.upgradeLevel)&&b.connected).reduce((n,b)=>n+houseCapacity(b),0),need:population,unit:"places",action:suggest("house","Build homes")},
     {id:"parks",label:"Leisure nearby",have:coverage("park","garden","tavern"),need:population,unit:"residents served",action:suggest("park","Add fountain square")},
-    {id:"religion",label:"Religion nearby",have:coverage("church"),need:population,unit:"residents served",action:suggest("church","Build church")},
+    {id:"religion",label:"Religion nearby",have:coverage("church","chapel"),need:population,unit:"residents served",action:suggest("chapel","Build chapel")},
   ];
 }
 export interface BuildingNeed {label:string;have:string;need:string;ok:boolean}
@@ -62,7 +62,7 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
     rows.push({label:"Food",have:`${sim.state.food}% fed`,need:"100%",ok:sim.state.food>=100});
     const occupants=sim.state.residents.filter(r=>r.home===b.id),leisure=occupants.length?Math.round(occupants.reduce((n,r)=>n+(r.leisure??60),0)/occupants.length):0;
     const faith=occupants.length?Math.round(occupants.reduce((n,r)=>n+(r.faith??70),0)/occupants.length):0;
-    rows.push({label:"Religion",have:`${faith}%`,need:"Church visits",ok:faith>=60});
+    rows.push({label:"Religion",have:`${faith}%`,need:"Chapel or church visits",ok:faith>=60});
     rows.push({label:"Leisure",have:`${leisure}%`,need:"Nearby visits",ok:leisure>=60});
   }
   if(d.recipe)for(const [resource,count] of recipeProducts(d.recipe))rows.push({label:RESOURCE_NAMES[resource],have:String(b.inventory[resource]??0),need:`${outputCapacity(b)} storage`,ok:d.recipe.outputs?(b.inventory[resource]??0)+count<=outputCapacity(b):(b.inventory[resource]??0)<outputCapacity(b)});
