@@ -1,4 +1,5 @@
 import { WATER_DROP } from './water-level.js';
+import type {WorldSelection} from './world-inspection.js';
 import {shorePlant} from './shore-bank.js';
 import {RoadWorkAlerts} from './roadwork-alerts.js';
 import {ViewWorld} from './view-world.js';
@@ -160,6 +161,8 @@ export class TownScene extends Phaser.Scene {
   selected: number | null = null;
   guidanceBuilding: number | null = null;
   selectedAgent: number | null = null;
+  selectedWorld:WorldSelection|null=null;
+  onSelectWorld:(selection:WorldSelection)=>void=()=>{};
   selectedRoadWorks:number[]=[];
   onSelectRoadWork:(site:RoadWorkSite)=>void=()=>{};
   private roadWorkAlerts!:RoadWorkAlerts;
@@ -619,27 +622,15 @@ export class TownScene extends Phaser.Scene {
         // Road releases are handled only by the live draft above. A cancelled
         // drag or a pinch must never fall through to single-tile placement.
         if (tap && this.tool !== "road" && this.tool !== "bulldoze" && this.tool !== "market") {
-          const boatHit =
-            this.tool === "inspect"
-              ? over.find((o) => o.getData("boatId"))
-              : null;
-          const agentHit =
-            this.tool === "inspect"
-              ? over.find((o) => o.getData("agentId"))
-              : null;
-          const decorationHit =
-            this.tool === "inspect"
-              ? over.find((o) => o.getData("decoration"))
-              : null;
-          const hit =
-            this.tool === "inspect"
-              ? over.find((o) => o.getData("buildingId"))
-              : null;
-          if (boatHit) this.onSelectBoat(boatHit.getData("boatId"));
-          else if (agentHit) this.onSelectAgent(agentHit.getData("agentId"));
-          else if (decorationHit)
-            this.onSelectDecoration(decorationHit.getData("decoration").id);
-          else if (hit) this.onSelect(hit.getData("buildingId"));
+          // Phaser orders hits by visible depth: select what is in front,
+          // including scenery, rather than a traveller hidden behind it.
+          const hit=this.tool==='inspect'?over.find(o=>['boatId','agentId','decoration','buildingId','animalId','depositPoint'].some(k=>o.getData(k)!==undefined)):null;
+          if(hit?.getData('boatId')!==undefined)this.onSelectBoat(hit.getData('boatId'));
+          else if(hit?.getData('agentId')!==undefined)this.onSelectAgent(hit.getData('agentId'));
+          else if(hit?.getData('decoration'))this.onSelectDecoration(hit.getData('decoration').id);
+          else if(hit?.getData('buildingId')!==undefined)this.onSelect(hit.getData('buildingId'));
+          else if(hit?.getData('animalId')!==undefined)this.onSelectWorld({kind:'wildlife',id:hit.getData('animalId')});
+          else if(hit?.getData('depositPoint'))this.onSelectWorld({kind:'deposit',id:depositAt(this.view.from(hit.getData('depositPoint')))});
           else {
             const wp = this.cameras.main.getWorldPoint(p.x, p.y),
               t = this.pickTile(wp.x, wp.y);
@@ -846,7 +837,8 @@ export class TownScene extends Phaser.Scene {
               p.x + fit.x,
               p.y + fit.y + 4.8 - groundHeight(x, y, this.simulation.state.terrain),
             )
-            .setDepth((x + y) * 32 + 6).setData("depositPoint",{x,y});
+            .setDepth((x + y) * 32 + 6).setData("depositPoint",{x,y})
+            .setInteractive({pixelPerfect:true,alphaTolerance:40});
           this.trees.push(rock);
           continue;
         }
@@ -1014,6 +1006,22 @@ export class TownScene extends Phaser.Scene {
     if (this.showGrid && raised)
       for (let y = 0; y < SIZE; y++)
         for (let x = 0; x < SIZE; x++) this.diamond({ x, y }, 0xe8e9ca, 0.04);
+    const selected=this.selectedWorld;
+    if(selected?.kind==='road'){
+      const p=this.view.to(selected.point);
+      this.diamond(p,0xf3ce7b,.23,this.workRoadHeights.height(roadVisualState(this.simulation),p.x,p.y));
+    }else if(selected?.kind==='deposit'){
+      for(const original of depositTiles(selected.id)){
+        const p=this.view.to(original);
+        if(exposedDeposit(this.simulation.state,p)&&!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.roads.has(key(p)))this.diamond(p,0xf3ce7b,.23);
+      }
+    }else if(selected?.kind==='decoration'){
+      const d=this.simulation.state.decorations.find(d=>d.id===selected.id);
+      if(d?.kind==='fence'){
+        const [a,b]=fenceEnds(d,d.side??1),start=iso(a.x,a.y),end=iso(b.x,b.y),h=groundHeight(d.x,d.y,this.simulation.state.terrain);
+        this.overlay.lineStyle(2,0xf3ce7b,.9).lineBetween(start.x,start.y-h,end.x,end.y-h);
+      }else if(d)this.diamond(d,0xf3ce7b,.23);
+    }
     if (this.tool === "terrain") {
       const command = this.terrainCommand(),
         plan = command ? planTerrain(this.simulation.state, command) : null;
@@ -1678,7 +1686,7 @@ export class TownScene extends Phaser.Scene {
     }
     const time = this.simulation.state.tick * STEP + this.acc;
     this.forestryArt.update(this.simulation,this.acc,this.people,this.trees,this.occludingPlots);
-    this.huntingArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
+    this.huntingArt.update(this.simulation,this.acc,this.people,this.occludingPlots,this.selectedWorld?.kind==='wildlife'?this.selectedWorld.id:null);
     this.farmArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
     this.livestockArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
     this.fishingArt.update(this.simulation, this.acc, time, this.selected);

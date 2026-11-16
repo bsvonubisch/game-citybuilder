@@ -1190,6 +1190,14 @@ kbd {
     serif;
   margin-bottom: 8px;
 }
+.world-detail-heading { display:flex; align-items:center; gap:12px; margin:18px 0 8px; }
+.world-detail-heading > span { display:grid; place-items:center; flex:none; width:42px; height:42px; border-radius:12px; color:#607c54; background:#e8eddf; }
+.world-detail-heading .icon { width:24px; height:24px; }
+.world-detail-heading h3 { margin:0; }
+#world-facts { margin:0 0 18px; }
+#world-facts .detail-row { gap:16px; align-items:baseline; }
+#world-facts .detail-row b { text-align:right; }
+#world-status { font-size:12px; }
 .inspector > p {
   font-size: 10px;
   color: #8a927d;

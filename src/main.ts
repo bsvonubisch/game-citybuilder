@@ -1,4 +1,5 @@
 import {roadWorkSites,roadWorkCrew,type RoadWorkSite} from './roadwork-sites.js';
+import {worldDetails,roadName,type WorldSelection,type WorldAction} from './world-inspection.js';
 import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
@@ -19,7 +20,7 @@ import Phaser from "phaser";
 import {townNeeds,buildingNeeds} from "./needs.js";
 import "./style.css";
 import { ROAD_TYPES, roadTypeAt, type RoadType } from "./roads.js";
-import { FOREST_RADIUS, REGROW_TICKS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
+import { FOREST_RADIUS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
 import {
   BUILDINGS,
   SIZE,
@@ -136,7 +137,7 @@ let category: keyof typeof catalogGroups = "homes",
   selectedAgent: number | null = null,
   selectedTraffic: number[] | null = null,
   selectedRoadWork:RoadWorkSite|null=null,
-  selectedDecoration: number | null = null,
+  selectedWorld:WorldSelection|null=null,
   hovered: Point | null = null,
   tool: Tool = "inspect",
   panelOpen = false,
@@ -622,7 +623,12 @@ $(".world").addEventListener("pointerleave",()=>{costPointer=null;placementCost.
 const hoverLabel=document.createElement("div");hoverLabel.className="building-hover-name";hoverLabel.hidden=true;$(".world").append(hoverLabel);
 scene.onBuildingHover=(id,x,y)=>{const b=id?simulation.building(id):undefined;hoverLabel.hidden=!b;if(!b)return;hoverLabel.textContent=buildingName(b);hoverLabel.style.left=Math.max(8,Math.min(x+16,$(".world").clientWidth-hoverLabel.offsetWidth-8))+"px";hoverLabel.style.top=Math.max(8,y-38)+"px";};
 scene.onEyedropper=(kind,rotation,plot)=>{scene.rotation=rotation;if(isLivestock(kind)&&plot)scene.penPlot=[...plot];if(kind==='farm'&&plot)scene.farmPlot=[...plot];if(kind==="market"&&plot)scene.marketPlot=[...plot];setTool(kind,true);toast(`Selected ${isBuilding(kind)?BUILDINGS[kind].name:isDecoration(kind)?DECORATIONS[kind].name:kind}. Click to place another.`);};
-scene.onSelectDecoration=(id)=>{selectedDecoration=id;selected=null;scene.selected=null;selectedAgent=null;scene.selectedAgent=null;scene.drawOverlay();renderDecorationInspector();};
+scene.onSelectDecoration=(id)=>scene.onSelectWorld({kind:'decoration',id});
+scene.onSelectWorld=(selection)=>{
+  setPanelOpen(false);closeInspection();
+  selectedWorld=selection;scene.selectedWorld=selection;
+  renderWorldInspector();scene.drawOverlay();
+};
 scene.onDecorationRemove=async(id)=>{const result=await sendCommand({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onRemoveApply=async(from,to)=>{const result=await sendCommand({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
 scene.onTile = async (p: Point) => {
@@ -632,20 +638,15 @@ scene.onTile = async (p: Point) => {
     return;
   }
   if (tool === "inspect") {
-    selectedAgent = null;
-    scene.selectedAgent = null;
-    selectedDecoration = simulation.decorationAt(p.x, p.y)?.id ?? null;
+    const original=scene.view.from(p),work=roadWorkAt(simulation.state,p);
+    if(work){const site=roadWorkSites(scene.view.source.state).find(s=>s.works.some(w=>w.id===work.id));if(site){scene.onSelectRoadWork(site);return;}}
+    const decoration=simulation.decorationAt(p.x,p.y);
     const b = simulation.buildingAt(p.x, p.y);
-    if(b)townAudio.building(b.kind,!!b.construction);
-    selected = b?.id ?? null;
-    scene.selected = selected;
-    scene.drawOverlay();
-    if (selectedDecoration) renderDecorationInspector();
-    else renderInspector();
-    if (!b && deposit)
-      toast(
-        `${DEPOSITS[deposit!] === "stone" ? "Stone" : "Metal"} deposit · ${simulation.state.deposits[deposit!].toLocaleString()} remaining · build beside it`,
-      );
+    if(b)scene.onSelect(b.id);
+    else if(decoration)scene.onSelectDecoration(decoration.id);
+    else if(simulation.roads.has(key(p)))scene.onSelectWorld({kind:'road',point:original});
+    else if(deposit)scene.onSelectWorld({kind:'deposit',id:deposit});
+    else closeInspection();
     return;
   }
   const result = await sendCommand(
@@ -716,7 +717,7 @@ scene.onHover = (p) => {
   const work=p&&roadWorkAt(simulation.state,p);
   const surface = work?`${work.operation==='remove'?'Road removal':'Road construction'} · ${Math.floor(work.completed/work.required*100)}% · ${simulation.state.agents.some(a=>a.roadWork===work.id)?'Crew assigned':'Waiting for an available worker'}`:p && simulation.roads.has(key(p))
     ? terrainCell(p.x, p.y, simulation.state.terrain).kind === "water"
-      ? "Wooden bridge · standard speed"
+      ? `${roadName(scene.view.source,original!)} · ${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes,p)].description.toLowerCase()}`
       : `${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].name} road · ${ROAD_TYPES[roadTypeAt(simulation.state.roadTypes, p)].description.toLowerCase()}`
     : "";
   $("#tile-label").textContent = p
@@ -724,12 +725,12 @@ scene.onHover = (p) => {
     : "";
 };
 scene.onSelectAgent = (id) => {
+  closeInspection();
   const agent=simulation.state.agents.find(a=>a.id===id);
   if(agent?.kind==="person")townAudio.person(agent.resident??agent.id);else if(agent)townAudio.vehicle();
   selectedTraffic = null;
   selectedRoadWork=null;scene.selectedRoadWorks=[];
   selected = null;
-  selectedDecoration = null;
   scene.selected = null;
   selectedAgent = id;
   scene.selectedAgent = id;
@@ -737,12 +738,12 @@ scene.onSelectAgent = (id) => {
   renderAgentInspector();
 };
 scene.onSelect = (id) => {
+  closeInspection();
   const building=id!==null?simulation.building(id):undefined;
   if(building)townAudio.building(building.kind,!!building.construction);
   selectedTraffic = null;
   selectedRoadWork=null;scene.selectedRoadWorks=[];
   selectedAgent = null;
-  selectedDecoration = null;
   scene.selectedAgent = null;
   selected = id;
   scene.selected = id;
@@ -894,12 +895,7 @@ function renderInspector() {
       setTool("move");
     };
   }
-  $("#close-inspector").onclick = () => {
-    selected = null;
-    scene.selected = null;
-    panel.hidden = true;
-    scene.drawOverlay();
-  };
+  $("#close-inspector").onclick = closeInspection;
   if (d.recipe || isLeisure(b.kind) || b.kind === "market" || b.construction)
     $("#toggle-production").onclick = async () => {
       const result = await sendCommand({ type: "toggle", id: b.id });
@@ -913,11 +909,11 @@ function renderInspector() {
   updateInspector();
 }
 function closeInspection() {
+  selectedWorld=null;scene.selectedWorld=null;
   selectedTraffic = null;
   selectedRoadWork=null;scene.selectedRoadWorks=[];
   selected = null;
   selectedAgent = null;
-  selectedDecoration = null;
   scene.selected = null;
   scene.selectedAgent = null;
   $("#inspector").hidden = true;
@@ -1020,29 +1016,46 @@ function runGuidance(b: Building, action: GuidanceAction) {
     }
   }
 }
-function renderDecorationInspector() {
-  selectedTraffic = null;
-  selectedRoadWork=null;scene.selectedRoadWorks=[];
-  const d = simulation.state.decorations.find(
-    (d) => d.id === selectedDecoration,
-  );
-  if (!d) return;
-  const growth=treeStage(d,simulation.state.tick);
-  const title=growth==="mature"?DECORATIONS[d.kind].name:growth==="stump"?"Regrowing tree stump":"Young woodland tree";
-  const detail=growth==="mature"?`A little detail at ${d.x}, ${d.y}.`:`${Math.ceil(Math.max(0,REGROW_TICKS-(simulation.state.tick-d.cutAt!))/4)} seconds until mature. Leave it to regrow; removing it clears the tree permanently.`;
-  $("#inspector").hidden = false;
-  $("#inspector").innerHTML =
-    `<button id="close-inspector" class="icon-button close" aria-label="Close decoration details">${icon("close")}</button><span class="eyebrow">GARDENS & STREETS</span><h3>${title}</h3><p>${detail}</p><button id="remove-decoration" class="primary">Remove ${growth==="mature"?"decoration":"stump permanently"}</button>`;
-  $("#close-inspector").onclick = closeInspection;
-  $("#remove-decoration").onclick = async () => {
-    const result = await sendCommand({ type: "removeDecoration", id:d.id });
-    toast(result.message);
-    if (result.ok) {
-      scene.redraw();
-      closeInspection();
-      save(false);
-    }
-  };
+function renderWorldInspector(){
+  const panel=$('#inspector');panel.hidden=false;panel.scrollTop=0;
+  panel.innerHTML=`<button id="close-inspector" class="icon-button close" aria-label="Close details">${icon('close')}</button><span class="eyebrow" id="world-category"></span><div class="world-detail-heading"><span id="world-icon"></span><h3 id="world-title"></h3></div><div id="world-status" class="building-status" role="status"></div><div id="world-facts"></div><div class="building-actions"><p class="next-step" id="world-guidance"></p><button id="world-primary" class="primary"></button><details id="building-more"><summary>More actions</summary><div id="building-menu-items"></div></details></div>`;
+  $('#close-inspector').onclick=closeInspection;updateWorldInspector();
+}
+function updateWorldInspector(){
+  if(!selectedWorld)return;
+  // Clicking a road and clicking its work badge lead to the same live crew panel.
+  if(selectedWorld.kind==='road'){
+    const work=roadWorkAt(simulation.state,selectedWorld.point);
+    const site=work&&roadWorkSites(simulation.state).find(s=>s.works.some(w=>w.id===work.id));
+    if(site){scene.onSelectRoadWork(site);return;}
+  }
+  const d=worldDetails(simulation,selectedWorld);
+  if(!d){closeInspection();return;}
+  $('#world-category').textContent=d.category;$('#world-title').textContent=d.title;
+  const symbol=icon(d.icon);if($('#world-icon').innerHTML!==symbol)$('#world-icon').innerHTML=symbol;
+  $('#world-status').textContent=d.status;$('#world-status').classList.toggle('warning',!!d.warning);
+  const facts=d.facts.map(([label,value])=>`<div class="detail-row"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('');
+  if($('#world-facts').innerHTML!==facts)$('#world-facts').innerHTML=facts;
+  $('#world-guidance').textContent=d.guidance;
+  $('#world-primary').textContent=d.primary.label;$('#world-primary').onclick=()=>runWorldAction(d.primary);
+  $('#building-more').hidden=!d.more.length;
+  const menu=$('#building-menu-items'),signature=JSON.stringify(d.more);
+  if(menu.dataset.actions!==signature){
+    menu.dataset.actions=signature;
+    menu.innerHTML=d.more.map((a,i)=>`<button type="button" data-world-action="${i}">${escapeHtml(a.label)}</button>`).join('');
+    menu.querySelectorAll<HTMLButtonElement>('button').forEach((button,i)=>button.onclick=()=>runWorldAction(d.more[i]));
+  }
+}
+async function runWorldAction(action:WorldAction){
+  if(action.type==='building'){scene.onSelect(action.id);const b=simulation.building(action.id);if(b)scene.focusTile(b.x,b.y);return;}
+  if(action.type==='place'){
+    if(action.roadType)scene.roadType=action.roadType;
+    if(action.rotation!==undefined)scene.rotation=((action.rotation-scene.view.turn+4)%4) as 0|1|2|3;
+    setTool(action.tool);return;
+  }
+  const result=await sendCommand({type:'removeDecoration',id:action.id});
+  toast(result.message);
+  if(result.ok){closeInspection();scene.redraw();save(false);updateUI();}
 }
 function renderAgentInspector() {
   $("#inspector").hidden = false;
@@ -1185,6 +1198,7 @@ function updateRoadWorkInspector(){
   $('#roadwork-guidance').textContent=!remaining.length?'':crew.length?(removal?'Traffic can pass until the whole removal stretch is cleared.':'Existing roads stay open during upgrades. New roads open as each tile is finished.'):'Road crews use unassigned residents. Keep a walking route to this stretch; new crews set out during the day.';
 }
 function updateInspector() {
+  if(selectedWorld){updateWorldInspector();return;}
   if(selectedRoadWork){updateRoadWorkInspector();return;}
   if (selectedTraffic) {
     updateTrafficInspector();
@@ -1684,9 +1698,9 @@ function replaceTown(next: Simulation) {
   simulation = next;
   gateway.simulation = next;
   scene.replace(next);
+  closeInspection();
   selected = null;
   selectedAgent = null;
-  selectedDecoration = null;
   $("#inspector").hidden = true;
   updateUI();
   save(false);
