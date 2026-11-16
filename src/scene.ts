@@ -873,7 +873,7 @@ export class TownScene extends Phaser.Scene {
         .setData("decoration", d)
         .setInteractive({ pixelPerfect: true });
       sprite.setScale(def.height / sprite.frame.height);
-      if(d.kind==="planter")this.planterArt.place(sprite,d.x,d.y,planterMask(d,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction));
+      if(d.kind==="planter")this.planterArt.place(sprite,d.x,d.y,planterMask(d,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction),this.view.turn);
       if (d.kind === "fence")
         this.fenceArt.place(
           sprite,
@@ -1150,7 +1150,7 @@ export class TownScene extends Phaser.Scene {
             {...this.hover,id:-1,side:this.rotation},
             this.simulation.state.decorations,
           );
-        if(this.tool==="planter")this.planterArt.place(this.decorationGhost,this.hover.x,this.hover.y,planterMask(this.hover,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction));
+        if(this.tool==="planter")this.planterArt.place(this.decorationGhost,this.hover.x,this.hover.y,planterMask(this.hover,this.simulation.state.decorations,p=>groundHeight(p.x,p.y,this.simulation.state.terrain),p=>!!this.simulation.buildingAt(p.x,p.y)&&!this.simulation.buildingAt(p.x,p.y)?.construction),this.view.turn);
         if(this.tool==="streetlight"){const p=lampPlacement(this.simulation,{...this.hover,edge:this.simulation.roads.has(key(this.hover))?this.rotation:undefined}).screen;this.decorationGhost.setPosition(p.x,p.y);}else this.decorationGhost.y -= groundHeight(this.hover.x,this.hover.y,this.simulation.state.terrain);
       }
       if (isBuilding(kind)) {

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {groundedArt,resolvedBuildingArt} from '../.test-dist/sprite-ground.js';
 import {buildingArt} from '../.test-dist/building-art.js';
 import {fitGround,groundCoordinates} from '../.test-dist/rendering.js';
+import {foundationGeometry} from '../.test-dist/foundation.js';
+import {planterGeometry,planterMask,planterEdges,planterFlowers} from '../.test-dist/planter-art.js';
+import {turnPoint} from '../.test-dist/view-space.js';
 
 function canvasFixture(){
  const crops=[];
@@ -39,4 +42,37 @@ test('hunter frontage maps to the entrance views and modular parks retain their 
   const art=buildingArt(kind,r);assert.equal(art.frame,r);assert.deepEqual(art.size,kind==='forester'?[887,443]:[627,627]);assert.equal(art.sourceRect,undefined);
  }
  const park=buildingArt('park',0);assert.strictEqual(groundedArt(park,{width:1024,height:1024}),park);
+});
+
+test('flower-bed borders match foundations and joined sides have no inset seam',()=>{
+ const tile={x:0,y:0},adjacent=[{kind:'planter',x:1,y:0}],hasBase=p=>p.x===0&&p.y===-1;
+ const mask=planterMask(tile,adjacent,()=>0,hasBase),bed=planterGeometry(mask),base=foundationGeometry(1,1);
+ assert.equal(bed.height,base.height);assert.deepEqual(bed.outer,base.base);
+ assert.deepEqual(planterEdges(mask),[[2,3],[3,0]],'no wood beside the other bed or stone foundation');
+ assert.equal(groundCoordinates(bed.inner[1].x,bed.inner[1].y).x,.5,'flowers reach the adjoining tile');
+ assert.equal(groundCoordinates(bed.inner[0].x,bed.inner[0].y).y,-.5,'no extra rim beside the foundation');
+ assert.equal(planterMask(tile,adjacent,p=>p.x===1?8:0),0,'different terrain heights keep their border');
+ for(let m=0;m<16;m++)for(const p of planterGeometry(m).inner){const g=groundCoordinates(p.x,p.y);assert.ok(Math.abs(g.x)<=.5&&Math.abs(g.y)<=.5,'all border caps stay inside the footprint');}
+});
+
+test('neighbouring flower-bed tiles share the same blossoms and paint order across their seam',()=>{
+ for(let turn=0;turn<4;turn++)for(const next of [{x:11,y:10},{x:10,y:11}]){
+  const a=planterFlowers(turnPoint({x:10,y:10},turn),turn),b=planterFlowers(turnPoint(next,turn),turn),ids=new Set(b.map(p=>p.id));
+  const common=a.filter(p=>ids.has(p.id)),shared=new Set(common.map(p=>p.id));
+  assert.ok(common.length>50,'both tiles include the overlapping flower canopy');
+  assert.deepEqual(common,b.filter(p=>shared.has(p.id)),'joined pieces cannot restart or reorder their texture');
+ }
+});
+
+test('turning the town preserves flower species, sizes and physical positions',()=>{
+ const tile={x:10,y:12},original=planterFlowers(tile);
+ for(let turn=1;turn<4;turn++){
+  const rotated=new Map(planterFlowers(turnPoint(tile,turn),turn).map(p=>[p.id,p]));
+  assert.equal(rotated.size,original.length);
+  for(const flower of original){
+   const actual=rotated.get(flower.id),point=turnPoint(flower.point,turn);
+   assert.ok(actual);assert.equal(actual.crop,flower.crop);assert.equal(actual.size,flower.size);
+   assert.ok(Math.abs(actual.point.x-point.x)<1e-9&&Math.abs(actual.point.y-point.y)<1e-9);
+  }
+ }
 });
