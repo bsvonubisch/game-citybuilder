@@ -1,3 +1,4 @@
+import { WATER_DROP } from './water-level.js';
 import type Phaser from 'phaser';
 import type {Point} from './simulation.js';
 import {iso} from './rendering.js';
@@ -11,7 +12,7 @@ export function drawFishingGear(g:Phaser.GameObjects.Graphics,water:Phaser.GameO
  const work=fishingNet(progress,duration),normal={x:-pose.dy*side,y:pose.dx*side};
  const near=normal.x+normal.y>0;
  g.setDepth(sprite.depth+(near?.15:-.15));
- const [hx,hy]=HANDS[pose.frame],hand={x:sprite.x+(hx-sprite.originX)*sprite.displayWidth,y:sprite.y+(hy-sprite.originY)*sprite.displayHeight};
+ const [hx,hy]=HANDS[pose.frame],hand={x:sprite.x+(hx-sprite.originX)*sprite.displayWidth,y:sprite.y+(hy-sprite.originY)*sprite.displayHeight-WATER_DROP};
  const reach=.22+work.extension*.6,ground={x:pose.x+normal.x*reach,y:pose.y+normal.y*reach},surface=iso(ground.x,ground.y);
  const lift=(1-work.extension)*8,center={x:surface.x,y:surface.y-lift};
  const radius=.09+work.extension*.15,bag=work.hauling?2.8*(1-work.extension):0;

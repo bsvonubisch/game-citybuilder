@@ -1,3 +1,4 @@
+import { WATER_DROP } from './water-level.js';
 import {RoadWorkAlerts} from './roadwork-alerts.js';
 import {ViewWorld} from './view-world.js';
 import {deliveryVehicle} from './delivery-vehicles.js';
@@ -431,7 +432,7 @@ export class TownScene extends Phaser.Scene {
     this.routeOverlay = this.add.graphics().setDepth(4999);
     this.logisticsRoutes = this.add.graphics().setDepth(4998);
     this.deliveryRoutes = this.add.graphics().setDepth(4998.5);
-    this.waterEffects = this.add.graphics().setDepth(-998);
+    this.waterEffects = this.add.graphics().setDepth(-1000.5).setY(WATER_DROP);
     this.cameras.main.setBackgroundColor("#a7b9ad");
     this.cameras.main.setRoundPixels(false);
     this.redraw();
@@ -816,7 +817,7 @@ export class TownScene extends Phaser.Scene {
           water = terrain(x, y, this.simulation.state.terrain) === "water",
           road = this.simulation.roads.has(key({ x, y }));
         const occupied = this.simulation.buildingAt(x, y);
-        if (water && !road && h > 0.3) {
+        if (water && !road && h > 0.78) {
           const bank = [
             { x: x - 1, y },
             { x, y: y - 1 },
@@ -831,7 +832,7 @@ export class TownScene extends Phaser.Scene {
           if (bank) {
             const foot = iso(x + (bank.x - x) * 0.4, y + (bank.y - y) * 0.4);
             const reeds = this.add
-              .image(foot.x, foot.y + 2, "shore", 4 + Math.floor(h * 4))
+              .image(foot.x, foot.y + WATER_DROP, "shore", 4 + Math.floor(h * 4))
               .setOrigin(0.5, 1);
             reeds
               .setScale((12 + h * 8) / reeds.frame.height)

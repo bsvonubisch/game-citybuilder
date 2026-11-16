@@ -27,6 +27,7 @@
     "src/gestures.ts",
     "src/foundation.ts",
     "src/park-art.ts",
-    "src/windmill.ts"
+    "src/windmill.ts",
+    "src/shore-bank.ts"
   ]
 }

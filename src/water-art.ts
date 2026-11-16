@@ -1,3 +1,4 @@
+import { WATER_DROP } from './water-level.js';
 import type Phaser from "phaser";
 import { SIZE } from "./catalog.js";
 import { terrain, type Simulation } from "./simulation.js";
@@ -14,7 +15,7 @@ export class WaterArt {
       .get("brook")
       .getSourceImage() as HTMLImageElement;
     this.surface = scene.add
-      .tileSprite(-SIZE * 32, -16, SIZE * 64, SIZE * 32 + 32, "brook")
+      .tileSprite(-SIZE * 32, -16 + WATER_DROP, SIZE * 64, SIZE * 32 + 32, "brook")
       .setOrigin(0)
       .setDepth(-1001)
       .setTileScale(320 / source.width, 320 / source.height)
@@ -26,7 +27,7 @@ export class WaterArt {
     for (let y = 0; y < SIZE; y++)
       for (let x = 0; x < SIZE; x++)
         if (terrain(x, y, sim.state.terrain) === "water") {
-          const p = iso(x, y);
+          const p = iso(x, y); p.y += WATER_DROP;
           maskShape.fillPoints(
             [
               { x: p.x, y: p.y - 16.1 },

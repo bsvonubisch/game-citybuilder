@@ -1,3 +1,5 @@
+import { shoreBanks, drawShoreBank } from './shore-bank.js';
+import { WATER_DROP } from './water-level.js';
 import {roadVisualState} from './roadworks.js';
 import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
@@ -52,7 +54,7 @@ export class ElevationArt {
           );
         if (h === 0 && !depths.some((d) => d > 0) && !sloped) continue;
         const name = `height-${x}-${y}`,
-          bottom = 20 + Math.max(0, ...depths),
+          bottom = 20 + Math.max(WATER_DROP, ...depths.map(d=>d+WATER_DROP)),
           top = -22;
         const texture = this.scene.textures.createCanvas(
           name,
@@ -78,7 +80,7 @@ export class ElevationArt {
         for (let i = 0; i < 2; i++) {
           const [a, b] = edges[i],
             drop = Math.max(0, depths[i]);
-          if (!drop) continue;
+          if (!drop || terrainCell(x+edges[i][2][0],y+edges[i][2][1],map).kind==='water') continue;
           poly(
             [a, b, [b[0], b[1] + drop], [a[0], a[1] + drop]],
             i === 0 ? "#857c5f" : "#696e52",
@@ -176,6 +178,9 @@ export class ElevationArt {
             ctx.restore();
           }
         }
+        const center=iso(x,y);ctx.save();ctx.translate(-center.x,-center.y+h);
+        for(const bank of shoreBanks({x,y},sim.roads,map))drawShoreBank(ctx,bank,grass,sourceImage(this.scene,'construction-earth'),sourceImage(this.scene,'foundation-stone'));
+        ctx.restore();
         texture.refresh();
         const p = iso(x, y);
         this.images.push(

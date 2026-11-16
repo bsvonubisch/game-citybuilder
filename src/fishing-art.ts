@@ -1,3 +1,4 @@
+import { WATER_DROP } from './water-level.js';
 import type Phaser from "phaser";
 import { BUILDINGS,FRONT_DIRECTIONS } from "./catalog.js";
 import { boatBerths, boatPose, fishingActive, openWater } from "./fishing.js";
@@ -17,7 +18,7 @@ export class FishingArt {
   >();
   private route: Phaser.GameObjects.Graphics;
   constructor(private scene: Phaser.Scene) {
-    this.route = scene.add.graphics().setDepth(4997);
+    this.route = scene.add.graphics().setDepth(4997).setY(WATER_DROP);
   }
   update(
     sim: Simulation,
@@ -52,7 +53,7 @@ export class FishingArt {
           .image(0, 0, "fishing-boats", 0)
           .setInteractive({ pixelPerfect: true, alphaTolerance: 64 })
           .setData("boatId", b.id);
-        art = { sprite, wake: this.scene.add.graphics().setDepth(-1000.5),gear:this.scene.add.graphics(),trail:new BoatWake() };
+        art = { sprite, wake: this.scene.add.graphics().setDepth(-1000.5).setY(WATER_DROP),gear:this.scene.add.graphics().setY(WATER_DROP),trail:new BoatWake() };
         this.boats.set(b.id, art);
       }
       const d = FRONT_DIRECTIONS[b.rotation];
@@ -71,7 +72,7 @@ export class FishingArt {
       s.setTexture("fishing-boats", pose.frame)
         .setScale(42 / s.frame.width)
         .setOrigin(0.5, 0.76)
-        .setPosition(p.x+drift.x, p.y+drift.y+floating.height)
+        .setPosition(p.x+drift.x, p.y+drift.y+floating.height+WATER_DROP)
         .setDepth((pose.x + pose.y) * 32 + 16)
         .setVisible(true);
       const g = art.wake;

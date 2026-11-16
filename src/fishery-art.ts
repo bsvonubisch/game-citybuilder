@@ -1,3 +1,4 @@
+import { WATER_DROP } from './water-level.js';
 import { drawFoundation, FOUNDATION_HEIGHT } from "./foundation.js";
 import { fisheryLayout } from "./shoreline.js";
 import { iso } from "./rendering.js";
@@ -27,10 +28,10 @@ export function drawFisheryDock(
       p.x - 1,
       p.y - height,
       2,
-      height + 5,
+      height + WATER_DROP + 2,
     );
     ctx.fillStyle = "#4d3d2840";
-    ctx.fillRect(p.x - 1, p.y - height, 0.7, height + 5);
+    ctx.fillRect(p.x - 1, p.y - height, 0.7, height + WATER_DROP + 2);
   }
   ctx.save();
   const p = corners[0];

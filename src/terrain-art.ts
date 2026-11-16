@@ -1,3 +1,4 @@
+import { shoreBanks, drawShoreBank } from './shore-bank.js';
 import {roadVisualState} from './roadworks.js';
 import {sourceImage} from "./source-images.js";
 import type Phaser from "phaser";
@@ -19,10 +20,6 @@ const EDGES = [
   { dx: -1, dy: 0, a: [-32, 0], b: [0, -16] },
   { dx: 0, dy: -1, a: [0, -16], b: [32, 0] },
 ];
-const shade = (x: number, y: number) => {
-  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-  return n - Math.floor(n);
-};
 
 export class TerrainArt {
   private chunks: {
@@ -36,12 +33,14 @@ export class TerrainArt {
     h: number;
   }[] = [];
   private grass: HTMLImageElement;
-  private shore: HTMLImageElement;
+  private earth: HTMLImageElement;
+  private stone: HTMLImageElement;
   constructor(private scene: Phaser.Scene) {
     const source = (name: string) =>
       sourceImage(scene,name) as HTMLImageElement;
     this.grass = source("meadow");
-    this.shore = source("shore");
+    this.earth = source("construction-earth");
+    this.stone = source("foundation-stone");
     const width = SIZE * 64,
       height = SIZE * 32 + 32;
     for (let y = 0; y < height; y += CHUNK)
@@ -202,11 +201,10 @@ export class TerrainArt {
             const nx = x + e.dx,
               ny = y + e.dy;
             if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE) continue;
-            const shore =
-              water && !road && terrain(nx, ny, sim.state.terrain) === "land";
+
             const curb =
               road && !water && !sim.roads.has(key({ x: nx, y: ny }));
-            if (!shore && !curb) continue;
+            if (!curb) continue;
             const ax = p.x + e.a[0],
               ay = p.y + e.a[1],
               bx = p.x + e.b[0],
@@ -225,56 +223,13 @@ export class TerrainArt {
                   yy = ay + ((by - ay) * i) / 6;
                 line(xx - 1, yy + 0.7, xx + 1, yy - 2, 0.6, "#897f6a");
               }
-            } else {
-              line(ax, ay, bx, by, 17, "#a4ccb324");
-              line(ax, ay, bx, by, 11, "#b9ceaa42");
-              // Riverbed stones remain visible beneath the pale shallows.
-              for (let i = 0; i < 2; i++) {
-                const t = (i + 0.5) / 2,
-                  frame = this.scene.textures.getFrame(
-                    "shore",
-                    (x + y + i) % 4,
-                  );
-                const w = 16,
-                  h = (w * frame.height) / frame.width;
-                ctx.globalAlpha = 0.32;
-                ctx.drawImage(
-                  this.shore,
-                  frame.cutX,
-                  frame.cutY,
-                  frame.cutWidth,
-                  frame.cutHeight,
-                  ax + (bx - ax) * t - e.dx * 3 - w / 2,
-                  ay + (by - ay) * t + 3 - h / 2,
-                  w,
-                  h,
-                );
-                ctx.globalAlpha = 1;
-              }
-              line(ax, ay, bx, by, 5, "#b7b08e");
-              for (let i = 0; i < 3; i++) {
-                const t = (i + 0.5) / 3;
-                const frame = this.scene.textures.getFrame(
-                  "shore",
-                  Math.floor(shade(x + i, y) * 4),
-                );
-                const w = 12 + shade(x, y + i) * 5,
-                  h = (w * frame.height) / frame.width;
-                ctx.drawImage(
-                  this.shore,
-                  frame.cutX,
-                  frame.cutY,
-                  frame.cutWidth,
-                  frame.cutHeight,
-                  ax + (bx - ax) * t - w / 2,
-                  ay + (by - ay) * t - h * 0.68,
-                  w,
-                  h,
-                );
-              }
             }
           }
         }
+      for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
+        const p=iso(x,y);if(!visible(p.x,p.y)||groundHeight(x,y,sim.state.terrain)!==0)continue;
+        for(const bank of shoreBanks({x,y},sim.roads,sim.state.terrain))drawShoreBank(ctx,bank,this.grass,this.earth,this.stone);
+      }
       chunk.texture.refresh();
     }
   }
