@@ -345,6 +345,9 @@ export class TownScene extends Phaser.Scene {
     this.load.image("bridge-wood", "/bridge-wood.png");
     this.load.image("deposits", "/alpine-deposits.png");
     this.load.image("brook", "/brook-hd.png");
+    this.load.image("bridge-woodland", "/bridge-woodland-v1.png");
+    this.load.image("bridge-alpine", "/bridge-alpine-v1.png");
+    this.load.image("bridge-iron", "/bridge-iron-v1.png");
     this.load.image("mill", "/windmill-parts.png");
     this.load.image("construction-props", "/construction-props.png");
     this.load.image("construction-earth", "/construction-earth.png");
@@ -923,6 +926,7 @@ export class TownScene extends Phaser.Scene {
     this.marketArt.sync(this.simulation,ordered);this.farmArt.sync(this.simulation);
     this.livestockArt.sync(this.simulation,ordered);
     this.lightSources = [
+      ...this.bridgeArt.lights,
       ...[...this.buildings.values()].filter(s=>!isPark(this.simulation.building(s.getData("buildingId"))?.kind??"")),
       ...this.plazaArt.sync(this.simulation,ordered),
       ...this.trees.filter((t) => t.getData("streetlight")),

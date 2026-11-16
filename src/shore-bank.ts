@@ -41,12 +41,12 @@ export function drawShoreBank(ctx:CanvasRenderingContext2D, bank:ReturnType<type
     ctx.save();ctx.transform(dx,dy,0,1,a.x,a.y-bank.height);
     if(bank.stone){
       ctx.fillStyle='#777568';ctx.fillRect(0,0,1,bank.drop);
-      const rows=Math.ceil(bank.drop/2.2);
+      const rows=Math.ceil(bank.drop/4);
       for(let row=0;row<rows;row++)for(let col=-1;col<6;col++){
         const x=(col+(row%2)*.5)/6,l=Math.max(0,x),r=Math.min(1,x+1/6);if(r<=l)continue;
         const sw=stone.width/6,sh=stone.height/6;
-        ctx.drawImage(stone,((col+6+row*2)%6)*sw,(row%6)*sh,sw,sh,l,row*2.2,r-l,Math.min(2.2,bank.drop-row*2.2));
-        ctx.fillStyle='#454b4240';ctx.fillRect(l,row*2.2,r-l,.18);ctx.fillRect(l,row*2.2,.004,Math.min(2.2,bank.drop-row*2.2));
+        ctx.drawImage(stone,((col+6+row*2)%6)*sw,(row%6)*sh,sw,sh,l,row*4,r-l,Math.min(4,bank.drop-row*4));
+        ctx.fillStyle='#454b4240';ctx.fillRect(l,row*4,r-l,.18);ctx.fillRect(l,row*4,.004,Math.min(4,bank.drop-row*4));
       }
     }else{
       ctx.drawImage(earth,0,earth.height*.2,earth.width*.5,earth.height*.22,0,0,1,bank.drop);
@@ -56,7 +56,7 @@ export function drawShoreBank(ctx:CanvasRenderingContext2D, bank:ReturnType<type
   }
   if(bank.stone){
     // One continuous coping, capped at the same land datum on every side.
-    line(-bank.height-.4,2.2,'#c8bfa5');line(-bank.height-1.25,.55,'#e2dac1');
+    line(-bank.height-.4,4,'#c8bfa5');line(-bank.height-1.25,.55,'#e2dac1');
     for(let i=0;i<6;i++){const t=i/6;ctx.beginPath();ctx.moveTo(a.x+dx*t-.7,a.y+dy*t-bank.height-1.4);ctx.lineTo(a.x+dx*t+.7,a.y+dy*t-bank.height+.5);ctx.strokeStyle='#7c7d6a';ctx.lineWidth=.45;ctx.stroke();}
   }else{
     // A narrow turf lip comes from the same meadow texture as the land. Small

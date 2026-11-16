@@ -28,6 +28,7 @@
     "src/foundation.ts",
     "src/park-art.ts",
     "src/windmill.ts",
-    "src/shore-bank.ts"
+    "src/shore-bank.ts",
+    "src/bridge-profile.ts"
   ]
 }

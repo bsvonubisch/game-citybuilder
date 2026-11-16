@@ -1,6 +1,6 @@
 # Shorelines on the actual grid
 
-The water surface is now 6 world pixels below unraised land. This is a shared
+The water surface is now 12 world pixels below unraised land. This is a shared
 rendering datum, not a change to saved terrain ownership or road routing.
 Boats, wakes, fishing gear and water glints use it; dock pilings reach it.
 

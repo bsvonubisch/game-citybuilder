@@ -79,7 +79,7 @@ export class NightArt {
         x = (i / 4) % frame.cutWidth,
         y = Math.floor(i / 4 / frame.cutWidth);
       const strength =
-        y < frame.cutHeight * (sprite.getData("streetlight") ? 0.55 : 0.82)
+        y < frame.cutHeight * (sprite.getData("bridgeLantern") ? 1 : sprite.getData("streetlight") ? 0.55 : 0.82)
           ? warmEmission(d[i], d[i + 1], d[i + 2], d[i + 3])
           : 0;
       if (strength > 0.25) {
