@@ -1,3 +1,5 @@
+import { SIZE } from './catalog.js';
+import { terrainCell } from './terrain.js';
 import { WATER_DROP } from './water-level.js';
 import { BridgeShadow } from './bridge-shadow.js';
 import {roadVisualState} from './roadworks.js';
@@ -25,10 +27,14 @@ export class BridgeArt {
  edges:EdgeOccluder[]=[];
  lights:Phaser.GameObjects.Image[]=[];
  private shadow:BridgeShadow;
- private variants=new Map<string,{deck:string;supports:string;rails:(string|null)[]}>();
+ private under:Phaser.GameObjects.Container;
+ private waterMask:Phaser.GameObjects.Graphics;
+ private variants=new Map<string,{deck:string;supports:(string|null)[];abutments:string;vault:string|null;rails:(string|null)[]}>();
  private images:Phaser.GameObjects.Image[]=[];
  constructor(private scene:Phaser.Scene){
   this.shadow=new BridgeShadow(scene);
+  this.waterMask=scene.make.graphics({x:0,y:0});
+  this.under=scene.add.container(0,0).setDepth(-997).setMask(this.waterMask.createGeometryMask());
   const frame=scene.textures.getFrame('streetlamp',0),tex=scene.textures.createCanvas('bridge-lantern',frame.cutWidth,Math.ceil(frame.cutHeight*.24))!;
   tex.context.drawImage(scene.textures.get('streetlamp').getSourceImage() as CanvasImageSource,frame.cutX,frame.cutY,frame.cutWidth,frame.cutHeight*.24,0,0,tex.width,tex.height);tex.refresh();
  }
@@ -115,18 +121,10 @@ export class BridgeArt {
     this.quad(ctx,ps,sx+(acrossX?j:i)*sw/4,sy+(acrossX?i:j)*sh/8,sw/4,sh/8,image);
    }
   });
-  const supports=this.canvas('bridge-supports-'+id,ctx=>{
-   for(const e of [2,3,0,1])if(open[e]){
+  const supports=open.map((closed,e)=>!closed?null:this.canvas('bridge-supports-'+id+'-'+e,ctx=>{
     const ps=[0,.5,1].map(t=>{const u=at(e,t),p=point(u.x,u.y);return{...u,p}});
-    ctx.save();ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.p.x,q.p.y):ctx.moveTo(q.p.x,q.p.y));
-    for(const q of [...ps].reverse()){
-     // The hidden end of a support stops at land, never sticks out above a ramp.
-     const taper=Math.min(1,...land.flatMap((l,i)=>l?[Math.max(0,1-2*[q.x,q.y,-q.x,-q.y][i])]:[]));
-     const bottom=iso(q.x,q.y);ctx.lineTo(bottom.x,bottom.y+(WATER_DROP+2)*taper);
-    }
-    ctx.closePath();ctx.clip();profile(ctx,e,material.deckTop,material.bottom,6+WATER_DROP+2,0);ctx.restore();
     // Supports are volumes with two visible faces and a cap, not flat cutouts.
-    for(const t of [0,1]){
+    for(const t of (kind==='wood'?[0,1]:[])){
      const uv=profiles[e].from+(profiles[e].to-profiles[e].from)*t;
      if(kind!=='wood'&&Math.abs(uv-.5)<.01)continue;
      const q=at(e,t),n=[{x:1,y:0},{x:0,y:1},{x:-1,y:0},{x:0,y:-1}][e];
@@ -136,7 +134,37 @@ export class BridgeArt {
      this.pier(ctx,cx,cy,kind==='wood'?.045:.08,kind==='wood'?top:top-2,-WATER_DROP+1,kind==='wood');
      this.pier(ctx,cx,cy,kind==='wood'?.065:.1,-WATER_DROP+2.5,-WATER_DROP-.6,false);
     }
+    ctx.save();ctx.beginPath();ps.forEach((q,i)=>i?ctx.lineTo(q.p.x,q.p.y):ctx.moveTo(q.p.x,q.p.y));
+    for(const q of [...ps].reverse()){
+     // The hidden end of a support stops at land, never sticks out above a ramp.
+     const taper=Math.min(1,...land.flatMap((l,i)=>l?[Math.max(0,1-2*[q.x,q.y,-q.x,-q.y][i])]:[]));
+     const bottom=iso(q.x,q.y);ctx.lineTo(bottom.x,bottom.y+(WATER_DROP+2)*taper);
+    }
+    ctx.closePath();ctx.clip();profile(ctx,e,material.deckTop,material.bottom,6+WATER_DROP+2,0);ctx.restore();
+  }));
+  // The arch is a vault across the FULL road width. Its soffit and the
+  // inner sides of shared piers sit between the two painted outer faces.
+  const alongX=Number(!open[0])+Number(!open[2])>=Number(!open[1])+Number(!open[3]);
+  const e=alongX?1:0,uv=profiles[e],bodyDepth=6+WATER_DROP+2;
+  const vault=kind==='wood'?null:this.canvas('bridge-vault-'+id,ctx=>{
+   const p=(t:number,far:boolean,drop:number)=>{const q=at(e,t),v=alongX?{x:q.x,y:far?-.5:.5}:{x:far?-.5:.5,y:q.y},s=point(v.x,v.y);return{x:s.x,y:s.y+drop}};
+   const depth=(phase:number)=>bodyDepth*(.22+.45*((phase-.5)/.37)**2);
+   const face=(ps:Vec[],shade:string)=>{
+    this.quad(ctx,ps,20,material.deckTop+4,420,58,image);
+    ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fillStyle=shade;ctx.fill();
+   };
+   const cuts=[0,1];for(let i=0;i<=16;i++){const t=(.13+i*.74/16-uv.from)/(uv.to-uv.from);if(t>0&&t<1)cuts.push(t);}cuts.sort((a,b)=>a-b);
+   for(let i=1;i<cuts.length;i++){
+    const a=cuts[i-1],b=cuts[i],phase=uv.from+(uv.to-uv.from)*(a+b)/2;if(phase<.13||phase>.87)continue;
+    const da=depth(uv.from+(uv.to-uv.from)*a),db=depth(uv.from+(uv.to-uv.from)*b);
+    face([p(a,false,da),p(b,false,db),p(b,true,db),p(a,true,da)],'#162f2d80');
    }
+   for(const boundary of [.13,.87]){
+    const t=(boundary-uv.from)/(uv.to-uv.from);if(t<0||t>1)continue;
+    face([p(t,false,depth(boundary)),p(t,true,depth(boundary)),p(t,true,bodyDepth),p(t,false,bodyDepth)],'#132d2b70');
+   }
+  });
+  const abutments=this.canvas('bridge-abutments-'+id,ctx=>{
    // A bank-to-bridge join needs an abutment down to the lowered water surface.
    // Only back edges of the water tile expose this face; the land hides the rest.
    for(const e of [2,3])if(land[e]){
@@ -162,7 +190,7 @@ export class BridgeArt {
     ctx.fillStyle='#be8749';ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(p.x,p.y+top):ctx.moveTo(p.x,p.y+top));ctx.closePath();ctx.fill();
    }
   }));
-  const result={deck,supports,rails};this.variants.set(id,result);return result;
+  const result={deck,supports,abutments,vault,rails};this.variants.set(id,result);return result;
  }
 
  private mount(kind:string,ground:Vec,depth:number){
@@ -181,6 +209,10 @@ export class BridgeArt {
  redraw(input:Simulation){
   const canonical=roadVisualState(sourceObject(input)),sim=roadVisualState(input);
   this.shadow.redraw(sim);
+  this.waterMask.clear().fillStyle(0xffffff);
+  for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++)if(terrainCell(x,y,sim.state.terrain).kind==='water'){
+   const p=iso(x,y);this.waterMask.fillPoints([{x:p.x,y:p.y-16.1},{x:p.x+32.2,y:p.y},{x:p.x,y:p.y+16.1},{x:p.x-32.2,y:p.y}],true);
+  }
   this.edges=[];this.images.forEach(i=>i.destroy());this.lights.forEach(i=>i.destroy());this.images=[];this.lights=[];
   const lit=new Set<string>();
   for(const road of sim.roads){
@@ -188,8 +220,15 @@ export class BridgeArt {
    const tile={x,y},physical=sourcePoint(input.state,tile);
    const profiles=CORNERS.map(([a,b])=>bridgeProfile(canonical,physical,sourcePoint(input.state,{x:x+a.x,y:y+a.y}),sourcePoint(input.state,{x:x+b.x,y:y+b.y})));
    const p=iso(x,y),art=this.variant(sim,tile,profiles);
-   const add=(texture:string,depth:number)=>this.images.push(this.scene.add.image(p.x-WIDTH/2,p.y-HEIGHT/2,texture).setOrigin(0).setScale(1/RESOLUTION).setDepth(depth));
-   add(art.supports,-997);add(art.deck,-996);
+   const add=(texture:string,depth:number)=>{
+    const image=this.scene.add.image(p.x-WIDTH/2,p.y-HEIGHT/2,texture).setOrigin(0).setScale(1/RESOLUTION).setDepth(depth);
+    if(depth<-996)this.under.add(image);this.images.push(image);
+   };
+   // Sort the under-deck edge faces globally, including after a view turn.
+   // Near faces win a shared-depth tie; a far pier cannot draw over a near arch.
+   art.supports.forEach((texture,e)=>{if(texture)add(texture,-997+((x+y)*32+(e<2?32:0))*.0001+(e<2?.000001:0));});
+   if(art.vault)add(art.vault,-997+((x+y)*32+16)*.0001);
+   add(art.abutments,-996.5);add(art.deck,-996);
    const land=bridgeLandings(sim.roads,tile,sim.state.buildings,sim.state.terrain);
    art.rails.forEach((texture,edge)=>{
     if(!texture)return;const depth=(x+y)*32+(edge<2?32:0);add(texture,depth);
@@ -206,6 +245,7 @@ export class BridgeArt {
     }
    });
   }
+  this.under.sort('depth');
   // A player-placed lantern also needs a solid mounting post: iron railings
   // have open space where the former masonry wall used to support its foot.
   for(const d of sim.state.decorations){

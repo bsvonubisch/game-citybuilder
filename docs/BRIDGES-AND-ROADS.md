@@ -63,3 +63,13 @@ tests including reversal and camera turns. Full simulation tests and production
 build pass. Comparison captures were rendered by the game, not regenerated
 illustrations. The original freeform concept shore scenery is not baked into
 any bridge; the game's real terrain and lighting supply its surroundings.
+
+## Current review build
+
+The user requested publication to inspect the bridges in the actual town.
+The underside remains a work in progress, not a final art acceptance. The added
+block-shaped masonry columns were removed. Continuous inner vault faces now
+connect the original side profiles across the road width. Under-deck faces sort
+independently and share a water mask so they cannot paint over foreground land.
+A native painted stone bridge section is the next art revision; keep the accepted
+road materials while reviewing its support geometry.
