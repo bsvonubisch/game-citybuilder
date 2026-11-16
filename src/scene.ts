@@ -99,7 +99,7 @@ import { lanePose, lanePoint, LANE_OFFSET } from "./traffic.js";
 import { laneCuts } from "./lanes.js";
 import { BridgeArt } from "./bridge-art.js";
 import { FenceArt } from "./fence-art.js";
-import { roadHeight } from "./bridges.js";
+import { roadHeight, RoadHeightCache } from "./bridges.js";
 import {
   TownAnimation,
   createRotorFrames,
@@ -297,6 +297,8 @@ export class TownScene extends Phaser.Scene {
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   speed = 1;
   ready = false;
+  private roadHeights=new RoadHeightCache();
+  private workRoadHeights=new RoadHeightCache();
   constructor(simulation: Simulation) {
     super("Town");
     this.view = new ViewWorld(simulation);
@@ -1305,12 +1307,10 @@ export class TownScene extends Phaser.Scene {
           x: v.x,
           y:
             v.y -
-            roadHeight(
-              this.simulation.roads,
+            this.roadHeights.height(
+              this.simulation,
               p.x,
               p.y,
-              this.simulation.state.buildings,
-              this.simulation.state.terrain,
             ),
         };
       });
@@ -1582,12 +1582,10 @@ export class TownScene extends Phaser.Scene {
         .setPosition(
           v.x,
           v.y -
-            roadHeight(
-              this.simulation.roads,
+            this.roadHeights.height(
+              this.simulation,
               p.x,
               p.y,
-              this.simulation.state.buildings,
-              this.simulation.state.terrain,
             ) +
             bob,
         )
@@ -1605,13 +1603,13 @@ export class TownScene extends Phaser.Scene {
           ),
         )
         .setFlipX(a.kind === "person" && walk.flip);
-      if(a.roadWork!==undefined){const visual=roadVisualState(this.simulation);s.y=v.y-roadHeight(visual.roads,p.x,p.y,visual.state.buildings,visual.state.terrain)+bob;}
+      if(a.roadWork!==undefined){const visual=roadVisualState(this.simulation);s.y=v.y-this.workRoadHeights.height(visual,p.x,p.y)+bob;}
       s.setDepth(edgeDepth(p,{left:s.x-s.displayWidth*s.originX,right:s.x+s.displayWidth*(1-s.originX),top:s.y-s.displayHeight*s.originY,bottom:s.y+s.displayHeight*(1-s.originY)},s.depth,this.occludingEdges));
       if(a.roadWork!==undefined&&a.wait>0){
         const pose=builderFrame(a.resident??a.id,a.id%2,this.simulation.state.tick*STEP+this.acc,true);
         s.setTexture('construction-workers',pose.frame).setOrigin(pose.originX,pose.originY).setScale(pose.size/this.textures.getFrame('construction-workers',pose.frame).height).setFlipX(false);
         const visual=roadVisualState(this.simulation);
-        s.y=v.y-roadHeight(visual.roads,p.x,p.y,visual.state.buildings,visual.state.terrain);
+        s.y=v.y-this.workRoadHeights.height(visual,p.x,p.y);
       }
       if (site?.construction) {
         const crew = this.simulation.state.agents.filter(

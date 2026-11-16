@@ -3,6 +3,7 @@ import {TownStatusLog} from './town-status-log.js';
 import {isLivestock,stepLivestock,ensureHerd,validPenPlot,livestockCapacity,LIVESTOCK,isButcherCut,BUTCHER_CUTS,type Herd,type ButcherCut} from './livestock.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown} from './starter-town.js';
+import {RoadPathCache} from './road-path-cache.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
 import {ensureField,prepareField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
@@ -290,6 +291,8 @@ export class Simulation {
   private initializing = true;
   private leisureByResident = new Map<number, Building[]>();
   private roadSet = new Set<string>();
+  private roadPaths = new RoadPathCache();
+  private pathRevision = -1;
   private statusLog = new TownStatusLog();
   private processed = new Map<string, Result>();
   private terrainUndo?: {
@@ -412,6 +415,10 @@ export class Simulation {
     return [...perimeter.values()];
   }
   path(start: Point, end: Point, kind:Agent["kind"]="person"): Point[] | null {
+    if(this.pathRevision!==this.state.revision){this.roadPaths.clear();this.pathRevision=this.state.revision;}
+    return this.roadPaths.find(`${kind==='person'?'walk':'drive'}:${key(start)}>${key(end)}`,()=>this.findRoadPath(start,end,kind));
+  }
+  private findRoadPath(start:Point,end:Point,kind:Agent['kind']):Point[]|null {
     const allowed=(p:Point)=>kind==="person"||roadTypeAt(this.state.roadTypes,p)!=="pavement";
     if(!allowed(start)||!allowed(end))return null;
     if (!this.roadSet.has(key(start)) || !this.roadSet.has(key(end)))
@@ -460,6 +467,7 @@ export class Simulation {
     const roadResidents=new Set(roadCrew.map(a=>a.resident));
     const travellers = preserveTravel ? this.state.agents.filter(a=>a.roadWork===undefined) : [];
     this.roadSet = new Set(this.state.roads);
+    this.roadPaths.clear();this.pathRevision=this.state.revision;
     this.traffic.configure(this.roadSet, this.state.roadTypes);
     for(const a of travellers)if(a.kind==="car"&&a.path.slice(a.segment).some(p=>roadTypeAt(this.state.roadTypes,p)==="pavement"))a.kind="person";
     const warehouses = this.state.buildings.filter(warehouseReady);
