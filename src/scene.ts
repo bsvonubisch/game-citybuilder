@@ -62,6 +62,7 @@ import {
   opaqueBounds,
   buildingDepths,
   iso,
+  plotOutline,
   fitGround,
   agentDistance,
   travellerDepth,
@@ -216,10 +217,24 @@ export class TownScene extends Phaser.Scene {
   onEyedropper:(kind:Tool,rotation:0|1|2|3,plot?:readonly[number,number])=>void=()=>{};
   onBuildingHover:(id:number|null,x:number,y:number)=>void=()=>{};
   private hoverArt?:Phaser.GameObjects.Image;
-  clearBuildingHover(){this.hoverArt?.setVisible(false);this.onBuildingHover(null,0,0);}
+  private hoverField?:Phaser.GameObjects.Graphics;
+  clearBuildingHover(){this.hoverArt?.setVisible(false);this.hoverField?.setVisible(false);this.onBuildingHover(null,0,0);}
   private buildingHover(id:number|null,x:number,y:number){
     const sprite=id?this.buildings.get(id):undefined;
     if(!sprite||this.tool!=="inspect"||this.dragging){this.clearBuildingHover();return;}
+    const building=this.simulation.building(id!);
+    if(building?.kind==='farm'&&!building.construction?.clearance){
+      // Farms are many ground/crop sprites; their building sprite is transparent.
+      // Highlight the whole plot beneath crops and people, without cloning them.
+      this.hoverArt?.setVisible(false);
+      const [w,h]=dimensions(building.kind,building.rotation,building.plot),p=iso(building.x,building.y);
+      this.hoverField??=this.add.graphics().setDepth(-996.8);
+      this.hoverField.clear().setPosition(p.x,p.y-groundHeight(building.x,building.y,this.simulation.state.terrain))
+        .fillStyle(0xffedb0,.16).fillPoints(plotOutline(w,h),true)
+        .lineStyle(1.2,0xffdf88,.8).strokePoints(plotOutline(w,h),true).setVisible(true);
+      this.onBuildingHover(id,x,y);return;
+    }
+    this.hoverField?.setVisible(false);
     this.hoverArt??=this.add.image(0,0,sprite.texture.key).setBlendMode(Phaser.BlendModes.ADD);
     this.hoverArt.setTexture(sprite.texture.key,sprite.frame.name).setOrigin(sprite.originX,sprite.originY).setScale(sprite.scaleX,sprite.scaleY).setPosition(sprite.x,sprite.y).setDepth(sprite.depth+.2).setAlpha(.1).setVisible(sprite.visible);
     this.onBuildingHover(id,x,y);
