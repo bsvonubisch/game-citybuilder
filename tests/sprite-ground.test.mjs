@@ -6,6 +6,21 @@ import {fitGround,groundCoordinates} from '../.test-dist/rendering.js';
 import {foundationGeometry} from '../.test-dist/foundation.js';
 import {planterGeometry,planterMask,planterEdges,planterFlowers} from '../.test-dist/planter-art.js';
 import {turnPoint} from '../.test-dist/view-space.js';
+import {sawmillMotion} from '../.test-dist/sawmill-motion.js';
+
+test('sawmill motion stays on the exposed blade above the sloping workbench',()=>{
+ const measured=[{center:[223,400],slope:-.5,height:24},{center:[402,412],slope:.5,height:27}];
+ for(let r=0;r<2;r++){
+  const {center:[x,y],slope,height}=measured[r];
+  assert.deepEqual(buildingArt('sawmill',r).mechanism,[x,y]);
+  for(let phase=0;phase<8;phase+=.07)for(const line of sawmillMotion(r,phase).strokes)for(const p of line){
+   const dx=p.x-x,dy=p.y-y-dx*slope;
+   assert.ok(dy<0,'the workbench occludes the lower half');
+   assert.ok((dx/22)**2+(dy/height)**2<.7,'highlights stay inside the painted blade teeth');
+  }
+ }
+ assert.equal(sawmillMotion(2,1),null);assert.equal(sawmillMotion(3,1),null);
+});
 
 function canvasFixture(){
  const crops=[];

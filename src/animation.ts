@@ -1,4 +1,5 @@
 import {smokePuffs,weather} from "./weather.js";
+import {sawmillMotion} from './sawmill-motion.js';
 import {isHome,isPark} from "./catalog.js";
 import type Phaser from "phaser";
 import { BUILDINGS,fullProductionOutput } from "./catalog.js";
@@ -281,24 +282,19 @@ export class TownAnimation {
           );
         }
       }
-      if (b.kind === "sawmill" && b.rotation < 2) {
-        const p = this.point(b, ...art.mechanism!),
-          r = 22 * p.scale;
-        g.lineStyle(0.6, 0xe2ddd0, 0.8);
-        for (let i = 0; i < 6; i++) {
-          const angle = phase * 7 + (i * Math.PI) / 3;
-          if (Math.sin(angle) > 0) continue;
-          g.lineBetween(
-            p.x + Math.cos(angle) * r * 0.3,
-            p.y + Math.sin(angle) * r * 0.3,
-            p.x + Math.cos(angle) * r * 0.85,
-            p.y + Math.sin(angle) * r * 0.85,
-          );
+      if (b.kind === 'sawmill' && active) {
+        const motion=sawmillMotion(b.rotation,phase);
+        if(motion){
+          g.lineStyle(.5,0xe2ddd0,.65);
+          for(const [a,bp] of motion.strokes){
+            const start=this.point(b,a.x,a.y),end=this.point(b,bp.x,bp.y);
+            g.lineBetween(start.x,start.y,end.x,end.y);
+          }
+          for(const chip of motion.chips){
+            const p=this.point(b,chip.x,chip.y);
+            g.fillStyle(0xd7ad67,chip.alpha).fillRect(p.x,p.y,Math.max(.5,2*p.scale),Math.max(.4,1.4*p.scale));
+          }
         }
-      }
-      if (b.kind === "sawmill" && active && b.rotation<2) {
-        const p=this.point(b,...art.mechanism!);
-        for(let i=0;i<6;i++){const age=(phase*1.4+i/6)%1,side=b.rotation===0?1:-1;g.fillStyle(0xd7ad67,(1-age)*.8).fillRect(p.x+side*age*13,p.y+2+age*age*9,1,.7);}
       }
       if (b.kind === "workshop" && active && b.rotation < 2) {
         const p=this.point(b,...art.mechanism!);
