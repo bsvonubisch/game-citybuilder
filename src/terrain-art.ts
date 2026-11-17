@@ -188,8 +188,13 @@ export class TerrainArt {
             ctx.drawImage(roadSurface(this.scene, roadTypeAt(sim.state.roadTypes, {x, y}), x, y), 0, 0, 1, 1);
             ctx.restore();
           }
+          // Paint a bank with its own tile. Its face projects into the next
+          // row, whose land top must occlude it at concave shoreline corners.
+          // A final bank-only pass paints rear soil over that foreground turf.
+          for(const bank of shoreBanks({x,y},sim.roads,sim.state.terrain))
+            drawShoreBank(ctx,bank,this.grass,this.earth,this.stone);
         }
-      // Individual raised curb stones and banks are baked only after town edits.
+      // Individual raised curb stones are baked only after town edits.
       for (let y = 0; y < SIZE; y++)
         for (let x = 0; x < SIZE; x++) {
           if (groundHeight(x, y, sim.state.terrain) !== 0) continue;
@@ -226,10 +231,6 @@ export class TerrainArt {
             }
           }
         }
-      for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
-        const p=iso(x,y);if(!visible(p.x,p.y)||groundHeight(x,y,sim.state.terrain)!==0)continue;
-        for(const bank of shoreBanks({x,y},sim.roads,sim.state.terrain))drawShoreBank(ctx,bank,this.grass,this.earth,this.stone);
-      }
       chunk.texture.refresh();
     }
   }

@@ -35,6 +35,18 @@ now appear, with varied heights and sparse, evenly distributed spacing. Position
 are calculated in canonical map space, so camera turns do not reroll the shore.
 No new textures or per-frame work were added.
 
+## Inside-corner overlap correction
+
+Flat bank faces are now painted together with their owning land tile, before
+the next row of foreground ground. Painting every bank in a final pass let
+rear soil cover the grass at stepped, concave shoreline corners. The tile
+order now provides the same occlusion as the actual terrain geometry.
+
+Verified with a stepped shoreline through all four camera turns. Three pixels
+inside foreground grass previously contained brown bank material; after the
+fix, each matches the same location in a grass-only reference exactly. Terrain
+chunks retain their existing resolution, caching and filtering gutters.
+
 Verified around the starter fisheries, shoreline corners and raised banks, with
 four camera views and a narrow mobile viewport. Browser checks confirm roots use
 land elevation, avoid buildings/roads and retain their world positions through
