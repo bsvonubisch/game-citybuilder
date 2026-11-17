@@ -20,9 +20,10 @@ import Phaser from "phaser";
 import {townNeeds,buildingNeeds} from "./needs.js";
 import "./style.css";
 import { ROAD_TYPES, roadTypeAt, type RoadType } from "./roads.js";
-import { FOREST_RADIUS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
+import { FOREST_RADIUS, REGROW_TICKS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
 import {
   BUILDINGS,
+  STEP,
   SIZE,
   RESOURCES,
   RESOURCE_NAMES,
@@ -1296,7 +1297,7 @@ function updateInspector() {
   if (b.kind==="forester"&&!b.construction) {
     const reachable=forestTargets(simulation,b).length;
     const regrowing=simulation.state.decorations.filter(d=>harvestable(d)&&forestInside(b,d)&&treeStage(d,simulation.state.tick)!=="mature").length;
-    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Woodland · ${FOREST_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable mature trees</span><b>${reachable}</b></div><div class="detail-row"><span>Regrowing stumps / saplings</span><b>${regrowing}</b></div><p class="muted">Foresters walk to natural oak, pine and birch trees, cut them, then carry 6 wood back. Stumps regrow in two minutes at normal speed. Planted garden trees are protected.</p>${(b.forestry??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Forester")}</span><b>${t.phase==="chopping"?"Chopping":t.phase==="returning"?`Carrying ${t.cargo} wood`:"Walking to a tree"}</b></div>`).join("")}`);
+    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Woodland · ${FOREST_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable mature trees</span><b>${reachable}</b></div><div class="detail-row"><span>Regrowing stumps / saplings</span><b>${regrowing}</b></div><p class="muted">Foresters walk to natural oak, pine and birch trees, cut them, then carry 6 wood back. Trees fully regrow in ${REGROW_TICKS*STEP/60} minutes at normal speed. Planted garden trees are protected.</p>${(b.forestry??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Forester")}</span><b>${t.phase==="chopping"?"Chopping":t.phase==="returning"?`Carrying ${t.cargo} wood`:"Walking to a tree"}</b></div>`).join("")}`);
   }
   if (b.kind === "fishery" && !b.construction) {
     const trip = b.fishing,

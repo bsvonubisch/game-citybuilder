@@ -16,7 +16,7 @@ import {warehouseReady, LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
 import {parkVisitDuration,parkVisitorLimit} from "./park-visitors.js";
 import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
-import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, type ForestTrip } from "./forestry.js";
+import { stepForestry, forestTargets, landTimber, validForestTrip, harvestable, lengthenTreeRegrowth, REGROW_TICKS, type ForestTrip } from "./forestry.js";
 import { stepMining, miningTargets, landOre, validMiningTrip, type MiningTrip } from "./mining.js";
 import { depositAt, exposedDeposit, nearbyDeposit, nearbyDeposits, buildingDeposit, expandReserves } from "./deposits.js";
 import { ROCK_CLEARING_WORK } from "./construction.js";
@@ -345,6 +345,7 @@ export class Simulation {
     expandValley(this.state);
     expandReserves(this.state);
     lengthenDays(this.state);
+    lengthenTreeRegrowth(this.state);
     if(this.state.bridgeVersion!==1){this.state.roadTypes??={};for(const k of this.state.roads){const [x,y]=k.split(",").map(Number);if(terrain(x,y,this.state.terrain)==="water"&&!this.state.roadTypes[k])this.state.roadTypes[k]="dirt";}this.state.bridgeVersion=1;}
     for(const b of this.state.buildings)if(isExtractor(b.kind))b.deposit=buildingDeposit(b);
     this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
@@ -2180,6 +2181,7 @@ export function parseSave(raw: string): World {
         !isDecoration(d.kind) ||
         typeof d.natural !== "boolean" ||
         (d.cutAt !== undefined && (!harvestable(d) || !Number.isInteger(d.cutAt) || d.cutAt<0 || d.cutAt>s.tick)) ||
+        (d.regrowsAt !== undefined && (d.cutAt === undefined || !Number.isInteger(d.regrowsAt) || d.regrowsAt < d.cutAt || d.regrowsAt > s.tick + REGROW_TICKS)) ||
         (d.edge!==undefined&&!roadLamp) ||
         (d.side!==undefined&&!fence) ||
         (fence&&!inside(fenceNeighbour(d,d.side!).x,fenceNeighbour(d,d.side!).y)) ||
@@ -2257,6 +2259,7 @@ export function parseSave(raw: string): World {
   expandValley(s as World);
   expandReserves(s as World);
   lengthenDays(s);
+  lengthenTreeRegrowth(s);
   return s as World;
 }
 

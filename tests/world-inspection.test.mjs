@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import {Simulation} from '../.test-dist/simulation.js';
 import {worldDetails} from '../.test-dist/world-inspection.js';
 import {depositTiles} from '../.test-dist/deposits.js';
-import {REGROW_TICKS} from '../.test-dist/forestry.js';
-import {STEP} from '../.test-dist/catalog.js';
 const fact=(d,label)=>d.facts.find(([name])=>name===label)?.[1];
 
 test('roads and bridges report their actual material, access and speed',()=>{
@@ -53,6 +51,12 @@ test('wildlife details follow the real animal and disappear when it leaves the m
 test('tree regrowth uses simulation time and provides removal as a secondary action',()=>{
  const sim=new Simulation();sim.state.tick=200;sim.state.decorations=[{id:99001,x:5,y:5,kind:'pine',natural:true,cutAt:100}];
  const d=worldDetails(sim,{kind:'decoration',id:99001});
- assert.equal(d.status,'Regrowing stump');assert.equal(fact(d,'Mature in'),`${Math.ceil((REGROW_TICKS-100)*STEP)} seconds`);
+ assert.equal(d.status,'Regrowing stump');assert.equal(fact(d,'Mature in'),'9m 35s');
  assert.notEqual(d.primary.type,'remove-decoration');assert.equal(d.more[0].type,'remove-decoration');
+ sim.state.decorations[0].regrowsAt=400;
+ const migrated=worldDetails(sim,{kind:'decoration',id:99001});
+ assert.equal(migrated.status,'Young tree');assert.equal(fact(migrated,'Mature in'),'50s');
+ sim.state.tick=400;
+ const mature=worldDetails(sim,{kind:'decoration',id:99001});
+ assert.equal(mature.status,'Mature tree');assert.equal(fact(mature,'Mature in'),undefined);
 });

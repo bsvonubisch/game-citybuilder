@@ -38,7 +38,7 @@ import {
 import { Simulation, parseSave, key } from "./legacy-town.mjs";
 import { roadStroke, planRoad } from "../.test-dist/road-stroke.js";
 import { ROAD_TYPES, roadTypeAt } from "../.test-dist/roads.js";
-import { forestTargets, forestInside, treeStage, LOGS_PER_TREE, REGROW_TICKS } from "../.test-dist/forestry.js";
+import { forestTargets, forestInside, treeStage, treeRegrowthRemaining, LOGS_PER_TREE, REGROW_TICKS } from "../.test-dist/forestry.js";
 import {
   DEPOSITS,
   INITIAL_RESERVE,
@@ -140,11 +140,12 @@ test("needs distinguish ready meals, staffed workplaces and reachable leisure fr
 
 test("longer days preserve old save date, hour and stump regrowth age exactly once",()=>{
   assert.equal(DAY_TICKS*STEP,240);
-  const world={tick:750,decorations:[{cutAt:700}]};
+  const world={tick:750,decorations:[{cutAt:700,regrowsAt:3100}]};
   lengthenDays(world);
   assert.equal(daylight(world.tick).hour,11);
   assert.equal(daylight(world.tick).day,4);
   assert.equal(world.tick-world.decorations[0].cutAt,50);
+  assert.equal(world.decorations[0].regrowsAt-world.tick,2350);
   const snapshot=structuredClone(world);lengthenDays(world);
   assert.deepEqual(world,snapshot);
 });
@@ -1203,6 +1204,7 @@ test("foresters travel to different real trees, chop stumps, then deliver timber
         carried = true;
         const tree = sim.state.decorations.find(d => d.id === trip.tree);
         assert.equal(treeStage(tree, sim.state.tick), "stump");
+        assert.equal(tree.regrowsAt-tree.cutAt,2400,"a harvested tree needs ten minutes to mature");
         assert.equal(trip.cargo, LOGS_PER_TREE);
         if (!lodge.produced) assert.equal(lodge.inventory.wood, 0, "carried logs are not usable inventory");
       }
@@ -1227,11 +1229,39 @@ test("forestry reach respects woodland, buildings and regrowth, while garden tre
   tree.natural = true; tree.cutAt = sim.state.tick; sim.state.revision++;
   assert.ok(!forestTargets(sim, lodge).some(t => t.tree.id === tree.id));
   assert.equal(treeStage(tree, tree.cutAt), "stump");
+  assert.equal(REGROW_TICKS*STEP,600);
+  assert.equal(treeStage(tree,tree.cutAt+120/STEP),"stump","the old two-minute timer no longer matures a tree");
   assert.equal(treeStage(tree, tree.cutAt + REGROW_TICKS * .6), "sapling");
   assert.equal(treeStage(tree, tree.cutAt + REGROW_TICKS * .9), "young");
   sim.state.tick += REGROW_TICKS;
   assert.equal(treeStage(tree, sim.state.tick), "mature");
   assert.ok(forestTargets(sim, lodge).some(t => t.tree.id === tree.id));
+});
+
+test("old stumps retain growth stages and mature trees stay mature across repeated saves", () => {
+  const sim=new Simulation();sim.state.tick=1000;
+  const trees=sim.state.decorations.filter(d=>d.natural&&['oak','pine','birch'].includes(d.kind)).slice(0,6);
+  assert.equal(trees.length,6);
+  const ages=[0,120,240,384,480,900],stages=['stump','stump','sapling','young','mature','mature'];
+  trees.forEach((d,i)=>{d.cutAt=sim.state.tick-ages[i];delete d.regrowsAt;});
+  const old=sim.snapshot(),loaded=parseSave(JSON.stringify(old));
+  for(const world of [loaded,new Simulation(old).state])for(let i=0;i<trees.length;i++){
+    const tree=world.decorations.find(d=>d.id===trees[i].id);
+    assert.equal(treeStage(tree,world.tick),stages[i]);
+    assert.equal(treeRegrowthRemaining(tree,world.tick),Math.max(0,480-ages[i])*5);
+    assert.equal(tree.cutAt,trees[i].cutAt);
+  }
+  const again=new Simulation(parseSave(JSON.stringify(loaded))).state;
+  for(const tree of trees)assert.deepEqual(again.decorations.find(d=>d.id===tree.id),loaded.decorations.find(d=>d.id===tree.id));
+  loaded.tick+=2400;
+  for(const tree of loaded.decorations.filter(d=>trees.some(t=>t.id===d.id)))assert.equal(treeStage(tree,loaded.tick),'mature');
+  for(const invalid of [-1,1000.5,4000]){
+    const bad=structuredClone(old);bad.decorations.find(d=>d.id===trees[0].id).regrowsAt=invalid;
+    assert.throws(()=>parseSave(JSON.stringify(bad)),/decoration/);
+  }
+  const orphan=structuredClone(old),tree=orphan.decorations.find(d=>d.id===trees[0].id);
+  delete tree.cutAt;tree.regrowsAt=2000;
+  assert.throws(()=>parseSave(JSON.stringify(orphan)),/decoration/);
 });
 
 test("carried timber and stump age survive saves without duplicating goods", () => {
@@ -1241,11 +1271,12 @@ test("carried timber and stump age survive saves without duplicating goods", () 
   // Isolate the forestry load; delivery cargo has its own save tests.
   sim.state.agents = sim.state.agents.filter(a=>a.kind!=="truck");
   const timber = (lodge.inventory.wood??0) + lodge.forestry.reduce((n,t)=>n+t.cargo,0);
-  const cuts = sim.state.decorations.filter(d=>d.cutAt!==undefined).map(d=>[d.id,d.cutAt]);
+  const cuts = sim.state.decorations.filter(d=>d.cutAt!==undefined).map(d=>[d.id,d.cutAt,d.regrowsAt]);
   let loaded = parseSave(JSON.stringify(sim.snapshot()));
   assert.equal(loaded.buildings.find(b=>b.id===lodge.id).inventory.wood,timber);
-  assert.deepEqual(loaded.decorations.filter(d=>d.cutAt!==undefined).map(d=>[d.id,d.cutAt]),cuts);
+  assert.deepEqual(loaded.decorations.filter(d=>d.cutAt!==undefined).map(d=>[d.id,d.cutAt,d.regrowsAt]),cuts);
   loaded = parseSave(JSON.stringify(loaded));
+  assert.deepEqual(loaded.decorations.filter(d=>d.cutAt!==undefined).map(d=>[d.id,d.cutAt,d.regrowsAt]),cuts);
   assert.equal(loaded.buildings.find(b=>b.id===lodge.id).inventory.wood,timber);
   const malformed=sim.snapshot(); malformed.buildings.find(b=>b.id===lodge.id).forestry[0].cargo=10000;
   assert.throws(()=>parseSave(JSON.stringify(malformed)),/forestry/);

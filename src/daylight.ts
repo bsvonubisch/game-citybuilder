@@ -5,7 +5,10 @@ export function lengthenDays(world:Pick<World,"tick"|"clockVersion"|"decorations
   if(world.clockVersion===2)return;
   const shift=world.tick*3;
   world.tick+=shift;
-  for(const d of world.decorations??[])if(d.cutAt!==undefined)d.cutAt+=shift;
+  for(const d of world.decorations??[])if(d.cutAt!==undefined){
+    d.cutAt+=shift;
+    if(d.regrowsAt!==undefined)d.regrowsAt+=shift;
+  }
   world.clockVersion=2;
 }
 export function daylight(tick: number) {

@@ -1,6 +1,6 @@
 import {BUILDINGS, DECORATIONS, RESOURCE_NAMES, STEP, buildingName, type Tool} from './catalog.js';
 import {DEPOSITS, depositTiles, exposedDeposit, nearbyDeposits} from './deposits.js';
-import {forestCenter, forestInside, harvestable, REGROW_TICKS, treeStage} from './forestry.js';
+import {forestCenter, forestInside, harvestable, treeRegrowthRemaining, treeStage} from './forestry.js';
 import {animalPosition, HUNT_RADIUS, MEAT_PER_HUNT} from './hunting.js';
 import {miningTargets} from './mining.js';
 import {BRIDGE_TYPES, ROAD_TYPES, roadTypeAt, type RoadType} from './roads.js';
@@ -69,8 +69,10 @@ export function worldDetails(sim:Simulation,selection:WorldSelection):WorldDetai
   const tree=['oak','pine','birch','blossom'].includes(d.kind),stage=treeStage(d,world.tick),regrowing=tree&&stage!=='mature';
   const forester=harvestable(d)?world.buildings.find(b=>b.kind==='forester'&&forestInside(b,d)):undefined;
   const status=regrowing?stage==='stump'?'Regrowing stump':'Young tree':tree?'Mature tree':d.kind==='streetlight'?'Lights up after dusk':'Placed';
+  const seconds=Math.ceil(treeRegrowthRemaining(d,world.tick)*STEP);
+  const remaining=seconds>=60?`${Math.floor(seconds/60)}m ${seconds%60}s`:`${seconds}s`;
   return {title:DECORATIONS[d.kind].name,category:tree?'TREES & WOODLAND':'GARDENS & STREETS',icon:tree?'tree':'leaf',status,
-    facts:tree?[['Origin',d.natural?'Natural woodland':'Planted'],['Forestry',harvestable(d)?'Can be harvested':'Decorative'],...(regrowing?[['Mature in',`${Math.ceil(Math.max(0,REGROW_TICKS-(world.tick-d.cutAt!))*STEP)} seconds`] as [string,string]]:[])]:[['Position',`${d.x}, ${d.y}`]],
+    facts:tree?[['Origin',d.natural?'Natural woodland':'Planted'],['Forestry',harvestable(d)?'Can be harvested':'Decorative'],...(regrowing?[['Mature in',remaining] as [string,string]]:[])]:[['Position',`${d.x}, ${d.y}`]],
     guidance:regrowing?'Leave the stump to grow back. Removing it clears the tree permanently.':harvestable(d)?'Foresters chop woodland trees and leave stumps to regrow.':tree?'A planted tree adds greenery to the town.':d.kind==='fence'?'Fence sections join along tile edges. Keep entrances and walking routes clear.':d.kind==='planter'?'Adjacent flower beds join together. Place more beside this one to extend the garden.':d.kind==='streetlight'?'Lanterns illuminate nearby roads and gardens after dusk.':'A place for residents to sit and enjoy the town.',
     primary:forester?{type:'building',id:forester.id,label:'Inspect forester lodge'}:{type:'place',tool:d.kind,rotation:d.side??d.edge,label:`Place another ${tree?'tree':d.kind}`},
     more:[{type:'remove-decoration',id:d.id,label:regrowing?'Remove stump permanently':`Remove ${tree?'tree':'decoration'}`} ]};

@@ -2,6 +2,22 @@
 
 Asset: `public/forestry-workers.png`. Generated with the built-in image tool, transparent background, 15 November 2026. The runtime divides the image into four columns and five rows. Rows 0–3 are southeast, southwest, northwest and northeast chopping cycles. Row 4 contains stump, bundled logs, sapling and young-tree props. Existing tree sprites scale through growth stages to preserve their species.
 
+## Regrowth timing — 17 November 2026
+
+Natural trees take 2,400 simulation ticks (10 minutes at 1× speed) to regrow
+after chopping, five times the previous duration. They remain stumps for five
+minutes, saplings for three, and young trees for two. Only mature trees can be
+harvested. Pausing stops growth; game speed changes advance it proportionally.
+
+Each cut stores `cutAt` and `regrowsAt`. Older saves without a deadline retain
+their existing growth percentage when migrated; previously mature trees remain
+mature. Repeated save/load cycles preserve the deadline. The tree inspector
+uses that same deadline for its minutes/seconds countdown. Tree artwork,
+forester travel, chopping time and wood yield are unchanged.
+
+Regression checks cover harvest deadlines, growth stages, legacy migration,
+repeated saves, invalid deadlines, clock migration and inspector countdowns.
+
 Prompt:
 
 Create a production-ready pixel-art sprite sheet for a cozy isometric town-builder game, Pine & Copper / high-detail SNES inspired painted pixel art. Transparent background. Exactly 4 equal-width columns and 5 equal-height rows (20 equal rectangular cells), no margins between cells, no labels, no text, no grid lines. Canvas portrait aspect 4:5. Every individual sprite must fit fully inside its cell with transparent padding, no cropping or touching adjacent cells. Rows 1-4: SAME adult forester character in all 16 frames, straw brimmed hat, moss green shirt, brown leather vest, brown trousers, sturdy boots, two hands holding a woodcutting AXE with a silver wedge-shaped head, standing full body at identical scale and feet anchor. No bench, no scenery, no tree trunk in these frames. Use a 30-degree isometric camera matching cozy timber houses. Row 1 facing southeast (screen right), row 2 southwest (screen left), row 3 northwest (back view screen left), row 4 northeast (back view screen right). Each row is a coherent 4-frame chopping cycle: 1 ready axe forward low, 2 strong windup axe lifted over shoulder, 3 axe swings down and outward toward an imagined tree at waist height, 4 follow-through axe low with body leaning forward. Stable foot placement all frames, visibly different arm/axe poses. These are upright sprites, no rotations of the body plane. Row 5 props, one per cell: column1 freshly cut tree stump with roots and growth rings, column2 small bundle of THREE cut logs tied with rope lying diagonally, column3 tiny leafy oak sapling with slim trunk, column4 young leafy oak tree twice the sapling's height. Props in same isometric angle and detailed pixel texture, grounded at same baseline. Warm amber light upper left, deep brown outlines, rich green foliage, restrained highlights, legible silhouettes at small game size. Transparent negative space everywhere outside sprites. Consistent sprite scale, anatomy, outfit and axe in all four views.

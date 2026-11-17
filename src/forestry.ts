@@ -5,9 +5,10 @@ import { daylight } from "./daylight.js";
 import { outputCapacity, productionRate } from "./upgrades.js";
 import { DEPOSIT_TILES } from "./deposits.js";
 import type { Decoration } from "./decorations.js";
-import type { Building, Point, Simulation } from "./simulation.js";
+import type { Building, Point, Simulation, World } from "./simulation.js";
 
-export const FOREST_RADIUS = 10, REGROW_TICKS = 480, CHOP_SECONDS = 6, LOGS_PER_TREE = 6;
+export const FOREST_RADIUS = 10, REGROW_TICKS = 2400, CHOP_SECONDS = 6, LOGS_PER_TREE = 6;
+const LEGACY_REGROW_TICKS = 480;
 export interface ForestTrip {
   resident: number;
   tree: number;
@@ -20,9 +21,22 @@ export interface ForestTrip {
 const key = (p: Point) => `${p.x},${p.y}`;
 const dirs = [{x:1,y:0}, {x:0,y:1}, {x:-1,y:0}, {x:0,y:-1}];
 export const harvestable = (d: Decoration) => d.natural && ["oak", "pine", "birch"].includes(d.kind);
+/** Retain the visible growth stage of old stumps; mature trees stay mature.
+ * Persist the deadline so repeated loads never restart or extend growth. */
+export function lengthenTreeRegrowth(world: Pick<World, "tick" | "decorations">) {
+  for (const d of world.decorations) {
+    if (d.cutAt === undefined || d.regrowsAt !== undefined) continue;
+    const remaining = Math.max(0, LEGACY_REGROW_TICKS - (world.tick - d.cutAt));
+    d.regrowsAt = world.tick + remaining * (REGROW_TICKS / LEGACY_REGROW_TICKS);
+  }
+}
+export function treeRegrowthRemaining(d: Decoration, tick: number) {
+  return d.cutAt === undefined ? 0 : Math.max(0, (d.regrowsAt ?? d.cutAt + REGROW_TICKS) - tick);
+}
 export function treeStage(d: Decoration, tick: number) {
-  if (d.cutAt === undefined || tick - d.cutAt >= REGROW_TICKS) return "mature";
-  return tick - d.cutAt < REGROW_TICKS * .5 ? "stump" : tick - d.cutAt < REGROW_TICKS * .8 ? "sapling" : "young";
+  const remaining = treeRegrowthRemaining(d, tick);
+  if (!remaining) return "mature";
+  return remaining > REGROW_TICKS * .5 ? "stump" : remaining > REGROW_TICKS * .2 ? "sapling" : "young";
 }
 export function forestCenter(b: Building) {
   const [w,h] = dimensions(b.kind, b.rotation, b.plot);
@@ -109,6 +123,7 @@ export function stepForestry(sim:Simulation,b:Building) {
       t.work+=STEP*productionRate(b)*(night?.25:1);
       if(t.work>=CHOP_SECONDS) {
         tree.cutAt=sim.state.tick;
+        tree.regrowsAt=sim.state.tick+REGROW_TICKS;
         t.cargo=LOGS_PER_TREE;
         t.phase="returning"; t.path.reverse(); t.distance=0;
       }
