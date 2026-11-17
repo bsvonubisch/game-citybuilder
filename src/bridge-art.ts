@@ -1,4 +1,5 @@
 import { SIZE } from './catalog.js';
+import {BRIDGE_TIMBER} from './timber-material.js';
 import { terrainCell } from './terrain.js';
 import { WATER_DROP } from './water-level.js';
 import { BridgeShadow } from './bridge-shadow.js';
@@ -17,7 +18,7 @@ const RESOLUTION=4,WIDTH=96,HEIGHT=88;
 const CORNERS=[ [{x:.5,y:-.5},{x:.5,y:.5}], [{x:.5,y:.5},{x:-.5,y:.5}], [{x:-.5,y:.5},{x:-.5,y:-.5}], [{x:-.5,y:-.5},{x:.5,y:-.5}] ];
 // Measured production atlas coordinates, not the nominal image-generation guide.
 const MATERIALS={
- wood:{key:'bridge-woodland',deck:[1,1,1252,599],profileX:0,profileWidth:1254,railTop:628,deckTop:850,bottom:1150},
+ wood:{key:BRIDGE_TIMBER.key,deck:BRIDGE_TIMBER.deck,profileX:0,profileWidth:1254,railTop:628,deckTop:850,bottom:1150},
  stone:{key:'bridge-alpine',deck:[1,1,1252,625],profileX:12,profileWidth:1230,railTop:672,deckTop:824,bottom:1200},
  brick:{key:'bridge-iron',deck:[1,1,1252,625],profileX:16,profileWidth:1222,railTop:639,deckTop:850,bottom:1220},
 } as const;

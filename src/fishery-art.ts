@@ -1,4 +1,5 @@
 import { WATER_DROP } from './water-level.js';
+import {BRIDGE_TIMBER} from './timber-material.js';
 import { drawFoundation, FOUNDATION_HEIGHT } from "./foundation.js";
 import { fisheryLayout } from "./shoreline.js";
 import { iso } from "./rendering.js";
@@ -21,10 +22,7 @@ export function drawFisheryDock(
   for (const p of corners) {
     ctx.drawImage(
       wood,
-      wood.width * 0.5,
-      0,
-      wood.width * 0.05,
-      wood.height * 0.2,
+      ...BRIDGE_TIMBER.post,
       p.x - 1,
       p.y - height,
       2,
@@ -36,12 +34,16 @@ export function drawFisheryDock(
   ctx.save();
   const p = corners[0];
   ctx.transform(32, 16, -32, 16, p.x, p.y - height);
-  ctx.fillStyle = "#a47340";
+  ctx.fillStyle = "#946331";
   ctx.fillRect(0, 0, r.width, r.height);
-  // Use the same fine-grained planks as the town bridges, at a fixed density.
-  for (let x = 0; x < r.width; x++)
-    for (let y = 0; y < r.height; y++)
-      ctx.drawImage(wood, 0, 0, wood.width / 2, wood.height, x, y, 1, 1);
+  // Boards cross the short dock dimension. Rotate the material with the plot,
+  // keeping the bridge's six boards per tile and continuous two-tile repeat.
+  const alongX=r.width>r.height;
+  if(alongX)ctx.transform(0,1,1,0,0,0);
+  const [sx,sy,sw,sh]=BRIDGE_TIMBER.deck;
+  for(let x=0;x<(alongX?r.height:r.width);x++)
+    for(let y=0;y<(alongX?r.width:r.height);y++)
+      ctx.drawImage(wood,sx,sy+(y%2)*sh/2,sw,sh/2,x,y,1,1);
   ctx.restore();
   for (const [a, b] of [
     [corners[1], corners[2]],
@@ -51,10 +53,7 @@ export function drawFisheryDock(
     ctx.transform(b.x - a.x, b.y - a.y, 0, 2, a.x, a.y - height);
     ctx.drawImage(
       wood,
-      wood.width / 2,
-      0,
-      wood.width / 2,
-      wood.height * 0.12,
+      ...BRIDGE_TIMBER.beam,
       0,
       0,
       1,
@@ -63,7 +62,6 @@ export function drawFisheryDock(
     ctx.restore();
   }
   // Low mooring posts stay inside the plot; no extra tiles are obstructed.
-  const alongX = r.width > r.height;
   for (const t of [0.15, 0.85]) {
     const x = alongX
       ? r.x - 0.5 + r.width * t
@@ -74,16 +72,13 @@ export function drawFisheryDock(
     const q = iso(x, y);
     ctx.drawImage(
       wood,
-      wood.width / 2,
-      0,
-      wood.width * 0.08,
-      wood.height * 0.25,
+      ...BRIDGE_TIMBER.post,
       q.x - 1.5,
       q.y - height - 5,
       3,
       5,
     );
-    ctx.fillStyle = "#e0bf85";
+    ctx.fillStyle = "#b38a54";
     ctx.fillRect(q.x - 1.5, q.y - height - 5, 3, 0.7);
   }
 }

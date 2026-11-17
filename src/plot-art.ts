@@ -1,4 +1,5 @@
 import {drawFarmPreview} from './farm-art.js';
+import {BRIDGE_TIMBER} from './timber-material.js';
 import {drawPen} from './livestock-art.js';
 import {isLivestock} from './livestock.js';
 import {sourceImage} from "./source-images.js";
@@ -144,7 +145,7 @@ export class PlotArt {
         h,
         sourceImage(this.scene,"park-benches") as HTMLImageElement,
         sourceImage(this.scene,"foundation-stone") as HTMLImageElement,
-        sourceImage(this.scene,"bridge-wood") as HTMLImageElement,
+        sourceImage(this.scene,BRIDGE_TIMBER.key) as HTMLImageElement,
         (kind==="market"||isLivestock(kind))&&!sprite.getData("buildingId"),
         sourceImage(this.scene,"meadow") as HTMLImageElement,
         sourceImage(this.scene,"construction-earth") as HTMLImageElement,

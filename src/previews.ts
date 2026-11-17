@@ -1,4 +1,5 @@
 import {drawFarmPreview} from './farm-art.js';
+import {BRIDGE_TIMBER} from './timber-material.js';
 import type {Crop} from './farm-layout.js';
 import {isLivestock,LIVESTOCK,livestockPose} from './livestock.js';
 import {iso,opaqueBounds} from './rendering.js';
@@ -52,7 +53,7 @@ export function buildingPreview(
         (kind === "park" || kind === "garden") ? artImage("/park-benches.png") : undefined,
         kind === "mill" ? artImage("/windmill-parts.png") : undefined,
         artImage("/foundation-stone.png"),
-        kind === "fishery" ? artImage("/bridge-wood.png") : undefined,
+        kind === "fishery" ? artImage(BRIDGE_TIMBER.file) : undefined,
         kind === "garden" || isLivestock(kind) ? artImage("/meadow-hd.png") : undefined,
         kind === "farm" || kind === 'pigs' ? artImage("/construction-earth.png") : undefined,
       ]);
