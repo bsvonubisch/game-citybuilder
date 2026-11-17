@@ -265,6 +265,7 @@ export function buildingArt(
   rotation = 0,
   houseTier: HouseTier = 1,
 ): BuildingArt {
+  if(kind==='gatherer')return {texture:'building-gatherer',frame:rotation,columns:2,rows:2,size:[627,627],ground:([[[110,451],[313,553],[545,437]],[[80,437],[312,553],[542,451]],[[110,437],[313,543],[545,437]],[[80,437],[312,543],[542,437]]] satisfies PlotCorners[])[rotation]};
   if(kind==='cattle'||kind==='chickens'||kind==='pigs')return{texture:'livestock-shelter',livestock:kind,frame:rotation,columns:2,rows:2,size:[512,512],ground:[[51,400],[256,502],[461,400]]};
   if(kind==='farm')return {texture:'farm-crops',frame:0,columns:3,rows:3,size:[512,342],ground:[[0,32],[32,48],[64,32]]};
   if(kind==="market")return {texture:"market-stalls",frame:rotation,columns:4,rows:3,size:[444,296],ground:[[0,148],[222,259],[444,148]]};

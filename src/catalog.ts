@@ -2,6 +2,7 @@ import {marketPrice,marketStalls} from "./market-layout.js";
 import {isLivestock,penPrice,livestockJobs,BUTCHER_CUTS,type ButcherCut} from './livestock-layout.js';
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 export type Resource =
+  | "berries"
   | "steaks"
   | "roasts"
   | "milk"
@@ -21,6 +22,7 @@ export type Resource =
   | "planks"
   | "tools";
 export type BuildingKind =
+  | "gatherer"
   | "cattle"
   | "chickens"
   | "pigs"
@@ -108,6 +110,7 @@ export const buildingInvestment = (b: {
     : (isLivestock(b.kind)?penPrice(b.kind,b.plot).cost:b.kind==="market"?marketPrice(b.plot).cost:b.kind==='farm'?farmPrice(b.plot).cost:BUILDINGS[b.kind].cost) *
       ((b.level ?? 1) === 3 ? 6 : (b.level ?? 1) === 2 ? 3 : 1);
 export type DecorationKind =
+  | "berry"
   | "oak"
   | "pine"
   | "birch"
@@ -122,6 +125,7 @@ export const DECORATIONS: Record<
   DecorationKind,
   { name: string; cost: number; texture: string; frame: number; height: number }
 > = {
+  berry:{name:"Wild berry bush",cost:8,texture:"berries",frame:0,height:19},
   oak: { name: "Oak tree", cost: 18, texture: "garden", frame: 0, height: 62 },
   pine: {
     name: "Pine tree",
@@ -206,6 +210,7 @@ export interface Definition {
   };
 }
 export const BUILDINGS: Record<BuildingKind, Definition> = {
+  gatherer:{name:"Gatherer’s hut",cost:100,jobs:2,frame:4,materials:{wood:6,stone:3},category:'production',description:'Gatherers pick wild berry bushes within 10 tiles and carry food back to the hut. Bushes replenish in two game days.',recipe:{output:'berries',count:6,seconds:6}},
   cattle:{name:"Dairy pasture",...penPrice('cattle'),jobs:1,frame:0,category:"production",description:"Drag a 2×2 to 10×10 pasture. Starts with two cows; farmers and grain grow the herd. Collect milk and send surplus livestock to the butcher.",recipe:{input:"grain",amount:1,output:"milk",count:1,seconds:32}},
   chickens:{name:"Chicken coop",...penPrice('chickens'),jobs:1,frame:0,category:"production",description:"Drag a 2×2 to 10×10 chicken run. Starts with two birds; farmers and grain grow the flock. Collect eggs and send surplus poultry to the butcher.",recipe:{input:"grain",amount:1,output:"eggs",count:1,seconds:24}},
   pigs:{name:"Pigsty",...penPrice('pigs'),jobs:1,frame:0,category:"production",description:"Drag a 2×2 to 10×10 pen. Starts with two pigs; farmers and grain grow the herd. Surplus animals supply meat while a breeding pair stays behind.",recipe:{input:"grain",amount:1,output:"meat",count:4,seconds:44}},
@@ -376,6 +381,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
   },
 };
 export const RESOURCES: Resource[] = [
+  "berries",
   "steaks", "roasts",
   "milk", "eggs",
   "potatoes",
@@ -394,6 +400,7 @@ export const RESOURCES: Resource[] = [
   "tools",
 ];
 export const RESOURCE_NAMES: Record<Resource, string> = {
+  berries:"Berries",
   steaks:"Steaks",roasts:"Roasts",
   milk:"Milk",eggs:"Eggs",
   potatoes:"Potatoes",
@@ -412,6 +419,7 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   tools: "Tools",
 };
 export const FOOTPRINTS: Record<BuildingKind, readonly [number, number]> = {
+  gatherer:[1,1],
   cattle:[3,3],chickens:[2,2],pigs:[3,3],
   butcher:[2,2],
   hunter:[2,2],
@@ -510,4 +518,4 @@ export function fullProductionOutput(b:{kind:BuildingKind;crop?:Crop|null;invent
  return recipe&&recipeProducts(recipe).find(([resource,count])=>recipe.outputs?(b.inventory[resource]??0)+count>capacity:(b.inventory[resource]??0)>=capacity)?.[0];
 }
 export const buildingOutputs=(b:{kind:BuildingKind;crop?:Crop|null;cut?:ButcherCut}):Resource[]=>b.kind==='butcher'?['sausages','steaks','roasts']:isLivestock(b.kind)?[...new Set<Resource>([BUILDINGS[b.kind].recipe!.output,'meat'])]:buildingRecipe(b)?[buildingRecipe(b)!.output]:[];
-export const FOOD_RESOURCES:Resource[]=['bread','fish','sausages','steaks','roasts','meat','potatoes','carrots','milk','eggs'];
+export const FOOD_RESOURCES:Resource[]=['berries','bread','fish','sausages','steaks','roasts','meat','potatoes','carrots','milk','eggs'];

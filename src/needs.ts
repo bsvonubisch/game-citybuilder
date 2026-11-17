@@ -61,6 +61,7 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
     rows.push({label:'Grain feed',have:String(b.inventory.grain??0),need:`${feed} / 40s`,ok:herd.fed>0||(b.inventory.grain??0)>=feed});
   }else if(d.recipe?.input)rows.push({label:RESOURCE_NAMES[d.recipe.input],have:String(b.inventory[d.recipe.input]??0),need:`${d.recipe.amount??0} / batch`,ok:(b.inventory[d.recipe.input]??0)>=(d.recipe.amount??0)});
   if(isExtractor(b.kind)){const reserve=sim.state.deposits[buildingDeposit(b)!]??0;rows.push({label:"Deposit",have:reserve.toLocaleString(),need:"Within reach",ok:reserve>0&&sim.alert(b)?.kind!=="input"});}
+  if(b.kind==='gatherer')rows.push({label:'Berry bushes',have:sim.alert(b)?.kind==='input'?'None ripe in reach':'In reach',need:'Wild bushes within 10 tiles',ok:sim.alert(b)?.kind!=='input'});
   if(b.kind==="forester")rows.push({label:"Trees",have:sim.alert(b)?.kind==="input"?"None reachable":"In reach",need:"Mature woodland",ok:sim.alert(b)?.kind!=="input"});
   if(b.kind==="hunter")rows.push({label:"Wildlife",have:sim.alert(b)?.kind==="input"?"None nearby":"In reach",need:"Woodland within 12 tiles",ok:sim.alert(b)?.kind!=="input"});
   if(isHome(b.kind)) {

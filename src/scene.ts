@@ -337,6 +337,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("foundation-stone", "/foundation-stone.png");
     this.load.image("garden", "/garden-sprites.png");
     this.load.image("tree-variants", "/tree-variants-v1.png");
+    this.load.image("berries", "/berry-bushes-v2.png");
     this.load.image("props", "/town-props.png");
     this.load.image("vehicles", "/vehicles-directions.png");
     this.load.image('delivery-industrial','/delivery-industrial-v1.png');
@@ -421,6 +422,7 @@ export class TownScene extends Phaser.Scene {
     this.trimAtlas("shore", 4, 2);
     this.trimAtlas("garden", 4, 4);
     this.trimAtlas("tree-variants", 4, 4);
+    this.trimAtlas("berries", 3, 3);
     this.trimAtlas("props", 2, 2);
     this.trimAtlas("streetlamp",1,1);
     this.trimAtlas("mill", 2, 1);
@@ -1062,7 +1064,7 @@ export class TownScene extends Phaser.Scene {
           this.diamond(p, 0xf3ce7b, 0.23);
         this.drawFront(b.kind, b.x, b.y, b.rotation, b.plot);
         if (isLeisure(b.kind)) this.drawCoverage(b);
-        if (b.kind==="forester")this.drawForestRange(b);
+        if (b.kind==="forester"||b.kind==='gatherer')this.drawForestRange(b);
         if (b.kind==="hunter")this.drawHuntRange(b);
         if (isExtractor(b.kind))this.drawMiningRange(b);
       }
@@ -1167,7 +1169,7 @@ export class TownScene extends Phaser.Scene {
       if (isBuilding(kind)) {
         if(kind==="market")this.drawCoverage({...servicePreview(kind,this.hover.x,this.hover.y,this.rotation),plot});
         if(kind==="hunter")this.drawHuntRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
-        if(kind==="forester")this.drawForestRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
+        if(kind==="forester"||kind==='gatherer')this.drawForestRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if(isExtractor(kind))this.drawMiningRange(servicePreview(kind,this.hover.x,this.hover.y,this.rotation,moving?.level));
         if (isLeisure(kind))
           this.drawCoverage(

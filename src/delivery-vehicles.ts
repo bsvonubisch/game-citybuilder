@@ -15,7 +15,7 @@ export const DELIVERY_VEHICLES={
 } as const;
 const CARGO_VEHICLE:Record<Resource,keyof typeof DELIVERY_VEHICLES>={
   wood:'timber',planks:'timber',stone:'stone',metal:'ore',bricks:'bricks',
-  grain:'produce',flour:'produce',potatoes:'produce',carrots:'produce',
+  berries:'produce',grain:'produce',flour:'produce',potatoes:'produce',carrots:'produce',
   bread:'food',fish:'food',meat:'food',sausages:'food',steaks:'food',roasts:'food',
   milk:'dairy',eggs:'dairy',tools:'tools',
 };

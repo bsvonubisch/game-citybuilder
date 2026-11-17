@@ -148,6 +148,7 @@ export class TownAudio {
       case 'church':this.bell(t,294,.16);this.bell(t+.65,440,.09);break;
       case 'mill':this.noise(t,.9,.1,450);for(let i=0;i<3;i++)this.tone(145,t+i*.26,.18,.07,this.effectsBus!,'triangle',110);break;
       case 'bakery':this.noise(t,.7,.1,650);this.bell(t+.25,880,.055);break;
+      case 'gatherer':this.bird(t);this.noise(t+.15,.2,.03,1800);break;
       case 'forester':this.knock(t,150);this.knock(t+.38,130);this.bird(t+.55);break;
       case 'sawmill':this.noise(t,.28,.19,1500,'bandpass');this.noise(t+.35,.3,.17,1200,'bandpass');this.knock(t+.7,140);break;
       case 'workshop':this.knock(t,380);this.bell(t,1100,.08);this.knock(t+.34,430);this.bell(t+.34,1320,.065);break;

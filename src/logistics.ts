@@ -41,7 +41,7 @@ export function canSupply(source: Building, target: Building,resource?:Resource)
       ((source.kind==='warehouse'||source.kind==='market')&&isHome(target.kind)&&(output==='wood'||FOOD_RESOURCES.includes(output))) ||
       (output==='tools'&&toolRequirement(target)>0) ||
       (target.kind === "warehouse" &&
-        ["steaks","roasts","grain","milk","eggs","potatoes","carrots","sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
+        ["berries","steaks","roasts","grain","milk","eggs","potatoes","carrots","sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
           output,
         ))))
   );

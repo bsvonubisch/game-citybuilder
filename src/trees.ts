@@ -15,6 +15,7 @@ export function treeVariant(d:Pick<Decoration,'kind'|'id'|'natural'|'variant'>){
 }
 export function decorationArt(d:Pick<Decoration,'kind'|'id'|'natural'|'variant'>){
   const def=DECORATIONS[d.kind];
+  if(d.kind==='berry')return {...def,frame:d.id%3};
   if(!isTree(d.kind))return def;
   const frame=TREE_FRAMES[d.kind][treeVariant(d)];
   return frame<0?def:{...def,texture:'tree-variants',frame};

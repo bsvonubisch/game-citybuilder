@@ -1,4 +1,5 @@
 import {fenceEdgeSet,crossesFence} from "./fences.js";
+import {berryRipe,BERRY_REGROW_TICKS} from './gathering.js';
 import {isTree} from './trees.js';
 import {wearTools} from './supplies.js';
 import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
@@ -8,6 +9,7 @@ import { outputCapacity, productionRate } from "./upgrades.js";
 import { DEPOSIT_TILES } from "./deposits.js";
 import type { Decoration } from "./decorations.js";
 import type { Building, Point, Simulation, World } from "./simulation.js";
+import {sourceObject,sourceBuilding,turnPoint,viewTurn} from './view-space.js';
 
 export const FOREST_RADIUS = 10, REGROW_TICKS = 2400, CHOP_SECONDS = 6, LOGS_PER_TREE = 6;
 const LEGACY_REGROW_TICKS = 480;
@@ -53,19 +55,20 @@ function walkable(sim: Simulation, p: Point, blocked: Set<string>) {
     terrainCell(p.x,p.y,sim.state.terrain).kind === "land" && !blocked.has(key(p));
 }
 const reachCache = new WeakMap<Simulation, {stamp:string; entries:Map<string, {tree:Decoration; path:Point[]}[]>}>();
-export function forestTargets(sim: Simulation, b: Building) {
+export function forestTargets(sim: Simulation, b: Building):{tree:Decoration;path:Point[]}[] {
+  const source=sourceObject(sim);if(source!==sim){const map=(p:Point)=>turnPoint(p,viewTurn(sim));return forestTargets(source,sourceBuilding(b,viewTurn(sim))).map(t=>({tree:{...t.tree,...map(t.tree)},path:t.path.map(map)}));}
   const stamp = `${sim.state.revision}:${sim.state.tick}`;
   let cache = reachCache.get(sim);
   if (!cache || cache.stamp !== stamp) { cache = {stamp, entries:new Map()}; reachCache.set(sim,cache); }
-  const identity = `${b.id}:${b.x}:${b.y}:${b.rotation}`;
+  const identity = `${b.kind}:${b.id}:${b.x}:${b.y}:${b.rotation}`;
   const cached = cache.entries.get(identity);
   if (cached) return cached;
   const fences=fenceEdgeSet(sim.state.decorations);
   const blocked = new Set(sim.state.buildings.flatMap(other => footprint(other.kind,other.x,other.y,other.rotation,other.plot).map(key)));
   for (const p of footprint(b.kind,b.x,b.y,b.rotation,b.plot)) blocked.add(key(p));
-  for (const k of Object.keys(DEPOSIT_TILES)) blocked.add(k);
+  for (const k of Object.keys(DEPOSIT_TILES)) if(!sim.state.clearedDeposits?.includes(k))blocked.add(k);
   for (const k of sim.roads) blocked.delete(k);
-  for (const d of sim.state.decorations) if ((d.kind === "fence" && d.side===undefined) || (isTree(d.kind) && treeStage(d,sim.state.tick) === "mature")) blocked.add(key(d));
+  for (const d of sim.state.decorations) if ((d.kind === "fence" && d.side===undefined) || (isTree(d.kind) && treeStage(d,sim.state.tick) === "mature" && !(b.kind==='gatherer'&&d.natural)) || (b.kind==='gatherer'&&!d.natural&&d.side===undefined&&d.kind!=='berry')) blocked.add(key(d));
   const start = sim.adjacent(b).find(p => walkable(sim,p,blocked));
   const candidates: {tree:Decoration; path:Point[]}[] = [];
   if (start) {
@@ -77,7 +80,7 @@ export function forestTargets(sim: Simulation, b: Building) {
       }
     }
     for (const tree of sim.state.decorations) {
-      if (!harvestable(tree) || treeStage(tree,sim.state.tick) !== "mature" || !forestInside(b,tree)) continue;
+      if (!(b.kind==='gatherer'?berryRipe(tree,sim.state.tick):harvestable(tree)&&treeStage(tree,sim.state.tick)==='mature') || !forestInside(b,tree)) continue;
       const approaches = dirs.map(d => ({x:tree.x+d.x,y:tree.y+d.y})).filter(p => parents.has(key(p))&&!crossesFence(p,tree,fences));
       let best: Point[]|undefined;
       for (const p of approaches) {
@@ -88,8 +91,11 @@ export function forestTargets(sim: Simulation, b: Building) {
       }
       if (best) {
         const stand=best[best.length-1];
-        best.push({x:stand.x+(tree.x-stand.x)*.65,y:stand.y+(tree.y-stand.y)*.65});
-        candidates.push({tree,path:best});
+        const waypoints=b.kind==='gatherer'?best.map(p=>sim.roads.has(key(p))?p:{x:p.x+.28,y:p.y+.28}):best;
+        waypoints.push({x:stand.x+(tree.x-stand.x)*.65,y:stand.y+(tree.y-stand.y)*.65});
+        const path=[waypoints[0]];
+        for(const p of waypoints.slice(1)){const a=path[path.length-1],steps=Math.ceil(Math.abs(p.x-a.x)+Math.abs(p.y-a.y));for(let i=1;i<=steps;i++)path.push({x:a.x+(p.x-a.x)*i/steps,y:a.y+(p.y-a.y)*i/steps});}
+        candidates.push({tree,path});
       }
     }
   }
@@ -99,7 +105,7 @@ export function forestTargets(sim: Simulation, b: Building) {
 }
 export function landTimber(b: Building) {
   if (!b.forestry) return;
-  b.inventory.wood=(b.inventory.wood??0)+(b.forestry??[]).reduce((n,t)=>n+t.cargo,0);
+  const resource=b.kind==='gatherer'?'berries':'wood';b.inventory[resource]=(b.inventory[resource]??0)+(b.forestry??[]).reduce((n,t)=>n+t.cargo,0);
   delete b.forestry;
 }
 export function forestPosition(t:ForestTrip, elapsed=0) {
@@ -109,24 +115,24 @@ export function forestPosition(t:ForestTrip, elapsed=0) {
   return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,dx:b.x-a.x,dy:b.y-a.y};
 }
 export function stepForestry(sim:Simulation,b:Building) {
-  b.forestry ??= [];
+  b.forestry ??= [];const resource=b.kind==='gatherer'?'berries':'wood';
   const night=daylight(sim.state.tick).night;
   const crew=sim.state.agents.filter(a=>a.onsite===b.id && sim.state.residents.some(r=>r.id===a.resident && r.job===b.id));
   for (const t of [...b.forestry]) {
     const tree=sim.state.decorations.find(d=>d.id===t.tree);
-    if (!crew.some(a=>a.resident===t.resident) || t.path.some(p=>terrainCell(p.x,p.y,sim.state.terrain).kind!=="land" || !!sim.buildingAt(p.x,p.y))) {
-      b.inventory.wood=(b.inventory.wood??0)+t.cargo;
+    if (!crew.some(a=>a.resident===t.resident) || t.path.some(p=>terrainCell(p.x,p.y,sim.state.terrain).kind!=="land" || !!sim.buildingAt(Math.round(p.x),Math.round(p.y)))) {
+      b.inventory[resource]=(b.inventory[resource]??0)+t.cargo;
       b.forestry=b.forestry.filter(other=>other!==t); continue;
     }
     if (t.phase === "chopping") {
-      if (!tree || treeStage(tree,sim.state.tick)!=="mature" || !b.enabled || b.construction || !b.connected) {
+      if (!tree || (b.kind==='gatherer'?!berryRipe(tree,sim.state.tick):treeStage(tree,sim.state.tick)!=="mature") || !b.enabled || b.construction || !b.connected) {
         t.phase="returning"; t.path.reverse(); t.distance=0; continue;
       }
       t.work+=STEP*productionRate(b)*(night?.25:1);
       wearTools(b,1,night?.25:1);
       if(t.work>=CHOP_SECONDS) {
-        tree.cutAt=sim.state.tick;
-        tree.regrowsAt=sim.state.tick+REGROW_TICKS;
+        if(b.kind==='gatherer')tree.ripeAt=sim.state.tick+BERRY_REGROW_TICKS;
+        else {tree.cutAt=sim.state.tick;tree.regrowsAt=sim.state.tick+REGROW_TICKS;}
         t.cargo=LOGS_PER_TREE;
         t.phase="returning"; t.path.reverse(); t.distance=0;
       }
@@ -135,7 +141,7 @@ export function stepForestry(sim:Simulation,b:Building) {
       if(t.distance>=t.path.length-1) {
         if(t.phase==="outbound") { t.phase="chopping"; t.work=0; }
         else {
-          b.inventory.wood=(b.inventory.wood??0)+t.cargo;
+          b.inventory[resource]=(b.inventory[resource]??0)+t.cargo;
           b.produced+=t.cargo;
           b.forestry=b.forestry.filter(other=>other!==t);
         }
@@ -146,8 +152,8 @@ export function stepForestry(sim:Simulation,b:Building) {
   const reserved=new Set(sim.state.buildings.flatMap(other=>(other.forestry??[]).filter(t=>t.phase!=="returning").map(t=>t.tree)));
   for(const a of crew) {
     if(b.forestry.some(t=>t.resident===a.resident)) continue;
-    if((b.inventory.wood??0)+b.forestry.length*LOGS_PER_TREE+LOGS_PER_TREE>outputCapacity(b)) break;
-    const target=forestTargets(sim,b).find(t=>!reserved.has(t.tree.id) && treeStage(t.tree,sim.state.tick)==="mature");
+    if((b.inventory[resource]??0)+b.forestry.length*LOGS_PER_TREE+LOGS_PER_TREE>outputCapacity(b)) break;
+    const target=forestTargets(sim,b).find(t=>!reserved.has(t.tree.id) && (b.kind==='gatherer'?berryRipe(t.tree,sim.state.tick):treeStage(t.tree,sim.state.tick)==="mature"));
     if(!target) break;
     reserved.add(target.tree.id);
     b.forestry.push({resident:a.resident!, tree:target.tree.id,path:target.path.map(p=>({...p})),distance:0,phase:"outbound",work:0,cargo:0});

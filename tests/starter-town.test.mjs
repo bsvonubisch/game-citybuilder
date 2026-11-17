@@ -50,15 +50,16 @@ test('captured town keeps its actual service coverage and closed services stop c
 
 test('new games reproduce the captured layout with independent fresh state',()=>{
  const a=new Simulation(),b=new Simulation();
- assert.equal(a.state.buildings.length,74);
+ assert.equal(a.state.buildings.length,75);
  assert.equal(a.state.roads.length,273);
- assert.equal(a.state.decorations.length,1593);
+ assert.equal(a.state.decorations.filter(d=>d.kind!=='berry').length,1593);
+ assert.ok(a.state.decorations.some(d=>d.kind==='berry'));
  assert.deepEqual(a.state.buildings.map(v=>Object.fromEntries(Object.keys(STARTER_LAYOUT.buildings[a.state.buildings.indexOf(v)]).map(k=>[k,v[k]]))),STARTER_LAYOUT.buildings);
  assert.deepEqual(a.state.roads,STARTER_LAYOUT.roads);
  assert.deepEqual(a.state.roadTypes,STARTER_LAYOUT.roadTypes);
  assert.deepEqual(a.state.terrain,STARTER_LAYOUT.terrain);
  assert.deepEqual(a.state.clearedDeposits,STARTER_LAYOUT.clearedDeposits);
- assert.deepEqual(a.state.decorations.map(({id,kind,variant,...d})=>d),STARTER_LAYOUT.decorations.map(({kind,variant,...d})=>d));
+ assert.deepEqual(a.state.decorations.filter(d=>d.kind!=='berry').map(({id,kind,variant,...d})=>d),STARTER_LAYOUT.decorations.map(({kind,variant,...d})=>d));
  assert.ok(a.state.decorations.some(d=>d.kind==='maple'));assert.ok(a.state.decorations.some(d=>d.kind==='willow'));
  assert.equal(a.state.money,5000);assert.equal(a.state.tick,960);
  assert.ok(a.state.buildings.every(v=>!v.construction&&v.produced===0));

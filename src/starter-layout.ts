@@ -83,7 +83,8 @@ export const STARTER_LAYOUT:StarterLayout = {
   {"kind":"warehouse","x":3,"y":38,"rotation":1,"plot":[2,2]},
   {"kind":"fishery","x":27,"y":23,"rotation":1,"plot":[2,2]},
   {"kind":"fishery","x":22,"y":24,"rotation":3,"plot":[2,2]},
-  {"kind":"chapel","x":19,"y":26,"rotation":2,"plot":[1,1]}
+  {"kind":"chapel","x":19,"y":26,"rotation":2,"plot":[1,1]},
+  {"kind":"gatherer","x":33,"y":26,"rotation":3,"plot":[1,1]}
  ],
  roads: [
   "6,3",

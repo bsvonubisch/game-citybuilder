@@ -4,7 +4,7 @@ import {foodStock,toolRequirement} from './supplies.js';
 import {marketLayout,marketStalls} from './market-layout.js';
 import type {Agent,Building,Resident,Simulation} from './simulation.js';
 import {marketCustomerPose,marketVisit} from './market-visitors.js';
-export const MARKET_GOODS:Resource[]=['bread','fish','meat','sausages','steaks','roasts','potatoes','carrots','milk','eggs','tools','wood'];
+export const MARKET_GOODS:Resource[]=['berries','bread','fish','meat','sausages','steaks','roasts','potatoes','carrots','milk','eggs','tools','wood'];
 export const marketOpen=(tick:number)=>{const hour=daylight(tick).hour;return hour>=7&&hour<19;};
 export const marketStock=(b:Building)=>MARKET_GOODS.reduce((n,r)=>n+(b.inventory[r]??0),0);
 export function marketVendors(sim:Simulation,b:Building){return sim.state.agents.filter(a=>a.onsite===b.id&&sim.state.residents.some(r=>r.id===a.resident&&r.job===b.id)).sort((a,c)=>a.resident!-c.resident!);}

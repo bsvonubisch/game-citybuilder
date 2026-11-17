@@ -1,5 +1,7 @@
 import type Phaser from "phaser";
 import { STEP } from "./catalog.js";
+import {berryRipe} from './gathering.js';
+import {placeActor} from './actor-art.js';
 import {decorationArt} from './trees.js';
 import { iso, facing, travellerDepth, opaqueBounds, type OccludingPlot } from "./rendering.js";
 import { groundHeight } from "./terrain.js";
@@ -31,6 +33,7 @@ export class ForestryArt {
     for(const sprite of trees) {
       const d=sprite.getData("decoration") as Decoration|undefined;
       if(!d)continue;
+      if(d.kind==='berry'){const frame=d.id%3+(berryRipe(d,sim.state.tick)?0:3);if(sprite.frame.name!==String(frame))sprite.setTexture('berries',frame).setOrigin(.5,1).setScale(19/this.scene.textures.getFrame('berries',d.id%3).height);continue;}
       const stage=treeStage(d,sim.state.tick);
       if(sprite.getData("growth")===stage)continue;
       sprite.setData("growth",stage);
@@ -44,12 +47,13 @@ export class ForestryArt {
       if(!s||!agent)continue;
       live.add(agent.id);
       const p=forestPosition(trip,elapsed), v=iso(p.x,p.y);
-      const miner=!!trip.rock, texture=miner?"mining":"forestry";
+      const gatherer=b.kind==='gatherer',miner=!!trip.rock, texture=miner?'mining':gatherer?'berries':'forestry';
       const tree=trip.rock??sim.state.decorations.find(d=>d.id===trip.tree);
       const direction=trip.phase==="chopping"&&tree ? facing(tree.x-p.x,tree.y-p.y) : facing(p.dx,p.dy);
       const clock=sim.state.tick*STEP+elapsed;
       const frame=[0,1,1,2,3,0][Math.floor(clock*6+trip.resident)%6];
-      if(trip.phase==="chopping")s.setTexture(texture,direction*4+frame).setOrigin([.44,.56,.56,.44][direction],.97).setScale(29/s.frame.height).setFlipX(false);
+      if(gatherer&&trip.phase==='chopping'){const phase=Math.floor((clock%2)/2*6);placeActor(s,'farm-workers',direction*4+[0,1,2,2,3,0][phase]);}
+      else if(trip.phase==="chopping")s.setTexture(texture,direction*4+frame).setOrigin([.44,.56,.56,.44][direction],.97).setScale(29/s.frame.height).setFlipX(false);
       else {
         const pose=walkFrame(direction,0,trip.distance+elapsed*.75,false);
         s.setTexture("walkers",pose.frame).setOrigin(.5,.91).setScale(24/s.frame.height).setFlipX(pose.flip);
@@ -57,14 +61,14 @@ export class ForestryArt {
       s.setPosition(v.x,v.y-groundHeight(p.x,p.y,sim.state.terrain)).setVisible(true);
       s.setDepth(travellerDepth(p,{left:s.x-s.displayWidth*s.originX,right:s.x+s.displayWidth*(1-s.originX),top:s.y-s.displayHeight*s.originY,bottom:s.y+s.displayHeight*(1-s.originY)},plots));
       let logs=this.logs.get(agent.id);
-      const cargoFrame=miner?(b.kind==="quarry"?16:17):17;
+      const cargoFrame=gatherer?6:miner?(b.kind==="quarry"?16:17):17;
       if(!logs){logs=this.scene.add.image(0,0,texture,cargoFrame).setOrigin(.5,.5);this.logs.set(agent.id,logs);}
-      logs.setTexture(texture,cargoFrame).setScale((miner?8:12)/this.scene.textures.getFrame(texture,cargoFrame).width);
+      logs.setTexture(texture,cargoFrame).setScale((gatherer?7:miner?8:12)/this.scene.textures.getFrame(texture,cargoFrame).width);
       logs.setPosition(s.x+(direction===0||direction===3?3:-3),s.y-10).setDepth(s.depth+.1).setVisible(trip.cargo>0);
       let chips=this.chips.get(agent.id);
       if(!chips){chips=this.scene.add.graphics();this.chips.set(agent.id,chips);}
       chips.clear().setDepth(s.depth+.2);
-      if(trip.phase==="chopping"&&tree&&frame===2) {
+      if(!gatherer&&trip.phase==="chopping"&&tree&&frame===2) {
         const at=iso(tree.x,tree.y), phase=(clock*6)%1;
         for(let i=0;i<3;i++)chips.fillStyle(miner?(b.kind==="quarry"?0xb8b6ab:0xc98552):i%2?0xd9ac63:0x9c6836,.9).fillRect(at.x-5+i*4+(i-1)*phase*5,at.y-4-phase*7+i*2-groundHeight(tree.x,tree.y,sim.state.terrain),1.7,.9);
       }

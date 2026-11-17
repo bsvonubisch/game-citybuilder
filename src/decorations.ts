@@ -5,6 +5,7 @@ export interface Decoration extends Point {
   kind: DecorationKind;
   natural: boolean;
   variant?: number;
+  ripeAt?: number;
   cutAt?: number;
   regrowsAt?: number;
   edge?: 0|1|2|3;

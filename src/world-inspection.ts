@@ -1,5 +1,6 @@
 import {BUILDINGS, DECORATIONS, RESOURCE_NAMES, STEP, buildingName, type Tool} from './catalog.js';
 import {isTree} from './trees.js';
+import {berryRipe} from './gathering.js';
 import {DEPOSITS, depositTiles, exposedDeposit, nearbyDeposits} from './deposits.js';
 import {forestCenter, forestInside, harvestable, treeRegrowthRemaining, treeStage} from './forestry.js';
 import {animalPosition, HUNT_RADIUS, MEAT_PER_HUNT} from './hunting.js';
@@ -67,6 +68,17 @@ export function worldDetails(sim:Simulation,selection:WorldSelection):WorldDetai
       primary:lodge?{type:'building',id:lodge.id,label:"Inspect hunter’s lodge"}:{type:'place',tool:'hunter',label:"Build hunter’s lodge"},more:[]};
   }
   const d=world.decorations.find(d=>d.id===selection.id);if(!d)return null;
+  if(d.kind==='berry'){
+    const ripe=berryRipe(d,world.tick),gatherers=world.buildings.filter(b=>b.kind==='gatherer'&&forestInside(b,d));
+    const active=world.buildings.find(b=>b.kind==='gatherer'&&b.forestry?.some(t=>t.tree===d.id&&t.phase!=='returning'));
+    const hut=active??gatherers.find(b=>b.enabled&&b.connected&&!b.construction)??gatherers[0];
+    const seconds=Math.ceil(Math.max(0,(d.ripeAt??0)-world.tick)*STEP);
+    return {title:'Wild berry bush',category:'WILD FOOD',icon:'leaf',status:!ripe?'Berries regrowing':active?'Gatherer on the way':'Ready to pick',
+      facts:[['Available food',ripe?'6 berries':'0 berries'],['Gatherers in range',String(gatherers.length)],...(!ripe?[['Ripe in',`${Math.floor(seconds/60)}m ${seconds%60}s`] as [string,string]]:[])],
+      guidance:'Gatherers need a clear walking route from their hut within 10 tiles. They bring berries back for warehouses, markets and homes. Picked bushes replenish in two game days.',
+      primary:hut?{type:'building',id:hut.id,label:'Inspect gatherer’s hut'}:{type:'place',tool:'gatherer',label:'Build gatherer’s hut'},
+      more:[{type:'remove-decoration',id:d.id,label:'Remove bush permanently'}]};
+  }
   const tree=isTree(d.kind),stage=treeStage(d,world.tick),regrowing=tree&&stage!=='mature';
   const forester=harvestable(d)?world.buildings.find(b=>b.kind==='forester'&&forestInside(b,d)):undefined;
   const status=regrowing?stage==='stump'?'Regrowing stump':'Young tree':tree?'Mature tree':d.kind==='streetlight'?'Lights up after dusk':'Placed';

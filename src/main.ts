@@ -132,7 +132,7 @@ const scene = new TownScene(simulation);
 function sendCommand(command:Command){return gateway.command(scene.view.command(command));}
 const cloud = new CloudSaves();
 const catalogGroups={homes:"Homes",food:"Food & farms",gather:"Gathering",industry:"Workshops",town:"Services",parks:"Parks",trees:"Trees",decorations:"Street furniture"};
-const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","chapel","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom","maple","willow"],decorations:["bench","streetlight","planter","fence"]};
+const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["gatherer","farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","chapel","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom","maple","willow"],decorations:["bench","streetlight","planter","fence"]};
 let category: keyof typeof catalogGroups = "homes",
   tab: "build" | "town" = "build",
   selected: number | null = null,
@@ -368,6 +368,7 @@ function setTool(next: Tool, preservePlot=false) {
   if(next==="fence")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at a tile edge · Fences join at shared corners · The tile stays usable</span>');
   if(next==="streetlight")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at either road edge to choose the curb · One post per click · 20 gold</span>');
   if(next==="hunter")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${HUNT_RADIUS}-tile hunting area · Green markers show reachable wildlife · Meat arrives when hunters return</span>`);
+  if(next==='gatherer')$('#placement-hint').insertAdjacentHTML('beforeend',`<span class="shore-hint">10-tile gathering area · Green markers show ripe bushes · Berries arrive when gatherers return</span>`);
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
   if(isExtractor(next))$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">Build beside the deposit · ${MINING_RADIUS}-tile reach · Green rocks are reachable from the entrance</span>`);
   if (next === "road") document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((button) => {
@@ -1122,10 +1123,11 @@ function updateAgentInspector() {
       $("#traveller-status").textContent="Serving customers at the stall";
       $("#traveller-detail").innerHTML=`<div class="detail-row"><span>Workplace</span><b>${escapeHtml(buildingName(site))}</b></div><p class="muted">Sells delivered food and goods to nearby residents.</p>`;return;
     }
-    if(site?.kind==="forester"&&!site.construction) {
+    if((site?.kind==="forester"||site?.kind==='gatherer')&&!site.construction) {
       const trip=site.forestry?.find(t=>t.resident===a.resident);
       $("#traveller-name").textContent=person?.name??"Forester";
       $("#traveller-kind").textContent="Forestry worker";
+      if(site.kind==='gatherer'){$('#traveller-status').textContent=trip?.phase==='chopping'?'Picking berries':trip?.phase==='returning'?'Carrying berries to the hut':trip?'Walking to a berry bush':'At the gatherer’s hut';$('#traveller-detail').innerHTML=`<div class="detail-row"><span>Carrying</span><b>${trip?.cargo??0} berries</b></div><p class="muted">Berries enter storage when this gatherer returns to the hut.</p>`;return;}
       $("#traveller-status").textContent=trip?.phase==="chopping"?"Chopping a tree":trip?.phase==="returning"?"Carrying logs to the lodge":trip?"Walking to a tree":"At the forester lodge";
       $("#traveller-detail").innerHTML=`<div class="detail-row"><span>Workplace</span><b>${escapeHtml(buildingName(site))}</b></div><div class="detail-row"><span>Carrying</span><b>${trip?.cargo??0} wood</b></div><p class="muted">Wood enters the lodge's inventory only when this worker returns. Cut trees leave stumps that regrow.</p>`;
       return;
@@ -1296,6 +1298,7 @@ function updateInspector() {
     const targets=miningTargets(simulation,b);
     $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Mining area · ${MINING_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable rock faces</span><b>${targets.length}</b></div><p class="muted">Miners use reachable matching deposits across this area and carry ore back. Green rocks can be reached. Dig deeper replenishes the assigned seam.</p>${(b.mining??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Miner")}</span><b>${t.phase==="mining"?"Mining":t.phase==="returning"?`Carrying ${t.cargo} ${b.kind==="quarry"?"stone":"metal"}`:"Walking to the deposit"}</b></div>`).join("")}`);
   }
+  if(b.kind==='gatherer'&&!b.construction)$('#building-detail').insertAdjacentHTML('beforeend',`<h4>Gathering area · 10-tile reach</h4><div class="detail-row"><span>Reachable ripe bushes</span><b>${forestTargets(simulation,b).length}</b></div><p class="muted">Gatherers bring back 6 berries per bush. Bushes replenish in two game days. Warehouses and markets make berries available to homes.</p>${(b.forestry??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??'Gatherer')}</span><b>${t.phase==='chopping'?'Picking':t.phase==='returning'?`Carrying ${t.cargo} berries`:'Walking to a bush'}</b></div>`).join('')}`);
   if (b.kind==="forester"&&!b.construction) {
     const reachable=forestTargets(simulation,b).length;
     const regrowing=simulation.state.decorations.filter(d=>harvestable(d)&&forestInside(b,d)&&treeStage(d,simulation.state.tick)!=="mature").length;
