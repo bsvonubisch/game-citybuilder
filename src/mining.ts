@@ -1,4 +1,5 @@
 import {fenceEdgeSet,crossesFence} from "./fences.js";
+import {isTree} from './trees.js';
 import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
 import { DEPOSITS, DEPOSIT_TILES, MINING_RADIUS, nearbyDeposits, depositTiles, exposedDeposit } from "./deposits.js";
 import { groundHeight, terrainCell } from "./terrain.js";
@@ -35,7 +36,7 @@ export function miningTargets(sim:Simulation,b:Building):MiningTarget[] {
   const fences=fenceEdgeSet(sim.state.decorations);
   const blocked=new Set([...Object.keys(DEPOSIT_TILES).filter(k=>!sim.state.clearedDeposits?.includes(k)),...sim.state.buildings.flatMap(c=>footprint(c.kind,c.x,c.y,c.rotation,c.plot).map(key)),...footprint(b.kind,b.x,b.y,b.rotation,b.plot).map(key)]);
   // Woodland has room between trunks. Planted trees and solid decorations remain obstacles.
-  for(const d of sim.state.decorations){const tree=["oak","pine","birch","blossom"].includes(d.kind);if(d.side===undefined&&!(d.natural&&tree)&&(!tree||treeStage(d,sim.state.tick)==="mature"))blocked.add(key(d));}
+  for(const d of sim.state.decorations){const tree=isTree(d.kind);if(d.side===undefined&&!(d.natural&&tree)&&(!tree||treeStage(d,sim.state.tick)==="mature"))blocked.add(key(d));}
   // Existing roads across a legacy seam remain usable; exposed rocks do not.
   for(const k of sim.roads)blocked.delete(k);
   const open=(p:Point)=>p.x>=0&&p.y>=0&&p.x<SIZE&&p.y<SIZE&&terrainCell(p.x,p.y,sim.state.terrain).kind==="land"&&!blocked.has(key(p))&&Math.hypot(p.x-cx,p.y-cy)<=MINING_RADIUS+1;

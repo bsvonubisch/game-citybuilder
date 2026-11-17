@@ -1,4 +1,5 @@
 import {SIZE,STEP,footprint} from './catalog.js';
+import {isTree} from './trees.js';
 import {DAY_TICKS,daylight} from './daylight.js';
 import {terrainCell,groundHeight} from './terrain.js';
 import {exposedDeposit} from './deposits.js';
@@ -16,7 +17,7 @@ function landscape(sim:Simulation){
  if(!value||value.stamp!==stamp){const plots=sim.state.buildings.flatMap(b=>footprint(b.kind,b.x,b.y,b.rotation,b.plot)),blocked=new Set(plots.map(key)),settlement=new Set<string>(),woodland=new Set<string>();
   for(const p of plots)for(let dy=-WILDLIFE_BUILDING_BUFFER;dy<=WILDLIFE_BUILDING_BUFFER;dy++)for(let dx=-WILDLIFE_BUILDING_BUFFER;dx<=WILDLIFE_BUILDING_BUFFER;dx++)if(Math.hypot(dx,dy)<=WILDLIFE_BUILDING_BUFFER)settlement.add(key({x:p.x+dx,y:p.y+dy}));
   for(const road of sim.roads){const [x,y]=road.split(',').map(Number);settlement.add(road);for(const d of dirs)settlement.add(key({x:x+d.x,y:y+d.y}));}
-  for(const d of sim.state.decorations)if(['oak','pine','birch','blossom'].includes(d.kind)&&d.cutAt===undefined){blocked.add(key(d));if(d.natural)for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++)if(Math.hypot(dx,dy)<=3)woodland.add(key({x:d.x+dx,y:d.y+dy}));}
+  for(const d of sim.state.decorations)if(isTree(d.kind)&&d.cutAt===undefined){blocked.add(key(d));if(d.natural)for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++)if(Math.hypot(dx,dy)<=3)woodland.add(key({x:d.x+dx,y:d.y+dy}));}
   value={stamp,blocked,settlement,woodland,fences:fenceEdgeSet(sim.state.decorations)};cache.set(sim,value);
  }return value;
 }

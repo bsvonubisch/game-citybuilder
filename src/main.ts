@@ -131,7 +131,7 @@ const scene = new TownScene(simulation);
 function sendCommand(command:Command){return gateway.command(scene.view.command(command));}
 const cloud = new CloudSaves();
 const catalogGroups={homes:"Homes",food:"Food & farms",gather:"Gathering",industry:"Workshops",town:"Services",parks:"Parks",trees:"Trees",decorations:"Street furniture"};
-const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","chapel","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom"],decorations:["bench","streetlight","planter","fence"]};
+const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","chapel","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom","maple","willow"],decorations:["bench","streetlight","planter","fence"]};
 let category: keyof typeof catalogGroups = "homes",
   tab: "build" | "town" = "build",
   selected: number | null = null,
@@ -560,7 +560,7 @@ function renderPanel() {
       ? Object.entries(DECORATIONS).filter(([kind])=>catalogKinds[category].includes(kind))
           .map(
             ([kind, d]) =>
-              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "fence" ? '<img class="building-icon" data-fence-preview alt="">' : kind === "streetlight" ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' : kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" ? atlasIcon("/garden-sprites.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
+              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "fence" ? '<img class="building-icon" data-fence-preview alt="">' : kind === "streetlight" ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' : kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" || d.texture === "tree-variants" ? atlasIcon(d.texture === "garden" ? "/garden-sprites.png" : "/tree-variants-v1.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
           )
           .join("")
       : (Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][])

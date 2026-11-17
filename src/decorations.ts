@@ -4,6 +4,7 @@ export interface Decoration extends Point {
   id: number;
   kind: DecorationKind;
   natural: boolean;
+  variant?: number;
   cutAt?: number;
   regrowsAt?: number;
   edge?: 0|1|2|3;
@@ -36,7 +37,7 @@ export function initialDecorations(
         kind = wilderness
           ? h > 0.68
             ? "pine"
-            : "oak"
+            : h > .61 ? "maple" : "oak"
           : h > 0.96
             ? "blossom"
             : h > 0.9

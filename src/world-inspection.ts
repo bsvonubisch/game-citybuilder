@@ -1,4 +1,5 @@
 import {BUILDINGS, DECORATIONS, RESOURCE_NAMES, STEP, buildingName, type Tool} from './catalog.js';
+import {isTree} from './trees.js';
 import {DEPOSITS, depositTiles, exposedDeposit, nearbyDeposits} from './deposits.js';
 import {forestCenter, forestInside, harvestable, treeRegrowthRemaining, treeStage} from './forestry.js';
 import {animalPosition, HUNT_RADIUS, MEAT_PER_HUNT} from './hunting.js';
@@ -66,7 +67,7 @@ export function worldDetails(sim:Simulation,selection:WorldSelection):WorldDetai
       primary:lodge?{type:'building',id:lodge.id,label:"Inspect hunter’s lodge"}:{type:'place',tool:'hunter',label:"Build hunter’s lodge"},more:[]};
   }
   const d=world.decorations.find(d=>d.id===selection.id);if(!d)return null;
-  const tree=['oak','pine','birch','blossom'].includes(d.kind),stage=treeStage(d,world.tick),regrowing=tree&&stage!=='mature';
+  const tree=isTree(d.kind),stage=treeStage(d,world.tick),regrowing=tree&&stage!=='mature';
   const forester=harvestable(d)?world.buildings.find(b=>b.kind==='forester'&&forestInside(b,d)):undefined;
   const status=regrowing?stage==='stump'?'Regrowing stump':'Young tree':tree?'Mature tree':d.kind==='streetlight'?'Lights up after dusk':'Placed';
   const seconds=Math.ceil(treeRegrowthRemaining(d,world.tick)*STEP);

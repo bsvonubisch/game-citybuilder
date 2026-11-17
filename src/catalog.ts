@@ -112,6 +112,8 @@ export type DecorationKind =
   | "pine"
   | "birch"
   | "blossom"
+  | "maple"
+  | "willow"
   | "bench"
   | "streetlight"
   | "planter"
@@ -142,6 +144,8 @@ export const DECORATIONS: Record<
     frame: 3,
     height: 54,
   },
+  maple: {name:"Maple tree",cost:22,texture:"tree-variants",frame:8,height:60},
+  willow: {name:"Willow tree",cost:22,texture:"tree-variants",frame:12,height:62},
   bench: {
     name: "Park bench",
     cost: 12,

@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
-import { DECORATIONS, STEP } from "./catalog.js";
+import { STEP } from "./catalog.js";
+import {decorationArt} from './trees.js';
 import { iso, facing, travellerDepth, opaqueBounds, type OccludingPlot } from "./rendering.js";
 import { groundHeight } from "./terrain.js";
 import { walkFrame } from "./animation.js";
@@ -33,7 +34,7 @@ export class ForestryArt {
       const stage=treeStage(d,sim.state.tick);
       if(sprite.getData("growth")===stage)continue;
       sprite.setData("growth",stage);
-      const def=DECORATIONS[d.kind];
+      const def=decorationArt(d);
       if(stage==="stump")sprite.setTexture("forestry",16).setOrigin(.5,1).setScale(9/this.scene.textures.getFrame("forestry",16).height);
       else if(d.cutAt!==undefined)sprite.setTexture(def.texture,def.frame).setOrigin(.5,1).setScale(def.height/sprite.frame.height*(stage==="sapling"?.28:stage==="young"?.6:1));
     }

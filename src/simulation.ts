@@ -3,6 +3,7 @@ import {TownStatusLog} from './town-status-log.js';
 import {isLivestock,stepLivestock,ensureHerd,validPenPlot,livestockCapacity,LIVESTOCK,isButcherCut,BUTCHER_CUTS,type Herd,type ButcherCut} from './livestock.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown} from './starter-town.js';
+import {isTree,plantTreeVariant,validTreeVariant,validateTreePlanting,type TreePlanting} from './trees.js';
 import {RoadPathCache} from './road-path-cache.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
@@ -160,6 +161,7 @@ export interface Agent {
   marketSlot?:number;
 }
 export interface World {
+  treePlanting?:TreePlanting;
   roadWorks?:RoadWork[];
   events?:TownEvent[];
   wildlife?:Animal[];
@@ -1095,12 +1097,14 @@ export class Simulation {
       if (c.kind === "road" || c.kind === "bridge")
         this.state.roads.push(key(c));
       else if (isDecoration(c.kind)) {
+        const variant=isTree(c.kind)?plantTreeVariant(this.state,c.kind):undefined;
         this.state.decorations.push({
           id: this.state.nextId++,
           kind: c.kind,
           x: c.x,
           y: c.y,
           natural: false,
+          ...(variant!==undefined?{variant}:{}),
           ...(c.kind==="streetlight"&&this.roadSet.has(key(c))?{edge:c.rotation??0}:{}),
           ...(c.kind==="fence"?canonicalFence({x:c.x,y:c.y,side:c.rotation??0}):{}),
         });
@@ -1913,6 +1917,7 @@ export function parseSave(raw: string): World {
   const legacy = s.version === 1;
   validateTerrain(s.terrain);
   validateWildlife(s as World);
+  validateTreePlanting(s.treePlanting);
   const occupied = new Set<string>();
   const ids = new Set<number>();
   if (
@@ -2180,6 +2185,7 @@ export function parseSave(raw: string): World {
         (terrain(d.x, d.y, s.terrain) === "water"&&!roadLamp) ||
         !isDecoration(d.kind) ||
         typeof d.natural !== "boolean" ||
+        (d.variant !== undefined && !validTreeVariant(d.kind,d.variant)) ||
         (d.cutAt !== undefined && (!harvestable(d) || !Number.isInteger(d.cutAt) || d.cutAt<0 || d.cutAt>s.tick)) ||
         (d.regrowsAt !== undefined && (d.cutAt === undefined || !Number.isInteger(d.regrowsAt) || d.regrowsAt < d.cutAt || d.regrowsAt > s.tick + REGROW_TICKS)) ||
         (d.edge!==undefined&&!roadLamp) ||

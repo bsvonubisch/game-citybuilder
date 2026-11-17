@@ -1,4 +1,5 @@
 import {fenceEdgeSet,crossesFence} from "./fences.js";
+import {isTree} from './trees.js';
 import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import { daylight } from "./daylight.js";
@@ -20,7 +21,7 @@ export interface ForestTrip {
 }
 const key = (p: Point) => `${p.x},${p.y}`;
 const dirs = [{x:1,y:0}, {x:0,y:1}, {x:-1,y:0}, {x:0,y:-1}];
-export const harvestable = (d: Decoration) => d.natural && ["oak", "pine", "birch"].includes(d.kind);
+export const harvestable = (d: Decoration) => d.natural && isTree(d.kind) && d.kind!=="blossom";
 /** Retain the visible growth stage of old stumps; mature trees stay mature.
  * Persist the deadline so repeated loads never restart or extend growth. */
 export function lengthenTreeRegrowth(world: Pick<World, "tick" | "decorations">) {
@@ -63,7 +64,7 @@ export function forestTargets(sim: Simulation, b: Building) {
   for (const p of footprint(b.kind,b.x,b.y,b.rotation,b.plot)) blocked.add(key(p));
   for (const k of Object.keys(DEPOSIT_TILES)) blocked.add(k);
   for (const k of sim.roads) blocked.delete(k);
-  for (const d of sim.state.decorations) if ((d.kind === "fence" && d.side===undefined) || (["oak","pine","birch","blossom"].includes(d.kind) && treeStage(d,sim.state.tick) === "mature")) blocked.add(key(d));
+  for (const d of sim.state.decorations) if ((d.kind === "fence" && d.side===undefined) || (isTree(d.kind) && treeStage(d,sim.state.tick) === "mature")) blocked.add(key(d));
   const start = sim.adjacent(b).find(p => walkable(sim,p,blocked));
   const candidates: {tree:Decoration; path:Point[]}[] = [];
   if (start) {

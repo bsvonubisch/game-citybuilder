@@ -1,4 +1,5 @@
 import { WATER_DROP } from './water-level.js';
+import {decorationArt,isTree,nextTreeVariant} from './trees.js';
 import type {WorldSelection} from './world-inspection.js';
 import {shorePlant} from './shore-bank.js';
 import {RoadWorkAlerts} from './roadwork-alerts.js';
@@ -335,6 +336,7 @@ export class TownScene extends Phaser.Scene {
     this.load.image("park-benches", "/park-benches.png");
     this.load.image("foundation-stone", "/foundation-stone.png");
     this.load.image("garden", "/garden-sprites.png");
+    this.load.image("tree-variants", "/tree-variants-v1.png");
     this.load.image("props", "/town-props.png");
     this.load.image("vehicles", "/vehicles-directions.png");
     this.load.image('delivery-industrial','/delivery-industrial-v1.png');
@@ -418,6 +420,7 @@ export class TownScene extends Phaser.Scene {
     this.trimAtlas("deposits", 4, 2);
     this.trimAtlas("shore", 4, 2);
     this.trimAtlas("garden", 4, 4);
+    this.trimAtlas("tree-variants", 4, 4);
     this.trimAtlas("props", 2, 2);
     this.trimAtlas("streetlamp",1,1);
     this.trimAtlas("mill", 2, 1);
@@ -855,7 +858,7 @@ export class TownScene extends Phaser.Scene {
         }
       }
     for (const d of this.simulation.state.decorations) {
-      const def = DECORATIONS[d.kind],
+      const def = decorationArt(d),
         position=d.kind==="streetlight"?lampPoint(d):d.kind==="fence"?fenceCenter(d):d,
         p = iso(position.x, position.y);
       const sprite = this.add
@@ -1135,7 +1138,7 @@ export class TownScene extends Phaser.Scene {
         for (const p of cells)
           if(this.tool!=="fence")this.diamond(p, valid ? 0xffe5a4 : 0xd78069, 0.3);
       if (isDecoration(this.tool)) {
-        const def = DECORATIONS[this.tool],
+        const def = decorationArt({kind:this.tool,id:0,natural:false,variant:isTree(this.tool)?nextTreeVariant(this.view.source.state,this.tool):undefined}),
           position=this.tool==="streetlight"&&this.simulation.roads.has(key(this.hover))?lampPoint({...this.hover,edge:this.rotation}):this.hover,
           p = iso(position.x, position.y);
         this.decorationGhost ??= this.add
