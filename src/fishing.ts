@@ -3,6 +3,7 @@ import { fisheryCells } from "./shoreline.js";
 import { terrainCell } from "./terrain.js";
 import { daylight } from "./daylight.js";
 import { productionRate, outputCapacity } from "./upgrades.js";
+import {wearTools} from './supplies.js';
 import type { Building, Point, Simulation } from "./simulation.js";
 
 export interface FishingTrip {
@@ -108,6 +109,7 @@ export function stepFishing(sim: Simulation, b: Building) {
   }
   if (trip.phase === "fishing") {
     b.progress += STEP * productionRate(b);
+    wearTools(b,b.workers);
     if (b.progress >= BUILDINGS.fishery.recipe!.seconds) {
       b.progress = 0;
       trip.cargo = BUILDINGS.fishery.recipe!.count;

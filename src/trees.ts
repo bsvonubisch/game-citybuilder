@@ -1,6 +1,7 @@
 import {DECORATIONS} from './catalog.js';
 import type {Decoration} from './decorations.js';
 import type {World} from './simulation.js';
+import {terrainCell} from './terrain.js';
 
 export const TREE_KINDS=['oak','pine','birch','blossom','maple','willow'] as const;
 export type TreeKind=typeof TREE_KINDS[number];
@@ -35,4 +36,20 @@ export function plantTreeVariant(world:Pick<World,'treePlanting'|'decorations'>,
 export function validTreeVariant(kind:string,variant:unknown){return isTree(kind)&&Number.isInteger(variant)&&Number(variant)>=0&&Number(variant)<TREE_FRAMES[kind].length;}
 export function validateTreePlanting(value:TreePlanting|undefined){
   if(value!==undefined&&(!value||!Number.isSafeInteger(value.count)||value.count<0||!value.last||typeof value.last!=='object'||Array.isArray(value.last)||Object.entries(value.last).some(([kind,variant])=>!validTreeVariant(kind,variant))))throw new Error('Invalid tree planting history.');
+}
+/** Refresh wild species once, in place. Player-planted trees, stumps, IDs and
+ * growth deadlines remain intact; saved towns never receive a new layout. */
+export function diversifyWoodland(world:World){
+ if(world.woodlandVersion===1)return;
+ for(const d of world.decorations){
+  if(!d.natural||!isTree(d.kind)||d.kind==='blossom'||d.kind==='maple'||d.kind==='willow')continue;
+  const n=hash(d.x*7919+d.y*104729)%100;
+  const waterside=[[-1,0],[1,0],[0,1],[0,-1],[-2,0],[2,0],[0,2],[0,-2]].some(([dx,dy])=>terrainCell(d.x+dx,d.y+dy,world.terrain).kind==='water');
+  if(waterside&&n<65)d.kind='willow';
+  else if(n<24)d.kind='maple';
+  else if(n<37)d.kind='birch';
+  // Pick only the new views for refreshed natural trees so the update is visible.
+  d.variant=d.kind==='maple'||d.kind==='willow'?hash(d.id)%4:1+hash(d.id)%2;
+ }
+ world.woodlandVersion=1;
 }

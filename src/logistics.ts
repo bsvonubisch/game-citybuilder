@@ -1,6 +1,7 @@
 import {MARKET_GOODS} from "./market.js";
 import {isLivestock} from './livestock.js';
-import { BUILDINGS, buildingRecipe,buildingOutputs, type Resource } from "./catalog.js";
+import { BUILDINGS, buildingRecipe,buildingOutputs,isHome,FOOD_RESOURCES,RESOURCES, type Resource } from "./catalog.js";
+import {toolRequirement} from './supplies.js';
 import type {
   Agent,
   Building,
@@ -27,15 +28,18 @@ export interface ProductionConnections {
   workers: number[];
 }
 
-/** Shared by dispatch and inspection: warehouses receive only these exports. */
+/** Shared by dispatch and inspection: all goods stay in the local supply network. */
 export function canSupply(source: Building, target: Building,resource?:Resource) {
-  const output = resource?[resource]:source.kind === "warehouse" && (["workshop","butcher"].includes(target.kind)||isLivestock(target.kind)) ? [buildingRecipe(target)?.input].filter((r):r is Resource=>!!r) : buildingOutputs(source);
+  const output = resource?[resource]:source.kind === "warehouse" ? RESOURCES : source.kind==='market'?FOOD_RESOURCES:buildingOutputs(source);
   return (
     !source.construction &&
-    !target.construction &&
+    !target.construction?.demolition &&
+    (!target.construction || output.includes('tools')) &&
     !!output.length &&
     source.id !== target.id &&
-    output.some(output=>(buildingRecipe(target)?.input === output || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||
+    output.some(output=>((!target.construction&&buildingRecipe(target)?.input === output) || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||
+      ((source.kind==='warehouse'||source.kind==='market')&&isHome(target.kind)&&(output==='wood'||FOOD_RESOURCES.includes(output))) ||
+      (output==='tools'&&toolRequirement(target)>0) ||
       (target.kind === "warehouse" &&
         ["steaks","roasts","grain","milk","eggs","potatoes","carrots","sausages", "meat", "bricks", "bread", "fish", "tools", "wood", "planks", "stone", "metal"].includes(
           output,
@@ -50,7 +54,7 @@ export function productionConnections(
 ): ProductionConnections | null {
   const b = sim.building(id);
   if (!b || !BUILDINGS[b.kind].recipe) return null;
-  const link = (source: Building, target: Building): GoodsConnection[] => (source.kind==='warehouse'?[buildingRecipe(target)!.input!]:buildingOutputs(source)).filter(r=>canSupply(source,target,r)).map(resource=>({
+  const link = (source: Building, target: Building): GoodsConnection[] => (source.kind==='warehouse'?RESOURCES:source.kind==='market'?FOOD_RESOURCES:buildingOutputs(source)).filter(r=>canSupply(source,target,r)).map(resource=>({
     source: source.id,
     target: target.id,
     resource,

@@ -1,6 +1,7 @@
 import {BUILDINGS,STEP,dimensions,buildingJobs} from './catalog.js';
 import {daylight} from './daylight.js';
 import {outputCapacity,productionRate} from './upgrades.js';
+import {wearTools} from './supplies.js';
 import type {Building,Simulation} from './simulation.js';
 
 import {LIVESTOCK,isLivestock,livestockCapacity} from './livestock-layout.js';
@@ -15,6 +16,7 @@ export function stepLivestock(sim:Simulation,b:Building){
  if(b.construction||!b.enabled||!b.connected||daylight(sim.state.tick).night||livestockCrew(sim,b).length<buildingJobs(b))return;
  if(herd.fed<=0){const feed=Math.max(1,Math.ceil(herd.count/4));if((b.inventory.grain??0)<feed)return;b.inventory.grain!-=feed;herd.fed=40;}
  const dt=STEP*productionRate(b);herd.fed=Math.max(0,herd.fed-STEP);
+ wearTools(b,b.workers);
  // Breeding advances steadily per pen, not exponentially with the number of pairs.
  herd.growth=Math.min(LIVESTOCK[b.kind].birth,herd.growth+STEP);
  if(herd.growth>=LIVESTOCK[b.kind].birth){

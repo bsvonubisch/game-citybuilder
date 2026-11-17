@@ -58,12 +58,13 @@ test('new games reproduce the captured layout with independent fresh state',()=>
  assert.deepEqual(a.state.roadTypes,STARTER_LAYOUT.roadTypes);
  assert.deepEqual(a.state.terrain,STARTER_LAYOUT.terrain);
  assert.deepEqual(a.state.clearedDeposits,STARTER_LAYOUT.clearedDeposits);
- assert.deepEqual(a.state.decorations.map(({id,...d})=>d),STARTER_LAYOUT.decorations);
+ assert.deepEqual(a.state.decorations.map(({id,kind,variant,...d})=>d),STARTER_LAYOUT.decorations.map(({kind,variant,...d})=>d));
+ assert.ok(a.state.decorations.some(d=>d.kind==='maple'));assert.ok(a.state.decorations.some(d=>d.kind==='willow'));
  assert.equal(a.state.money,5000);assert.equal(a.state.tick,960);
  assert.ok(a.state.buildings.every(v=>!v.construction&&v.produced===0));
  assert.ok(a.state.buildings.filter(v=>v.herd).every(v=>v.herd.count===2));
  const warehouse=a.state.buildings.find(v=>v.kind==='warehouse');
- assert.ok(warehouse.inventory.wood>=200&&warehouse.inventory.stone>=160&&warehouse.inventory.bread>=140);
+ assert.ok(a.totals().wood>=200&&warehouse.inventory.stone>=160&&a.totals().bread>=140);
  a.state.buildings[0].x=55;a.state.decorations[0].x=55;a.state.roads.pop();
  assert.notEqual(b.state.buildings[0].x,55);assert.notEqual(b.state.decorations[0].x,55);assert.equal(b.state.roads.length,273);
 });

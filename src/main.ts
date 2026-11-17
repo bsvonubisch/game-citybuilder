@@ -18,6 +18,7 @@ import {isHome,isPark} from "./catalog.js";
 import {parkVisitor} from "./park-visitors.js";
 import Phaser from "phaser";
 import {townNeeds,buildingNeeds} from "./needs.js";
+import {foodStock,toolRequirement,firewoodNeed} from './supplies.js';
 import "./style.css";
 import { ROAD_TYPES, roadTypeAt, type RoadType } from "./roads.js";
 import { FOREST_RADIUS, REGROW_TICKS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
@@ -191,12 +192,13 @@ $("#app").innerHTML = `
  <header class="topbar"><a class="brand" href="#" aria-label="Center town">${icon("tree")}<span>LITTLE WORKS<small>PINE & COPPER</small></span></a><div class="resource-bar">
  ${[
    ["coin", "gold", "Gold"],
-   ["bread", "food-stock", "Food in warehouses"],
+   ["bread", "food-stock", "Food in town"],
    ["wood", "wood", "Wood in warehouses"],
    ["planks", "planks", "Planks in warehouses"],
    ["box", "bricks", "Bricks in warehouses"],
    ["stone", "stone", "Stone in warehouses"],
    ["metal", "metal", "Metal in warehouses"],
+   ["hammer", "tools", "Tools in town"],
    ["people", "population", "Employed / residents"],
    ["hammer", "builders", "Builders / needed"],
    ["leaf", "leisure", "Leisure"],
@@ -1272,7 +1274,7 @@ function updateInspector() {
     const herd=ensureHerd(b),capacity=livestockCapacity(b.kind,b.plot);
     $('#building-detail').innerHTML=`<div class="detail-row"><span>Animals / pen capacity</span><b>${herd.count} / ${capacity}</b></div><div class="detail-row"><span>Farmers on site</span><b>${simulation.state.agents.filter(a=>a.onsite===b.id).length} / ${buildingJobs(b)}</b></div><div class="detail-row"><span>${herd.count>=capacity?'Next birth → 4 meat':'Next birth'}</span><b>${Math.floor(herd.growth/LIVESTOCK[b.kind].birth*100)}%${herd.count>=capacity&&herd.growth>=LIVESTOCK[b.kind].birth&&(b.inventory.meat??0)>outputCapacity(b)-4?' · storage full':''}</b></div><div class="detail-row"><span>Grain feed</span><b>${b.inventory.grain??0}</b></div><div class="detail-row"><span>Meat for delivery</span><b>${b.inventory.meat??0}</b></div><p class="muted">At full capacity, each new birth supplies 4 meat and keeps the herd full.${b.kind==='cattle'?' Milk production continues.':b.kind==='chickens'?' Egg production continues.':''}</p>`;
   }
-  if(b.kind==="market"&&!b.construction){$("#building-detail").innerHTML=`<div class="detail-row"><span>Plot / stalls</span><b>${(b.plot??[2,2]).join("×")} / ${marketStalls(b)}</b></div><div class="detail-row"><span>Vendors on site</span><b>${marketVendors(simulation,b).length} / ${buildingJobs(b)}</b></div><div class="detail-row"><span>Customers browsing</span><b>${simulation.state.agents.filter(a=>a.target===b.id&&a.marketSlot!==undefined).length}</b></div><div class="detail-row"><span>Goods sold</span><b>${b.produced}</b></div>${MARKET_GOODS.map(r=>`<div class="detail-row"><span>${RESOURCE_NAMES[r]}</span><b>${b.inventory[r]??0}</b></div>`).join("")}<p class="muted">Open 07:00–19:00. Food purchases feed the town; sales earn gold. Nearby residents walk here, and trucks replenish stock.</p>`;}
+  if(b.kind==="market"&&!b.construction){$("#building-detail").innerHTML=`<div class="detail-row"><span>Plot / stalls</span><b>${(b.plot??[2,2]).join("×")} / ${marketStalls(b)}</b></div><div class="detail-row"><span>Vendors on site</span><b>${marketVendors(simulation,b).length} / ${buildingJobs(b)}</b></div><div class="detail-row"><span>Customers browsing</span><b>${simulation.state.agents.filter(a=>a.target===b.id&&a.marketSlot!==undefined).length}</b></div><div class="detail-row"><span>Goods sold</span><b>${b.produced}</b></div>${MARKET_GOODS.map(r=>`<div class="detail-row"><span>${RESOURCE_NAMES[r]}</span><b>${b.inventory[r]??0}</b></div>`).join("")}<p class="muted">Open 07:00–19:00. Homes collect food and firewood from this market. Local sales earn gold; trucks replenish its stock.</p>`;}
   if (d.recipe || isLeisure(b.kind) || b.kind === "market")
     $("#toggle-production").textContent = isLeisure(b.kind) || b.kind === "market"
       ? b.enabled
@@ -1631,19 +1633,24 @@ function updateUI() {
   $("#gold").textContent = Math.floor(s.money).toLocaleString();
   const income=incomeSummary(s.tick,s.income);
   $(".resource.gold small").textContent=`+${income.total.toLocaleString()} / day`;
-  $(".resource.gold").title=`Income over the last game day: ${income.total} gold · taxes ${income.tax} · exports ${income.exports} · market sales ${income.market}. Building refunds are excluded.`;
+  $(".resource.gold").title=`Income over the last game day: ${income.total} gold · taxes ${income.tax} · market sales ${income.market}. Building refunds are excluded.`;
   updatePlacementCost();
   const bread = simulation.stored("bread"),
     fish = simulation.stored("fish"),meat=simulation.stored("meat"),sausages=simulation.stored("sausages");
-  $("#food-stock").textContent = String(FOOD_RESOURCES.reduce((n,r)=>n+simulation.stored(r),0)+(s.marketMeals??0));
+  $("#food-stock").textContent = String(s.buildings.reduce((n,b)=>n+foodStock(b),0));
   $(".resource.food-stock").title =
-    `${bread} bread + ${fish} fish + ${meat} meat + ${sausages} sausages + ${simulation.stored("potatoes")} potatoes + ${simulation.stored("carrots")} carrots in warehouses · ${s.marketMeals??0} meals bought at markets · ${Math.ceil(s.residents.length / 3)} food needed per day · ${s.food}% of last day's needs met`;
+    `Food in homes, markets, workplaces and warehouses · ${s.residents.length} food consumed per game day · ${s.food}% of residents fed. Homes store two days of meals.`;
   $(".resource.food-stock").setAttribute(
     "aria-label",
     $(".resource.food-stock").title,
   );
   for (const r of ["wood", "planks", "bricks", "stone", "metal"] as const)
     $("#" + r).textContent = simulation.stored(r).toString();
+  const toolStock=s.buildings.reduce((n,b)=>n+(b.inventory.tools??0),0),toolNeed=s.buildings.reduce((n,b)=>n+toolRequirement(b),0),equipped=s.buildings.reduce((n,b)=>n+Math.min(toolRequirement(b),b.inventory.tools??0),0),toolsInTransit=s.agents.filter(a=>a.cargo==='tools').reduce((n,a)=>n+a.amount,0);
+  $('#tools').textContent=String(toolStock+toolsInTransit);
+  $('.resource.tools').title=`${simulation.stored('tools')} in warehouses · ${equipped} of ${toolNeed} workers equipped · ${toolsInTransit} being delivered. Missing tools reduce work speed to 50%; tools last four working days.`;
+  $('.resource.tools').setAttribute('aria-label',$('.resource.tools').title);$('.resource.tools').classList.toggle('shortage',equipped<toolNeed);
+  $('.resource.wood').title=`${simulation.stored('wood')} wood in warehouses · homes burn ${firewoodNeed(simulation)} wood per game day as firewood.`;
   $("#population").textContent = `${employed} / ${s.residents.length}`;
   $(".resource.population").title =
     `${employed} of ${s.residents.length} residents have jobs · ${s.residents.length - employed} without an assigned job`;
@@ -1661,7 +1668,7 @@ function updateUI() {
   $("#goal-count").textContent =
     s.delivered < 30
       ? `${s.delivered} / 30 goods delivered`
-      : `${s.delivered} goods delivered · ${s.exported} tools exported`;
+      : `${s.delivered} goods delivered locally`;
   $("#goal-copy").textContent =
     s.delivered < 30
       ? "Let your first deliveries find their way home."
@@ -1672,7 +1679,7 @@ function updateUI() {
   if (tab === "town") {
     $("#town-needs").innerHTML=needs.map(n=>`<div class="town-need ${n.have<n.need?"short":"met"}"><div><b>${n.label}</b><small>${n.have<n.need?`${n.need-n.have} more ${n.unit} needed`:n.id==="food"?`${n.need?Math.floor(n.have/n.need):0} days in reserve`:"Need met"}</small></div><strong>${n.have} <span>/ ${n.need}</span></strong>${n.have<n.need&&n.action?`<button class="quiet" data-need="${n.id}">${n.action.label}</button>`:""}</div>`).join("");
     $("#town-stats").innerHTML =
-      `<div class="detail-row"><span>Employed residents</span><b>${employed} / ${s.residents.length}</b></div><div class="detail-row"><span>Deliveries on the road</span><b>${s.agents.filter((a) => a.kind === "truck").length}</b></div><div class="detail-row"><span>Tools exported</span><b>${s.exported}</b></div><div class="detail-row"><span>Food needs met</span><b>${s.food}%</b></div>`;
+      `<div class="detail-row"><span>Employed residents</span><b>${employed} / ${s.residents.length}</b></div><div class="detail-row"><span>Deliveries on the road</span><b>${s.agents.filter((a) => a.kind === "truck").length}</b></div><div class="detail-row"><span>Food needs met</span><b>${s.food}%</b></div>`;
     const totals = simulation.totals();
     $("#inventory").innerHTML = RESOURCES.map(
       (r) =>
@@ -1718,7 +1725,7 @@ function closeModal() {
 }
 function showChains() {
   openModal(
-    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat field → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per three residents each day.</small></div><div class="chain"><b>From woodland to table</b><span>Hunter → Butcher → Market / Warehouse</span><small>Hunters bring meat home. Butchers turn two meat into four sausages, feeding more citizens; markets sell sausages for 8 gold.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Warehouse · Metal mine → Workshop → Warehouse</span><small>Wood becomes construction planks. Two metal become one tool; exported tools earn 35 gold each.</small></div><div class="chain"><b>Brickmaking</b><span>Stone quarry → Brickworks → Warehouse → Brick roads and bridges</span><small>Two stone become four bricks. New brick road tiles use one brick; bridge tiles use four.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
+    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat field → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per resident each day, delivered to homes.</small></div><div class="chain"><b>From woodland to table</b><span>Hunter → Butcher → Market / Warehouse</span><small>Hunters bring meat home. Butchers turn two meat into four sausages, feeding more citizens; markets sell sausages for 8 gold.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Warehouse · Metal mine → Workshop → Warehouse</span><small>Wood becomes construction planks. Two metal become one tool. Tools stay in town and equip workers; wood also heats homes.</small></div><div class="chain"><b>Brickmaking</b><span>Stone quarry → Brickworks → Warehouse → Brick roads and bridges</span><small>Two stone become four bricks. New brick road tiles use one brick; bridge tiles use four.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
   );
 }
 function showSettings() {

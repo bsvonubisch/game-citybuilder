@@ -7,6 +7,7 @@ import {
   type Resource,
 } from "./catalog.js";
 import { constructionWork } from "./construction.js";
+import {toolEfficiency} from './supplies.js';
 import {isService,serviceCapacity} from './proximity.js';
 import type { Building, Simulation } from "./simulation.js";
 
@@ -19,7 +20,7 @@ export function materialGuidance(
   const steps: string[] = [];
   if (sim.state.money < cost)
     steps.push(
-      `Earn ${Math.ceil(cost - sim.state.money)} more gold from household taxes or tool exports.`,
+      `Earn ${Math.ceil(cost - sim.state.money)} more gold from household taxes or local market sales.`,
     );
   for (const [resource, required] of Object.entries(materials)) {
     const r = resource as Resource,
@@ -55,7 +56,7 @@ export function materialGuidance(
 }
 export const buildingLevel = (b: Building) =>
   b.kind === "house" ? (b.houseTier ?? 1) : (b.level ?? 1);
-export const productionRate = (b: Building) => 1 + ((b.level ?? 1) - 1) * 0.35;
+export const productionRate = (b: Building) => (1 + ((b.level ?? 1) - 1) * 0.35)*toolEfficiency(b);
 export const outputCapacity = (b: Building) => (b.kind==='farm'?Math.max(20,(b.plot?.[0]??2)*(b.plot?.[1]??2)*5):20) * (b.level ?? 1);
 export function nextUpgrade(b: Building) {
   const level = buildingLevel(b);
@@ -83,7 +84,7 @@ export function nextUpgrade(b: Building) {
       b.kind === "farm" ? `Planting and harvesting ${Math.round((1+(next-1)*.35)*100)}% · harvest storage ${outputCapacity({...b,level:next})} · same field and farmers.` : b.kind === "market" ? `Sales earn ${Math.round((1+(next-1)*.1)*100)}% gold · same stalls, staff and plot.` : isService(b.kind)
         ? `Serves ${serviceCapacity({...b,level:next})} nearby residents; walking range stays the same.`
         : b.kind === "warehouse"
-          ? `Tool exports earn ${Math.round(35 * (1 + (next - 1) * 0.1))} gold each. Stock and road network stay here.`
+          ? `Local delivery loads carry ${12 + (next - 1) * 4} goods. Stock and road network stay here.`
           : `Production ${Math.round((1 + (next - 1) * 0.35) * 100)}% · output storage ${20 * next} · same workers and footprint.`,
   };
 }

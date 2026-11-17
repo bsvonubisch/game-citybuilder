@@ -9,9 +9,9 @@ test('wildlife roams natural woodland, outside buildings and road buffers',()=>{
  const a=sim.state.wildlife[0],house=sim.state.buildings.find(b=>b.kind==='house');house.x=a.x;house.y=a.y;sim.state.revision++;stepWildlife(sim);assert.ok(a.respawnAt!==undefined||wildOpen(sim,a),'town expansion displaces wildlife');
 });
 test('real hunters track, aim and return with meat before it enters stock',()=>{
- const{sim,lodge}=fixture(),seen=new Set();assert.ok(huntTargets(sim,lodge).length);
- for(let i=0;i<2200;i++){sim.step();const trips=lodge.hunting??[];const reserved=trips.filter(t=>t.phase!=='returning').map(t=>t.animal);assert.equal(new Set(reserved).size,reserved.length);for(const t of trips){seen.add(t.phase);assert.ok(sim.state.agents.some(a=>a.resident===t.resident&&a.onsite===lodge.id));if(t.phase==='returning'&&t.cargo)assert.ok(sim.state.wildlife.find(a=>a.id===t.animal).respawnAt>sim.state.tick);}}
- assert.deepEqual([...seen].sort(),['aiming','outbound','returning']);assert.ok(lodge.produced>=6);assert.ok(sim.stored('meat')>0);assert.doesNotThrow(()=>parseSave(JSON.stringify(sim.snapshot())));
+ const{sim,lodge}=fixture(),seen=new Set();let delivered=false;assert.ok(huntTargets(sim,lodge).length);
+ for(let i=0;i<2200;i++){sim.step();delivered ||= sim.state.agents.some(a=>a.source===lodge.id&&a.cargo==='meat');const trips=lodge.hunting??[];const reserved=trips.filter(t=>t.phase!=='returning').map(t=>t.animal);assert.equal(new Set(reserved).size,reserved.length);for(const t of trips){seen.add(t.phase);assert.ok(sim.state.agents.some(a=>a.resident===t.resident&&a.onsite===lodge.id));if(t.phase==='returning'&&t.cargo)assert.ok(sim.state.wildlife.find(a=>a.id===t.animal).respawnAt>sim.state.tick);}}
+ assert.deepEqual([...seen].sort(),['aiming','outbound','returning']);assert.ok(lodge.produced>=6);assert.ok(delivered,'Harvested meat is hauled to local consumers');assert.doesNotThrow(()=>parseSave(JSON.stringify(sim.snapshot())));
 });
 test('hunting needs present workers and keeps carried meat through saving',()=>{
  const{sim,lodge}=fixture();sim.state.agents=[];for(let i=0;i<50;i++){sim.state.tick++;stepHunting(sim,lodge);}assert.equal(lodge.produced,0);assert.equal(lodge.hunting.length,0);

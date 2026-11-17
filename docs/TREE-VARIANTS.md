@@ -21,6 +21,13 @@ trees retain their original appearance. View rotation and regrowth keep the
 same variant. New species use the shared tree rules for forestry, pathing and
 inspection; planted trees remain protected from foresters.
 
+Fresh towns and existing saves also receive a one-time `woodlandVersion: 1`
+species refresh. Some natural trees become maples or birches; willows favor
+water edges. Positions, tree IDs, stumps, regrowth deadlines, planted garden
+trees, removed trees and the player's entire town layout remain unchanged.
+The refreshed natural trees use the new atlas views. This replaces the earlier
+behavior that left the captured starter town's species unchanged.
+
 Checked all twenty appearances in the actual renderer and all four camera
 turns, the placement ghost against its placed result, and runtime errors.
 Regression tests cover non-repetition, save/load, invalid variants, rotation,

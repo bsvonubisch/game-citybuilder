@@ -2,6 +2,7 @@ import {finishRoadFixture} from './roadwork-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Simulation, key } from "./legacy-town.mjs";
+import {deliveryCapacity} from "../.test-dist/warehouses.js";
 import { BUILDINGS, DELIVERY_CAPACITY } from "../.test-dist/catalog.js";
 import { Simulation as StarterSimulation } from "../.test-dist/simulation.js";
 import { nearbyDeposits } from "../.test-dist/deposits.js";
@@ -16,13 +17,13 @@ import {
 const building = (sim, kind) =>
   sim.state.buildings.find((b) => b.kind === kind);
 
-test('delivery vehicles carry twelve goods, respect stock and include goods already en route',()=>{
+test('delivery loads respect source level, stock and goods already en route',()=>{
   for(const [sourceKind,targetKind,cargo] of [['warehouse','cattle','grain'],['warehouse','workshop','metal'],['warehouse','butcher','meat'],['warehouse','market','bread'],['sawmill','warehouse','planks']]){
     const sim=new StarterSimulation(),source=building(sim,sourceKind),target=building(sim,targetKind);
     sim.state.agents=[];for(const b of sim.state.buildings){b.enabled=b===source||b===target;b.inventory={};}
     source.inventory[cargo]=30;sim.dispatch();
     const shipment=sim.state.agents.find(a=>a.source===source.id&&a.target===target.id&&a.cargo===cargo);
-    assert.ok(shipment,`${cargo} shipment`);assert.equal(shipment.amount,DELIVERY_CAPACITY);assert.equal(source.inventory[cargo],18);
+    assert.ok(shipment,`${cargo} shipment`);assert.equal(shipment.amount,deliveryCapacity(source));assert.equal(source.inventory[cargo],30-deliveryCapacity(source));
     assert.equal(sim.totals()[cargo],30,'Loading never creates or loses goods');
     sim.dispatch();assert.equal(sim.state.agents.filter(a=>a.source===source.id).length,1,'An existing trip is not duplicated');
     sim.state.agents=[];source.inventory[cargo]=3;sim.dispatch();assert.equal(sim.state.agents.find(a=>a.source===source.id)?.amount,3,'Partial loads use available stock');
@@ -41,7 +42,7 @@ const execute = (sim, command) => {
   assert.equal(result.ok, true, result.message);
 };
 
-test("production links follow recipe chains, warehouse export rules and front entrances", () => {
+test("production links follow recipe chains, local household supplies and front entrances", () => {
   const sim = new Simulation(),
     sawmill = building(sim, "sawmill"),
     forester = building(sim, "forester"),
@@ -51,7 +52,7 @@ test("production links follow recipe chains, warehouse export rules and front en
   const view = productionConnections(sim, sawmill.id);
   assert.deepEqual(
     view.inputs.map((l) => [l.source, l.resource]),
-    [[forester.id, "wood"]],
+    [[warehouse.id,"wood"],[warehouse.id,"tools"],[forester.id,"wood"],[workshop.id,"tools"]],
   );
   assert.deepEqual(
     new Set(view.outputs.map((l) => `${l.target}:${l.resource}`)),
@@ -64,7 +65,7 @@ test("production links follow recipe chains, warehouse export rules and front en
   );
   assert.equal(canSupply(forester, warehouse), true);
   const quarry = productionConnections(sim, building(sim, "quarry").id);
-  assert.equal(quarry.inputs.length, 0);
+  assert.ok(quarry.inputs.every(l=>l.resource==='tools'));
   assert.deepEqual(
     quarry.outputs.map((l) => l.target),
     [warehouse.id],
@@ -117,6 +118,7 @@ test("sawmills deliver usable construction planks to warehouses while workshops 
     "metal deliveries must supply workshops independently of planks",
   );
   const house = building(sim, "house");
+  building(sim,"warehouse").inventory.wood=100;
   execute(sim, { type: "upgrade", id: house.id });
   for (let i = 0; i < 5000 && house.construction; i++) sim.step();
   assert.equal(house.houseTier, 2);
@@ -351,9 +353,10 @@ test("brickworks consumes stone, makes bricks, and sends them to warehouse stock
  const sim=new Simulation(),works=building(sim,'workshop');
  for(const b of sim.state.buildings)if(BUILDINGS[b.kind].jobs)b.enabled=false;
  works.kind='brickworks';works.enabled=true;works.inventory={stone:12};works.produced=0;sim.reconnect();
+ const initialStone=sim.totals().stone;
  for(let i=0;i<240;i++)sim.step();
  assert.ok(works.produced>=4);assert.equal(works.produced%4,0);
- assert.equal(12-works.inventory.stone,works.produced/2);
+ assert.equal(initialStone-sim.totals().stone,works.produced/2);
  assert.ok(sim.stored('bricks')>0);assert.equal(canSupply(works,building(sim,'warehouse')),true);
 });
 

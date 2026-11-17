@@ -18,7 +18,7 @@ export function seedStarterTown(world:World) {
   world.buildings=layout.buildings.map(plan=>{
     const inventory={...SUPPLIES[plan.kind]};
     if(plan.kind==='warehouse')Object.assign(inventory,warehouse++===0
-      ?{bread:140,fish:80,potatoes:60,carrots:60,sausages:40,meat:35,grain:60,flour:35,wood:200,planks:100,stone:160,metal:100,bricks:80,tools:20}
+      ?{bread:140,fish:80,potatoes:60,carrots:60,sausages:40,meat:35,grain:60,flour:35,wood:200,planks:100,stone:160,metal:100,bricks:80,tools:80}
       :{wood:60,stone:30,planks:30});
     return {...plan,id:world.nextId++,inventory,progress:0,workers:0,connected:false,enabled:true,produced:0};
   });

@@ -1,5 +1,6 @@
 import {fenceEdgeSet,crossesFence} from "./fences.js";
 import {isTree} from './trees.js';
+import {wearTools} from './supplies.js';
 import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
 import { DEPOSITS, DEPOSIT_TILES, MINING_RADIUS, nearbyDeposits, depositTiles, exposedDeposit } from "./deposits.js";
 import { groundHeight, terrainCell } from "./terrain.js";
@@ -84,6 +85,7 @@ export function stepMining(sim:Simulation,b:Building) {
     if(t.phase==="mining") {
       if(!b.enabled||!b.connected||b.construction||(sim.state.deposits[t.deposit]??0)<=0){t.phase="returning";t.path.reverse();t.distance=0;continue;}
       t.work+=STEP*productionRate(b)*(night?.25:1);
+      wearTools(b,1,night?.25:1);
       if(t.work>=MINING_SECONDS){t.cargo=Math.min(ORE_PER_TRIP,sim.state.deposits[t.deposit]);sim.state.deposits[t.deposit]-=t.cargo;t.phase="returning";t.path.reverse();t.distance=0;}
     } else {
       t.distance=Math.min(t.path.length-1,t.distance+STEP*.75);

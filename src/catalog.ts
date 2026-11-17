@@ -314,7 +314,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     frame: 6,
     materials:{"wood":10,"stone":10,"metal":8},
     category: "production",
-    description: "Forges metal into tools. Delivered tools sell for 35 gold.",
+    description: "Forges metal into tools for local workers. Equipped workers produce at full speed.",
     recipe: {
       input: "metal",
       amount: 2,
@@ -331,7 +331,7 @@ export const BUILDINGS: Record<BuildingKind, Definition> = {
     materials:{"wood":12,"planks":6,"stone":10},
     category: "town",
     description:
-      "The heart of a road network. Receives food and materials, and exports tools.",
+      "The heart of a road network. Stores food, tools and materials for local deliveries.",
   },
   park: {
     name: "Fountain square",

@@ -4,8 +4,21 @@ import {Simulation,parseSave} from './legacy-town.mjs';
 import {TREE_KINDS,TREE_FRAMES,nextTreeVariant,decorationArt,treeVariant} from '../.test-dist/trees.js';
 import {ViewWorld} from '../.test-dist/view-world.js';
 import {harvestable,treeStage,REGROW_TICKS} from '../.test-dist/forestry.js';
+import {diversifyWoodland} from '../.test-dist/trees.js';
 let serial=0;
 const command=(sim,command)=>sim.execute({id:`tree-${serial++}`,actorId:'test',expectedRevision:sim.state.revision,command});
+
+test('existing woodland gains new species once without resetting the player town or planted trees',()=>{
+ const world=new Simulation().snapshot();delete world.woodlandVersion;
+ const tree=world.decorations.find(d=>d.natural&&d.kind==='oak');tree.cutAt=world.tick;tree.regrowsAt=world.tick+REGROW_TICKS;
+ const before=structuredClone(world);diversifyWoodland(world);
+ for(const field of ['buildings','roads','residents','agents','money','tick','nextId'])assert.deepEqual(world[field],before[field]);
+ assert.deepEqual(world.decorations.map(d=>[d.id,d.x,d.y,d.cutAt,d.regrowsAt]),before.decorations.map(d=>[d.id,d.x,d.y,d.cutAt,d.regrowsAt]));
+ assert.deepEqual(world.decorations.filter(d=>!d.natural),before.decorations.filter(d=>!d.natural));
+ assert.ok(world.decorations.some(d=>d.kind==='maple'));assert.ok(world.decorations.some(d=>d.kind==='willow'));
+ const once=structuredClone(world);diversifyWoodland(world);assert.deepEqual(world,once);
+ assert.doesNotThrow(()=>parseSave(JSON.stringify(world)));
+});
 test('tree previews match placement and never repeat, including failed clicks, removal and reload',()=>{
  let sim=new Simulation();sim.state.money=100000;
  for(const kind of TREE_KINDS){

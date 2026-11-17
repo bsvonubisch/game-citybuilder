@@ -141,7 +141,7 @@ test('milk, eggs and surplus meat have delivery routes; butcher keeps and delive
 test('every butcher batch makes all cuts even when an old save had selected a single cut',()=>{
  for(const cut of ['steaks','roasts']){
   const sim=new Simulation(),b=sim.state.buildings.find(b=>b.kind==='butcher');
-  b.cut=cut;b.inventory={meat:40};sim.dispatch=()=>{};
+  b.cut=cut;b.inventory={meat:40,tools:2};sim.dispatch=()=>{};
   const recipe=buildingRecipe(b);b.progress=recipe.seconds-.25;sim.step();
   for(const [resource,count] of Object.entries(recipe.outputs))assert.equal(b.inventory[resource],count);
   assert.equal(b.inventory.meat,40-recipe.amount);

@@ -7,6 +7,7 @@ import type { Building, BuildingAlert, Simulation } from "./simulation.js";
 import type Phaser from "phaser";
 
 export const alertIcon: Record<BuildingAlert["kind"], string> = {
+  food:'bread',firewood:'wood',tools:'hammer',
   crop: "leaf",
   construction: "hammer",
   road: "road-off",

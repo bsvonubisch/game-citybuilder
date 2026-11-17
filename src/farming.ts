@@ -2,6 +2,7 @@ import {STEP,AGENT_SPEED,dimensions} from './catalog.js';
 import {CROPS,farmArea,farmPatch,isCrop,type Crop} from './farm-layout.js';
 import {daylight} from './daylight.js';
 import {outputCapacity,productionRate} from './upgrades.js';
+import {wearTools} from './supplies.js';
 import {ROCK_CLEARING_WORK} from './construction.js';
 import type {Building,Point,Simulation} from './simulation.js';
 
@@ -77,6 +78,7 @@ export function stepFarm(sim:Simulation,b:Building){
     if(t.phase==='working'){
       if(!b.enabled||!b.connected||b.construction)continue;
       t.work+=STEP*productionRate(b);
+      wearTools(b,1);
       if(t.work>=FARM_WORK_SECONDS){
         const at=t.path.at(-1)!,entry=t.entry??t.path[0];
         if(t.action==='sow')field.cells[t.patch].sownAt=sim.state.tick;

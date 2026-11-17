@@ -72,7 +72,7 @@ export function planRoad(sim: Simulation, from: Point, to: Point, roadType: Road
     }
   }
   for(const [r,n] of Object.entries(plan.materials))if(!plan.error&&sim.stored(r as Resource)<n)plan.error=`Need ${n-sim.stored(r as Resource)} more ${RESOURCE_NAMES[r as Resource].toLowerCase()} in warehouses.${r==="bricks"?" Build a brickworks and let its deliveries arrive.":" Wait for deliveries or shorten the stretch."}`;
-  if (!plan.error && plan.cost > sim.state.money) plan.error = `Need ${Math.ceil(plan.cost-sim.state.money)} more gold. Shorten the stretch or wait for taxes and exports.`;
+  if (!plan.error && plan.cost > sim.state.money) plan.error = `Need ${Math.ceil(plan.cost-sim.state.money)} more gold. Shorten the stretch or wait for taxes and local market sales.`;
   if (!plan.error && !plan.additions.length && !plan.upgrades.length) plan.error = "This stretch already has roads of this quality or better. Choose a better surface or drag farther.";
   return plan;
 }

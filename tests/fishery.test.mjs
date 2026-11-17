@@ -232,18 +232,17 @@ test("builders finish a shoreline fishery, workers catch fish and trucks feed ci
 });
 test("food demand consumes bread and fish without double charging and reports shortages", () => {
   for (const [bread, fish, expected, remaining] of [
-    [1, 2, 100, 2],
-    [0, 2, 100, 1],
+    [1, 2, 100, 0],
+    [0, 2, 67, 0],
     [0, 0, 0, 0],
   ]) {
     const sim = fixture(),
       w = sim.state.buildings.find((b) => b.kind === "warehouse");
-    w.inventory.bread = bread;
-    w.inventory.fish = fish;
+    const home=sim.state.buildings.find(b=>b.kind==='house');home.inventory={bread,fish};sim.state.residents.forEach(r=>r.lastMeal=0);sim.dispatch=()=>{};
     sim.state.tick = 959;
     sim.step();
     assert.equal(sim.state.food, expected);
-    assert.equal((w.inventory.bread ?? 0) + (w.inventory.fish ?? 0), remaining);
+    assert.equal((home.inventory.bread ?? 0) + (home.inventory.fish ?? 0), remaining);
   }
 });
 

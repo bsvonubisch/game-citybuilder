@@ -3,6 +3,8 @@ import {TownStatusLog} from './town-status-log.js';
 import {isLivestock,stepLivestock,ensureHerd,validPenPlot,livestockCapacity,LIVESTOCK,isButcherCut,BUTCHER_CUTS,type Herd,type ButcherCut} from './livestock.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown} from './starter-town.js';
+import {diversifyWoodland} from "./trees.js";
+import {initializeSupplies,stepHouseholds,dispatchSupplies,dispatchIndustry,collectHouseholdSupplies,toolEfficiency,toolRequirement,wearTools,availableSupply,foodStock,homeResidents} from './supplies.js';
 import {isTree,plantTreeVariant,validTreeVariant,validateTreePlanting,type TreePlanting} from './trees.js';
 import {RoadPathCache} from './road-path-cache.js';
 import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
@@ -13,7 +15,7 @@ import {marketDestination,marketOpen,buyAtMarket,marketStock,marketVendors,MARKE
 import {validMarketPlot,marketStalls} from "./market-layout.js";
 import {buildingJobs,buildingPrice} from "./catalog.js";
 import {isHome,isPark} from "./catalog.js";
-import {warehouseReady, LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
+import {deliveryCapacity,warehouseReady, LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
 import {parkVisitDuration,parkVisitorLimit} from "./park-visitors.js";
 import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
@@ -105,6 +107,8 @@ export interface Point {
   y: number;
 }
 export interface Building extends Point {
+  warmUntil?:number;
+  toolWear?:number;
   herd?:Herd;
   cut?:ButcherCut;
   crop?:Crop|null;
@@ -130,6 +134,7 @@ export interface Building extends Point {
   fishing?: FishingTrip;
 }
 export interface Resident {
+  lastMeal?:number;
   lastShopping?:number;
   id: number;
   name: string;
@@ -161,6 +166,8 @@ export interface Agent {
   marketSlot?:number;
 }
 export interface World {
+  suppliesVersion?:1;
+  woodlandVersion?:1;
   treePlanting?:TreePlanting;
   roadWorks?:RoadWork[];
   events?:TownEvent[];
@@ -236,6 +243,9 @@ export interface BuildingAlert {
     | "output"
     | "input"
     | "leisure"
+    | "food"
+    | "firewood"
+    | "tools"
     | "construction";
   title: string;
   message: string;
@@ -348,6 +358,7 @@ export class Simulation {
     expandReserves(this.state);
     lengthenDays(this.state);
     lengthenTreeRegrowth(this.state);
+    diversifyWoodland(this.state);
     if(this.state.bridgeVersion!==1){this.state.roadTypes??={};for(const k of this.state.roads){const [x,y]=k.split(",").map(Number);if(terrain(x,y,this.state.terrain)==="water"&&!this.state.roadTypes[k])this.state.roadTypes[k]="dirt";}this.state.bridgeVersion=1;}
     for(const b of this.state.buildings)if(isExtractor(b.kind))b.deposit=buildingDeposit(b);
     this.state.decorations=this.state.decorations.filter(d=>!d.natural||!depositAt(d));
@@ -374,6 +385,7 @@ export class Simulation {
     for(const b of this.state.buildings)if(b.kind==='farm')prepareField(b);
     for(const b of this.state.buildings)if(isLivestock(b.kind))ensureHerd(b);
     this.reconnect(!!saved);
+    initializeSupplies(this);
     ensureWildlife(this);
     this.initializing=false;
     if(!saved)recordTownEvent(this.state,"notice",`Pinehaven is ready. ${this.state.residents.length} residents call it home.`);
@@ -1364,6 +1376,7 @@ export class Simulation {
   }
   step() {
     this.state.tick++;
+    stepHouseholds(this);
     const day = daylight(this.state.tick);
     let completed = false;
     for (const b of this.state.buildings) {
@@ -1377,11 +1390,11 @@ export class Simulation {
       ).length;
       b.construction.completed = Math.min(
         b.construction.required,
-        b.construction.completed + crew * STEP * day.workRate,
+        b.construction.completed + crew * STEP * day.workRate * toolEfficiency(b),
       );
       const clearance=b.construction.clearance;
       if(clearance) {
-        clearance.work+=crew*STEP*day.workRate;
+        clearance.work+=crew*STEP*day.workRate*toolEfficiency(b);
         while(clearance.tiles.length&&clearance.work>=ROCK_CLEARING_WORK) {
           const tile=key(clearance.tiles.shift()!);
           this.state.clearedDeposits??=[];
@@ -1391,6 +1404,7 @@ export class Simulation {
         }
         if(!clearance.tiles.length){delete b.construction.clearance;this.state.revision++;}
       }
+      wearTools(b,crew,day.workRate);
       if (b.construction.completed >= b.construction.required) {
         if (b.construction.demolition) { completed=this.finishDemolition(b)||completed; continue; }
         if (b.construction.upgradeTo) b.houseTier = b.construction.upgradeTo;
@@ -1439,6 +1453,7 @@ export class Simulation {
       )
         continue;
       b.progress += STEP * day.workRate * productionRate(b);
+      wearTools(b,b.workers,day.workRate);
       if (b.progress >= recipe.seconds) {
         b.progress -= recipe.seconds;
         if (recipe.input) b.inventory[recipe.input]! -= recipe.amount!;
@@ -1524,11 +1539,6 @@ export class Simulation {
           if (b && a.cargo) {
             b.inventory[a.cargo] = (b.inventory[a.cargo] ?? 0) + a.amount;
             this.state.delivered += a.amount;
-            if (b.kind === "warehouse" && a.cargo === "tools") {
-              b.inventory.tools! -= a.amount;
-              this.earn(a.amount * Math.round(35 * (1 + ((b.level ?? 1) - 1) * 0.1)), "exports");
-              this.state.exported += a.amount;
-            }
           }
           this.state.agents = this.state.agents.filter((x) => x.id !== a.id);
         } else {
@@ -1591,34 +1601,11 @@ export class Simulation {
     this.statusLog.update(this);
     if (this.state.tick % DAY_TICKS === 0) {
       this.earn(this.state.residents.length * 6,"tax");
-      let demand = Math.ceil(this.state.residents.length / 3);
-      const needed = demand;
-      const meals=Math.min(demand,this.state.marketMeals??0);demand-=meals;this.state.marketMeals=Math.max(0,(this.state.marketMeals??0)-meals);
-      for (const w of this.state.buildings.filter(
-        (b) => b.kind === "warehouse",
-      )) {
-        for (const food of FOOD_RESOURCES) {
-          const n = Math.min(demand, w.inventory[food] ?? 0);
-          w.inventory[food] = (w.inventory[food] ?? 0) - n;
-          demand -= n;
-        }
-      }
-      this.state.food = needed
-        ? Math.round(((needed - demand) / needed) * 100)
-        : 100;
     }
   }
   private dispatch() {
-    // Feed is hauled to the pens by real trucks, just like factory inputs.
-    for(const source of this.state.buildings.filter(b=>warehouseReady(b)&&b.enabled&&b.connected&&(b.inventory.grain??0)>0)){
-      if(this.state.agents.some(a=>a.kind==='truck'&&a.source===source.id))continue;
-      for(const target of this.state.buildings.filter(b=>isLivestock(b.kind)&&!b.construction&&b.enabled&&b.connected).sort((a,b)=>(a.inventory.grain??0)-(b.inventory.grain??0))){
-        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==='grain').reduce((n,a)=>n+a.amount,0),room=Math.max(DELIVERY_CAPACITY*2,Math.ceil(ensureHerd(target).count/4)*3)-(target.inventory.grain??0)-incoming;
-        if(room<=0)continue;const path=this.route(source,target,'truck');if(!path)continue;
-        const amount=Math.min(DELIVERY_CAPACITY,room,source.inventory.grain??0);source.inventory.grain!-=amount;
-        this.state.agents.push({id:this.state.nextId++,kind:'truck',source:source.id,target:target.id,path,segment:0,progress:0,resident:null,cargo:'grain',amount,returning:false,wait:0});break;
-      }
-    }
+    collectHouseholdSupplies(this);
+    dispatchIndustry(this);
     // Old saves may still contain or deliver the former plank input. Return it intact.
     for(const source of this.state.buildings.filter(b=>b.kind==="workshop"&&!b.construction&&b.connected&&(b.inventory.planks??0)>0)){
       if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
@@ -1626,25 +1613,7 @@ export class Simulation {
       if(!target)continue;const path=this.route(source,target,"truck")!,amount=Math.min(DELIVERY_CAPACITY,source.inventory.planks??0);source.inventory.planks!-=amount;
       this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo:"planks",amount,returning:false,wait:0});
     }
-    for(const warehouse of this.state.buildings.filter(b=>b.kind==="warehouse"&&!b.construction&&b.connected&&b.enabled&&(b.inventory.metal??0)>0)){
-      if(this.state.agents.some(a=>a.kind==="truck"&&a.source===warehouse.id))continue;
-      for(const target of this.state.buildings.filter(b=>b.kind==="workshop"&&!b.construction&&b.enabled&&b.connected)){
-        const inbound=this.state.agents.filter(a=>a.target===target.id&&a.cargo==="metal").reduce((n,a)=>n+a.amount,0);
-        const room=DELIVERY_CAPACITY*2-(target.inventory.metal??0)-inbound;
-        if(room<=0)continue;
-        const path=this.route(warehouse,target,"truck");if(!path)continue;
-        const amount=Math.min(DELIVERY_CAPACITY,room,warehouse.inventory.metal??0);warehouse.inventory.metal!-=amount;
-        this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:warehouse.id,target:target.id,cargo:"metal",amount,returning:false,wait:0});break;
-      }
-    }
-    for(const source of this.state.buildings.filter(b=>warehouseReady(b)&&b.connected&&b.enabled&&(b.inventory.meat??0)>0)){
-      if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
-      for(const target of this.state.buildings.filter(b=>b.kind==="butcher"&&!b.construction&&b.enabled&&b.connected)){
-        const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo==="meat").reduce((n,a)=>n+a.amount,0),room=DELIVERY_CAPACITY*2-(target.inventory.meat??0)-incoming;
-        if(room<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;const amount=Math.min(DELIVERY_CAPACITY,room,source.inventory.meat??0);source.inventory.meat!-=amount;
-        this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo:"meat",amount,returning:false,wait:0});break;
-      }
-    }
+    dispatchSupplies(this);
     for(const source of this.state.buildings.filter(b=>b.kind==="warehouse"&&warehouseReady(b)&&b.connected&&b.enabled)){
       if(this.state.agents.some(a=>a.kind==="truck"&&a.source===source.id))continue;
       const markets=this.state.buildings.filter(b=>b.kind==="market"&&!b.construction&&b.connected&&b.enabled).sort((a,b)=>marketStock(a)-marketStock(b));
@@ -1652,7 +1621,7 @@ export class Simulation {
         for(const cargo of [...MARKET_GOODS].sort((a,b)=>(target.inventory[a]??0)-(target.inventory[b]??0))){
           const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo===cargo).reduce((n,a)=>n+a.amount,0),room=marketStalls(target)*4-(target.inventory[cargo]??0)-incoming;
           if(room<=0||(source.inventory[cargo]??0)<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;
-          const amount=Math.min(DELIVERY_CAPACITY,room,source.inventory[cargo]??0);source.inventory[cargo]!-=amount;
+          const amount=Math.min(deliveryCapacity(source),room,source.inventory[cargo]??0);source.inventory[cargo]!-=amount;
           this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo,amount,returning:false,wait:0});sent=true;break;
         }if(sent)break;
       }
@@ -1666,7 +1635,7 @@ export class Simulation {
         !r ||
         !b.connected ||
         !b.enabled ||
-        (b.inventory[r.output] ?? 0) < r.count
+        availableSupply(b,r.output) < r.count
       )
         continue;
       if (
@@ -1674,7 +1643,7 @@ export class Simulation {
       )
         continue;
       const destinations = this.state.buildings
-        .filter((t) => t.connected && t.enabled && canSupply(b, t,r.output))
+        .filter((t) => t.connected && t.enabled && !isHome(t.kind) && !(r.output==='tools'&&toolRequirement(t)>0) && canSupply(b, t,r.output))
         .sort((a, c) => {
           // Reserve one grand-house upgrade's planks before feeding continuous
           // factory demand; faster traffic must not consume every new plank.
@@ -1714,7 +1683,7 @@ export class Simulation {
         const p = this.route(b, dest,"truck");
         if (!p) continue;
         const room=dest.kind==='warehouse'?Infinity:(dest.kind==='market'?marketStalls(dest)*4:outputCapacity(dest)+4)-(dest.inventory[r.output]??0)-incoming;
-        const amount = Math.min(DELIVERY_CAPACITY, room, b.inventory[r.output] ?? 0);
+        const amount = Math.min(DELIVERY_CAPACITY, room, availableSupply(b,r.output));
         b.inventory[r.output]! -= amount;
         this.state.agents.push({
           id: this.state.nextId++,
@@ -1760,7 +1729,7 @@ export class Simulation {
       100,
       55 +
         Math.round(this.leisure() * 0.2) + Math.round(this.faith() * .05) +
-        Math.round(this.state.food * 0.2),
+        Math.round(this.state.food * 0.2) - (this.state.residents.length?Math.round(this.state.residents.filter(r=>(this.building(r.home)?.warmUntil??Infinity)<=this.state.tick).length/this.state.residents.length*10):0),
     );
   }
   alert(b: Building): BuildingAlert | null {
@@ -1844,8 +1813,11 @@ export class Simulation {
       return {kind:"input", title:"No reachable mature trees", message:"Wait for nearby stumps to regrow, clear a walking route, or move this lodge closer to woodland. Its highlighted area reaches 10 tiles. Planted garden trees are protected."};
     if(b.kind==="hunter"&&!b.hunting?.length&&!(this.state.wildlife??[]).some(a=>a.respawnAt===undefined&&Math.hypot(a.x-b.x-.5,a.y-b.y-.5)<=12))return{kind:"input",title:"No wildlife nearby",message:"Keep natural woodland within 12 tiles. Animals avoid buildings and roads; move the lodge near the forest or let wildlife recover."};
     if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
+    if(toolRequirement(b)&&b.workers&&(b.inventory.tools??0)<toolRequirement(b))return{kind:'tools',title:`Tools missing · ${Math.round(toolEfficiency(b)*100)}% work speed`,message:`${b.inventory.tools??0} of ${toolRequirement(b)} tools available. Connect a copper workshop supplied with metal. Deliveries restore full productivity; work continues at reduced speed.`};
     if (isHome(b.kind)) {
       const residents = this.state.residents.filter((r) => r.home === b.id);
+      if(residents.length&&!foodStock(b))return{kind:'food',title:'No food at home',message:'Residents need one food each per day. Connect a stocked market or warehouse by road; this home collects its food without delivery trucks.'};
+      if(residents.length&&!(b.inventory.wood??0))return{kind:'firewood',title:(b.warmUntil??Infinity)<=this.state.tick?'Home is cold':'Firewood stock empty',message:'This home burns one wood per day for heating. Stock wood in a connected warehouse or market; this home collects a two-day supply without delivery trucks.'};
       if(residents.length&&residents.every(r=>(r.faith??70)<25))return{kind:"leisure",title:"Needs nearby religion",message:"Connect a staffed chapel within 16 road tiles (open 24 hours), or a church within 32 road tiles. Religion improves after a visit."};
       if (residents.length && residents.every((r) => (r.leisure ?? 60) < 25))
         return {
@@ -1913,6 +1885,8 @@ export function parseSave(raw: string): World {
   )
     throw new Error("This save is not compatible with this version.");
   if(s.marketMeals!==undefined&&(!finite(s.marketMeals)||s.marketMeals!>2400))throw new Error("Invalid market meals.");
+  if(s.woodlandVersion!==undefined&&s.woodlandVersion!==1)throw new Error('Invalid woodland version.');
+  if(s.suppliesVersion!==undefined&&s.suppliesVersion!==1)throw new Error('Invalid supplies version.');
   if(s.income!==undefined&&(!Array.isArray(s.income)||s.income.length>3000||s.income.some(e=>!e||!Number.isSafeInteger(e.tick)||e.tick<0||e.tick>s.tick||!finite(e.amount)||!["tax","exports","market"].includes(e.source))))throw new Error("Invalid income history.");
   const legacy = s.version === 1;
   validateTerrain(s.terrain);
@@ -2085,6 +2059,8 @@ export function parseSave(raw: string): World {
       if (!RESOURCES.includes(k as Resource) || !finite(v))
         throw new Error("Invalid inventory.");
     }
+    if(b.toolWear!==undefined&&(!finite(b.toolWear)||b.toolWear>=1))throw new Error('Invalid tool wear.');
+    if(b.warmUntil!==undefined&&(!Number.isSafeInteger(b.warmUntil)||b.warmUntil<0))throw new Error('Invalid household heating.');
     ids.add(b.id);
     for (const p of legacy
       ? [b]
@@ -2232,6 +2208,7 @@ export function parseSave(raw: string): World {
   s.history = s.history.filter((x) => typeof x === "string").slice(0, 20);
   restoreTownEvents(s);
   for (const r of s.residents){
+    if(r.lastMeal!==undefined&&(!Number.isSafeInteger(r.lastMeal)||r.lastMeal<0||r.lastMeal>s.tick))throw new Error('Invalid household meals.');
     r.leisure = finite(r.leisure) ? Math.min(100, r.leisure!) : 60;
     r.faith=finite(r.faith)?Math.min(100,r.faith!):70;
     if(r.lastShopping!==undefined&&(!Number.isInteger(r.lastShopping)||r.lastShopping<0||r.lastShopping>s.tick))delete r.lastShopping;

@@ -1,5 +1,6 @@
 import {SIZE,STEP,footprint} from './catalog.js';
 import {isTree} from './trees.js';
+import {wearTools} from './supplies.js';
 import {DAY_TICKS,daylight} from './daylight.js';
 import {terrainCell,groundHeight} from './terrain.js';
 import {exposedDeposit} from './deposits.js';
@@ -68,7 +69,7 @@ export function stepHunting(sim:Simulation,b:Building){
   if(!crew.some(a=>a.resident===t.resident)||t.path.some(p=>terrainCell(p.x,p.y,sim.state.terrain).kind!=='land'||sim.buildingAt(p.x,p.y))){b.inventory.meat=(b.inventory.meat??0)+t.cargo;b.hunting=b.hunting.filter(other=>other!==t);continue;}
   if(t.phase!=='returning'&&(!animal||animal.respawnAt!==undefined||b.construction||!b.enabled||!b.connected)){turnBack(t);continue;}
   if(t.phase==='aiming'){
-   t.work+=STEP*productionRate(b);if(t.work>=HUNT_SECONDS){animal!.respawnAt=sim.state.tick+DAY_TICKS*2;animal!.wait=5;t.cargo=MEAT_PER_HUNT;t.path.reverse();t.distance=0;t.phase='returning';}
+   t.work+=STEP*productionRate(b);wearTools(b,1);if(t.work>=HUNT_SECONDS){animal!.respawnAt=sim.state.tick+DAY_TICKS*2;animal!.wait=5;t.cargo=MEAT_PER_HUNT;t.path.reverse();t.distance=0;t.phase='returning';}
   }else{t.distance=Math.min(t.path.length-1,t.distance+STEP*.75);if(t.distance>=t.path.length-1){if(t.phase==='outbound'){t.phase='aiming';t.work=0;}else{b.inventory.meat=(b.inventory.meat??0)+t.cargo;b.produced+=t.cargo;b.hunting=b.hunting.filter(other=>other!==t);}}}
  }
  if(night||b.construction||!b.enabled||!b.connected||sim.state.tick%8!==b.id%8)return;

@@ -1,5 +1,6 @@
 import {fenceEdgeSet,crossesFence} from "./fences.js";
 import {isTree} from './trees.js';
+import {wearTools} from './supplies.js';
 import { SIZE, STEP, dimensions, footprint } from "./catalog.js";
 import { groundHeight, terrainCell } from "./terrain.js";
 import { daylight } from "./daylight.js";
@@ -122,6 +123,7 @@ export function stepForestry(sim:Simulation,b:Building) {
         t.phase="returning"; t.path.reverse(); t.distance=0; continue;
       }
       t.work+=STEP*productionRate(b)*(night?.25:1);
+      wearTools(b,1,night?.25:1);
       if(t.work>=CHOP_SECONDS) {
         tree.cutAt=sim.state.tick;
         tree.regrowsAt=sim.state.tick+REGROW_TICKS;

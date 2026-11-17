@@ -2,6 +2,7 @@ import {buildingName,buildingRecipe,isHome} from './catalog.js';
 import {builderCapacity} from './construction.js';
 import {isService} from './proximity.js';
 import {recordTownEvent,type TownEventKind} from './town-events.js';
+import {foodStock,homeResidents,toolRequirement,toolEfficiency} from './supplies.js';
 import type {Building,Simulation} from './simulation.js';
 
 type Condition={state:string;message:string;kind:TownEventKind;b?:Building};
@@ -24,6 +25,10 @@ export class TownStatusLog {
     if(sim.state.tick%8!==0)return;
     const live=new Set<string>();
     for(const b of sim.state.buildings){
+      if(isHome(b.kind)&&homeResidents(sim,b).length){
+        for(const [need,shortage,advice] of [['food',!foodStock(b),'Connect a stocked market or warehouse by road.'],['firewood',!(b.inventory.wood??0),'Stock wood at a connected warehouse or market for heating.']] as const){const topic=`home:${b.id}:${need}`;live.add(topic);this.observe(sim,topic,{state:shortage?'empty':'',kind:shortage?'shortage':'recovery',b,message:shortage?`${buildingName(b)} has no ${need}. ${advice}`:`${buildingName(b)}: ${need} supplies restored.`});}
+      }
+      if(b.construction&&b.enabled&&b.workers){const topic=`tools:${b.id}`,shortage=(b.inventory.tools??0)<toolRequirement(b);live.add(topic);this.observe(sim,topic,{state:shortage?'short':'',kind:shortage?'shortage':'recovery',b,message:shortage?`${buildingName(b)}: builders need tools. Work continues at ${Math.round(toolEfficiency(b)*100)}% speed; supply a copper workshop with metal.`:`${buildingName(b)}: builders have tools again.`});}
       if(isHome(b.kind)||(!buildingRecipe(b)&&!isService(b.kind)&&!b.construction))continue;
       const topic=`work:${b.id}`;live.add(topic);
       const name=buildingName(b),alert=sim.alert(b);
@@ -41,6 +46,6 @@ export class TownStatusLog {
       const affected=sim.state.residents.filter(r=>(r[field]??70)<25),b=sim.building(affected[0]?.home??-1);
       this.observe(sim,`town:${need}`,{state:affected.length?'low':'',kind:affected.length?'leisure':'recovery',b,message:affected.length?`${affected.length} residents need ${need}. ${advice}`:`Residents’ ${need} has recovered.`});
     }
-    for(const topic of this.known.keys())if(topic.startsWith('work:')&&!live.has(topic))this.known.delete(topic);
+    for(const topic of this.known.keys())if(!topic.startsWith('town:')&&!live.has(topic))this.known.delete(topic);
   }
 }

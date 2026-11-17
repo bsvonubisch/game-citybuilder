@@ -1,5 +1,6 @@
 import {finishRoadFixture} from './roadwork-fixture.mjs';
 const executeFinishedRoad=(...args)=>{const result=execute(...args);if(result.ok)finishRoadFixture(args[0]);return result;};
+import {toolEfficiency} from "../.test-dist/supplies.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { nearbyDeposits } from "../.test-dist/deposits.js";
@@ -127,8 +128,8 @@ test("needs distinguish ready meals, staffed workplaces and reachable leisure fr
   const bakery=sim.state.buildings.find(b=>b.kind==="bakery");
   bakery.inventory.bread=90;
   const needs=townNeeds(sim),food=needs.find(n=>n.id==="food");
-  assert.equal(food.have,0,"undelivered food is not ready for households");
-  assert.equal(food.need,Math.ceil(sim.state.residents.length/3));
+  assert.equal(food.have,90,"town inventory includes food awaiting household delivery");
+  assert.equal(food.need,sim.state.residents.length);
   assert.ok(!needs.some(n=>n.id==="nightlife"),'a tavern is an alternative leisure service, not a separate mandatory need');
   const jobs=sim.state.buildings.filter(b=>b.enabled&&!b.construction&&BUILDINGS[b.kind].jobs);
   assert.equal(needs.find(n=>n.id==="workers").need,jobs.reduce((n,b)=>n+BUILDINGS[b.kind].jobs,0));
@@ -291,7 +292,7 @@ test("construction requires available builders to arrive, reserves costs once an
   assert.ok(crew.length > 0, "builders reach the site");
   const progress = b.construction.completed;
   sim.step();
-  assert.equal(b.construction.completed, progress + crew.length * STEP);
+  assert.equal(b.construction.completed, progress + crew.length * STEP * toolEfficiency(b));
   const saved = new Simulation(parseSave(JSON.stringify(sim.state)));
   assert.equal(
     saved.building(b.id).construction.completed,
@@ -303,7 +304,7 @@ test("construction requires available builders to arrive, reserves costs once an
   );
   assert.equal(
     b.construction.completed,
-    progress + crew.length * STEP,
+    progress + crew.length * STEP * toolEfficiency(b),
     "moving preserves labour",
   );
   finishConstruction(sim, b);
@@ -487,7 +488,7 @@ test("production alerts explain blockers, prioritize full output and clear after
   b.connected = true;
   b.enabled = true;
   b.workers = 2;
-  b.inventory = { wood: 3, planks: 0 };
+  b.inventory = { wood: 3, planks: 0, tools:2 };
   assert.equal(sim.alert(b), null);
   b.inventory.wood = 0;
   assert.equal(sim.alert(b).kind, "input");
@@ -533,7 +534,7 @@ test("depleted extractor alerts clear with a usable deposit and pauses take prio
   b.enabled = false;
   assert.equal(sim.alert(b).kind, "paused");
   b.enabled = true;
-  sim.state.deposits[key(b)] = 3;
+  sim.state.deposits[key(b)] = 3; b.inventory.tools=2;
   assert.equal(sim.alert(b), null);
 });
 
@@ -603,9 +604,10 @@ test("bridges connect people and deliveries across an inlet and survive a save r
       a.path.some((p) => isBridge(sim.roads, p.x, p.y)),
     ),
   );
+  const beforeWood=sim.stored("wood");
   advance(sim, 70);
   assert.ok(
-    sim.stored("wood") > 60,
+    sim.stored("wood") > beforeWood,
     "delivery trucks carry wood across the bridge",
   );
   const restored = new Simulation(parseSave(JSON.stringify(sim.snapshot())));
@@ -1172,12 +1174,12 @@ test("people have homes and workplaces; cars and walkers take valid road routes"
   for (const a of sim.state.agents)
     for (const p of a.path) assert.ok(sim.roads.has(key(p)));
 });
-test("both factory chains deliver real goods and export tools", () => {
+test("both factory chains deliver real goods and keep tools local", () => {
   const sim = new Simulation();
   // Include the five-times-longer crop growth and physical harvesting trips.
   advance(sim, 900);
   assert.ok(sim.state.delivered > 60);
-  assert.ok(sim.state.exported > 0);
+  assert.equal(sim.state.exported,0);assert.ok(sim.totals().tools>0);
   assert.ok(sim.state.buildings.find((b) => b.kind === "bakery").produced > 0);
   assert.ok(sim.stored("stone") > 45);
   assert.ok(sim.stored("metal") > 25);
@@ -2255,7 +2257,7 @@ test("daylight is continuous, repeats daily and night production slows without c
   const sim = new Simulation(),
     b = sim.state.buildings.find((b) => b.kind === "mill");
   b.progress = 0;
-  b.inventory.grain = 3;
+  b.inventory.grain = 3; b.inventory.tools=2;
   sim.state.tick = 0;
   sim.step();
   assert.equal(b.progress, STEP);

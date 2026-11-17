@@ -1,4 +1,5 @@
 import {SIZE,STEP,footprint,DECORATIONS} from './catalog.js';
+import {toolEfficiency,wearTools} from './supplies.js';
 import {terrainCell,groundHeight} from './terrain.js';
 import {fenceEdgeSet,crossesFence,fenceNeighbour} from './fences.js';
 import {exposedDeposit} from './deposits.js';
@@ -102,7 +103,7 @@ export function stepRoadWorks(sim:Simulation) {
     if(!w||!resident||resident.job!==null){delete a.roadWork;changed=true;continue;}
     const distance=Math.min(a.path.length-1,a.segment+a.progress+STEP*.85);
     a.segment=Math.floor(distance);a.progress=distance-a.segment;a.active=true;a.move=STEP*.85;
-    if(distance>=a.path.length-1){a.wait=1;w.completed=Math.min(w.required,w.completed+STEP*day.workRate);
+    if(distance>=a.path.length-1){const home=sim.building(resident.home),efficiency=home?toolEfficiency(home,1):.5;a.wait=1;w.completed=Math.min(w.required,w.completed+STEP*day.workRate*efficiency);if(home)wearTools(home,1,day.workRate,1);
       if(w.completed>=w.required){
         if(w.operation==='remove'){
           const group=sim.state.roadWorks!.filter(j=>j.operation==='remove'&&(j.group??j.id)===(w.group??w.id));

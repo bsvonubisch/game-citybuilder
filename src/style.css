@@ -583,6 +583,15 @@ main {
   color: #22665a;
   border-color: #6ca18e;
 }
+:is(.building-alert, .building-status.warning)[data-kind="food"] {
+  background:#ffe3d4;color:#91422b;border-color:#c47c5c;
+}
+:is(.building-alert, .building-status.warning)[data-kind="firewood"] {
+  background:#ffedce;color:#86551f;border-color:#bf9856;
+}
+:is(.building-alert, .building-status.warning)[data-kind="tools"] {
+  background:#fff4cf;color:#7e560c;border-color:#c7a147;
+}
 :is(.building-alert, .building-status.warning)[data-kind="input"] {
   background: #fff4cf;
   color: #7e560c;
@@ -2617,6 +2626,10 @@ dialog p.muted {
 .resource-bar {
   min-width: 0;
   gap: clamp(10px, 1.5vw, 26px);
+  flex:1;
+  overflow-x:auto;
+  scrollbar-width:thin;
+  justify-content:safe center;
 }
 .resource {
   flex-shrink: 0;
@@ -2624,7 +2637,9 @@ dialog p.muted {
   white-space: nowrap;
 }
 .resource.builders.shortage > .icon,
-.resource.builders.shortage > span {
+.resource.builders.shortage > span,
+.resource.tools.shortage > .icon,
+.resource.tools.shortage > span {
   color: #ac723b;
 }
 .townbar {

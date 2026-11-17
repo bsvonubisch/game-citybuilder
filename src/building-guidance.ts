@@ -1,4 +1,4 @@
-import {isHome} from "./catalog.js";
+import {isHome,FOOD_RESOURCES} from "./catalog.js";
 import {buildingRecipe} from './catalog.js';
 import { BUILDINGS, type BuildingKind } from "./catalog.js";
 import type { Building, Simulation } from "./simulation.js";
@@ -146,6 +146,14 @@ export function buildingGuidance(
       label: "Dig deeper",
       action: { type: "deepen" },
     };
+  if(['food','firewood','tools'].includes(alert.kind)){
+    const delivery=sim.state.agents.find(a=>a.kind==='truck'&&a.target===b.id&&a.amount>0&&(alert.kind==='tools'?a.cargo==='tools':alert.kind==='firewood'?a.cargo==='wood':a.cargo&&FOOD_RESOURCES.includes(a.cargo)));
+    if(delivery)return{message:'Supplies are already on the way. Follow the delivery to check its route.',label:'Follow delivery',action:{type:'agent',id:delivery.id}};
+    const kind=alert.kind==='tools'?'workshop':alert.kind==='firewood'?'forester':'fishery';
+    const supplier=sim.state.buildings.find(s=>s.id!==b.id&&(s.kind==='warehouse'||s.kind==='market')&&(alert.kind==='tools'?(s.inventory.tools??0)>0:alert.kind==='firewood'?(s.inventory.wood??0)>0:FOOD_RESOURCES.some(f=>(s.inventory[f]??0)>0)))??sim.state.buildings.find(s=>s.id!==b.id&&s.kind===kind);
+    const explanation=alert.kind==='tools'?'Tools are made from metal. Each production worker or builder needs one; missing tools reduce work speed to 50%, without stopping work.':alert.kind==='firewood'?'Wood is used directly as firewood: one per occupied home each day, collected from a connected warehouse or market.':'Each resident eats one food per day. Homes collect food directly from connected warehouses or markets, without delivery trucks.';
+    return supplier?inspect(supplier,`${explanation} Check this supplier’s stock and its road connection.`):build(kind,explanation);
+  }
   if (alert.kind === "leisure" && alert.title === "Needs nearby religion") {
     const church=sim.state.buildings.find(s=>isReligion(s.kind)&&serviceCoverage(sim,s).homes.some(h=>h.home.id===b.id));
     return church?inspect(church,church.kind==='chapel'?"Check this chapel’s worker, road connection and capacity. It stays open 24 hours; upgrade to serve more residents.":"Check this church’s two staff, road connection and capacity. Visits run from 06:00 to 23:00; upgrade to serve more residents."):build("chapel","Build a chapel within 16 road tiles of this home for 24-hour visits, or a church for a larger area. The placement preview highlights homes in reach.");
@@ -167,7 +175,7 @@ export function buildingGuidance(
         );
   }
   if (b.kind === "forester" && alert.kind === "input")
-    return {message:"Stumps regrow into mature trees after two minutes. Keep a clear land route to natural oak, pine or birch trees within the highlighted area, or move the lodge closer to woodland. Planted garden trees stay protected.",label:"Move near woodland",action:{type:"move"}};
+    return {message:"Stumps regrow into mature trees after ten minutes at normal speed. Keep a clear land route to natural woodland within the highlighted area, or move the lodge closer. Planted garden trees stay protected.",label:"Move near woodland",action:{type:"move"}};
   if(b.kind==="hunter"&&alert.kind==="input")return{message:"Animals stay in natural woodland away from buildings and roads. Preserve forest within the highlighted 12-tile hunting area and leave a walking route from the lodge. Wildlife recovers over time.",label:"Move near woodland",action:{type:"move"}};
   if (["quarry","mine"].includes(b.kind) && alert.kind==="input")return{message:"Workers need a clear land route from this workplace's entrance to an exposed rock face within 8 tiles. Clear obstacles or move closer to the matching deposit; roads must reach the workplace but do not need to cover the rocks.",label:"Move beside deposit",action:{type:"move"}};
   if (b.kind === "fishery" && alert.kind === "input")
@@ -192,7 +200,7 @@ export function buildingGuidance(
         label: "Follow delivery",
         action: { type: "agent", id: delivery.id },
       };
-    const links = [...(input ? view?.inputs??[] : view?.outputs??[])].sort((a,c)=>Number(sim.building(input?a.source:a.target)?.kind==='warehouse')-Number(sim.building(input?c.source:c.target)?.kind==='warehouse'));
+    const links = [...(input ? view?.inputs??[] : view?.outputs??[])].filter(l=>l.resource===(input?recipe.input:recipe.output)).filter(l=>!input||sim.building(l.source)?.kind!=='warehouse'||(sim.building(l.source)?.inventory[l.resource]??0)>0).sort((a,c)=>Number(sim.building(input?a.source:a.target)?.kind==='warehouse')-Number(sim.building(input?c.source:c.target)?.kind==='warehouse'));
     const linked = links?.find((link) => link.path) ?? links?.[0];
     if (linked) {
       const other = sim.building(input ? linked.source : linked.target)!;

@@ -28,7 +28,7 @@ test('failed and duplicate commands do not add repeated journal entries',()=>{
 
 test('sustained input shortages log once, explain the remedy, survive reload and report recovery',()=>{
  const s=new Simulation(),b=s.state.buildings.find(b=>b.kind==='workshop'),log=new TownStatusLog(),topic=`work:${b.id}`;
- b.inventory={metal:0};s.state.tick=1000;
+ b.inventory={metal:0,tools:3};s.state.tick=1000;
  const sample=(count)=>{for(let i=0;i<count;i++){s.state.tick+=8;log.update(s);}};
  sample(5);assert.equal(s.state.events.filter(e=>e.topic===topic).length,0,'brief gaps are quiet');
  sample(10);let entries=s.state.events.filter(e=>e.topic===topic);assert.equal(entries.length,1);assert.match(entries[0].message,/waiting for metal.*supplying industry/i);assert.equal(entries[0].buildingId,b.id);

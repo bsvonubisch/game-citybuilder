@@ -332,14 +332,14 @@ test("the oldest queued departure gets the next safe gap instead of newer low-id
   noCollisions([older, newer], "fair departure");
   complete([older, newer], path);
 });
-test("a busy working town remains collision free between simulation ticks and keeps exporting", () => {
+test("a busy working town remains collision free between simulation ticks and keeps delivering locally", () => {
   const sim = new Simulation();
   for (let i = 0; i < 2400; i++) {
     noCollisions(sim.state.agents, `town tick ${i}`);
     sim.step();
   }
   assert.ok(sim.state.delivered > 300);
-  assert.ok(sim.state.exported > 20);
+  assert.equal(sim.state.exported,0);assert.ok(sim.state.buildings.find(b=>b.kind==='workshop').produced>20);
   assert.ok(
     sim.state.agents.every((a) => (a.queuedTicks ?? 0) < 240),
     "no car should remain stuck for a minute",

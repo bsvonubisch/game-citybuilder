@@ -122,11 +122,13 @@ test('field movement, rotation and reload preserve growth, stock and harvested c
   const forged=s.snapshot();forged.buildings.find(v=>v.id===b.id).field.cells[0].sownAt=forged.tick+1;assert.throws(()=>parseSave(JSON.stringify(forged)),/farm/);
 });
 
-test('vegetables count as town food and are consumed from warehouse stock each day',()=>{
-  const s=fixture();s.state.buildings=s.state.buildings.filter(b=>b.kind==='warehouse'||b.kind==='house');s.reconnect();
-  const warehouse=s.state.buildings.find(b=>b.kind==='warehouse');warehouse.inventory={potatoes:100,carrots:100};
-  assert.equal(townNeeds(s).find(n=>n.id==='food').have,200);
-  s.state.tick=DAY_TICKS-1;s.step();assert.ok(s.stored('potatoes')+s.stored('carrots')<200);assert.equal(s.state.food,100);
+test('vegetables count as food and are consumed at homes once per resident each day',()=>{
+ const s=fixture();s.state.buildings=s.state.buildings.filter(b=>b.kind==='warehouse'||b.kind==='house');s.reconnect();s.dispatch=()=>{};
+ const warehouse=s.state.buildings.find(b=>b.kind==='warehouse');warehouse.inventory={potatoes:100,carrots:100};
+ for(const b of s.state.buildings.filter(b=>b.kind==='house'))b.inventory={carrots:s.state.residents.filter(r=>r.home===b.id).length};
+ s.state.residents.forEach(r=>r.lastMeal=0);assert.equal(townNeeds(s).find(n=>n.id==='food').have,200+s.state.residents.length);
+ s.state.tick=DAY_TICKS-1;s.step();assert.equal(s.stored('potatoes')+s.stored('carrots'),200);assert.equal(s.state.food,100);
+ assert.equal(s.state.buildings.filter(b=>b.kind==='house').reduce((n,b)=>n+(b.inventory.carrots??0),0),0);
 });
 
 test('old wheat farms retain inventory and become empty fields ready for planting',()=>{
