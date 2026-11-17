@@ -1,4 +1,5 @@
 import {isHome,FOOD_RESOURCES} from "./catalog.js";
+import {huntingArea} from './hunting.js';
 import {buildingRecipe} from './catalog.js';
 import { BUILDINGS, type BuildingKind } from "./catalog.js";
 import type { Building, Simulation } from "./simulation.js";
@@ -177,7 +178,9 @@ export function buildingGuidance(
   if(b.kind==='gatherer'&&alert.kind==='input')return{message:'Place this hut near wild berry bushes within 10 tiles and keep a clear walking route. Picked bushes replenish in two game days. The green markers show reachable ripe bushes.',label:'Move near berry bushes',action:{type:'move'}};
   if (b.kind === "forester" && alert.kind === "input")
     return {message:"Stumps regrow into mature trees after ten minutes at normal speed. Keep a clear land route to natural woodland within the highlighted area, or move the lodge closer. Planted garden trees stay protected.",label:"Move near woodland",action:{type:"move"}};
-  if(b.kind==="hunter"&&alert.kind==="input")return{message:"Animals stay in natural woodland away from buildings and roads. Preserve forest within the highlighted 12-tile hunting area and leave a walking route from the lodge. Wildlife recovers over time.",label:"Move near woodland",action:{type:"move"}};
+  if(b.kind==='hunter'&&alert.kind==='input')return huntingArea(sim,b).recovering
+    ?{message:alert.message,label:'Show hunting area',action:{type:'inspect',id:b.id}}
+    :{message:'Animals stay in natural woodland away from buildings and roads. Preserve forest within the highlighted 12-tile hunting area and leave a walking route from the lodge.',label:'Move near woodland',action:{type:'move'}};
   if (["quarry","mine"].includes(b.kind) && alert.kind==="input")return{message:"Workers need a clear land route from this workplace's entrance to an exposed rock face within 8 tiles. Clear obstacles or move closer to the matching deposit; roads must reach the workplace but do not need to cover the rocks.",label:"Move beside deposit",action:{type:"move"}};
   if (b.kind === "fishery" && alert.kind === "input")
     return {

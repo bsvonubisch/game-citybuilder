@@ -8,7 +8,7 @@ import {diversifyWoodland} from "./trees.js";
 import {initializeSupplies,stepHouseholds,dispatchSupplies,dispatchIndustry,collectHouseholdSupplies,toolEfficiency,toolRequirement,wearTools,availableSupply,foodStock,homeResidents} from './supplies.js';
 import {isTree,plantTreeVariant,validTreeVariant,validateTreePlanting,type TreePlanting} from './trees.js';
 import {RoadPathCache} from './road-path-cache.js';
-import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,type Animal,type HuntTrip} from "./hunting.js";
+import {ensureWildlife,stepWildlife,stepHunting,landHunt,validHunt,validateWildlife,huntTargets,huntingArea,type Animal,type HuntTrip} from "./hunting.js";
 import {CROPS,isCrop,validFarmPlot,type Crop} from './farm-layout.js';
 import {ensureField,prepareField,stepFarm,landHarvest,rotateField,validateField,farmSummary,type Field} from './farming.js';
 import {buildingRecipe,buildingOutputs,recipeProducts,fullProductionOutput,FOOD_RESOURCES} from './catalog.js';
@@ -1816,7 +1816,9 @@ export class Simulation {
     if(b.kind==='gatherer'&&!b.forestry?.length&&!forestTargets(this,b).length)return{kind:'input',title:'No ripe bushes in reach',message:'Keep a walkable route to wild berry bushes within 10 tiles. Picked bushes replenish after two game days; move the hut closer to woodland if none are nearby.'};
     if (b.kind === "forester" && !b.forestry?.length && !forestTargets(this,b).length)
       return {kind:"input", title:"No reachable mature trees", message:"Wait for nearby stumps to regrow, clear a walking route, or move this lodge closer to woodland. Its highlighted area reaches 10 tiles. Planted garden trees are protected."};
-    if(b.kind==="hunter"&&!b.hunting?.length&&!(this.state.wildlife??[]).some(a=>a.respawnAt===undefined&&Math.hypot(a.x-b.x-.5,a.y-b.y-.5)<=12))return{kind:"input",title:"No wildlife nearby",message:"Keep natural woodland within 12 tiles. Animals avoid buildings and roads; move the lodge near the forest or let wildlife recover."};
+    if(b.kind==='hunter'&&!b.hunting?.length){const area=huntingArea(this,b);if(!area.animals)return area.recovering
+      ?{kind:'input',title:'Wildlife recovering',message:`${area.recovering} animals replenishing nearby; next return in about ${Math.max(1,Math.ceil(area.nextReturn/60))} min at normal speed. Keep the woodland intact. Hunters resume automatically.`}
+      :{kind:'input',title:'No wildlife nearby',message:'Keep natural woodland within 12 tiles. Animals avoid buildings and roads; move the lodge near existing woodland and leave a walking route.'};}
     if(isExtractor(b.kind)&&!b.mining?.length&&!miningTargets(this,b).length)return{kind:"input",title:"No reachable rock face",message:"Clear a walking route from the entrance to exposed rocks within 8 tiles, or move the workplace closer. Keep the building and roads beside the deposit."};
     if(toolRequirement(b)&&b.workers&&(b.inventory.tools??0)<toolRequirement(b))return{kind:'tools',title:`Tools missing · ${Math.round(toolEfficiency(b)*100)}% work speed`,message:`${b.inventory.tools??0} of ${toolRequirement(b)} tools available. Connect a copper workshop supplied with metal. Deliveries restore full productivity; work continues at reduced speed.`};
     if (isHome(b.kind)) {

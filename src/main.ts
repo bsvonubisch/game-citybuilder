@@ -6,7 +6,7 @@ import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
 import {deliveryVehicle} from './delivery-vehicles.js';
 import {civilianCar} from './civilian-vehicles.js';
-import {HUNT_RADIUS,huntTargets} from "./hunting.js";
+import {HUNT_RADIUS,huntTargets,huntingArea} from "./hunting.js";
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 import {farmSummary} from './farming.js';
 import {isLivestock,penPrice,livestockJobs,livestockCapacity,LIVESTOCK,ensureHerd} from './livestock.js';
@@ -1311,7 +1311,8 @@ function updateInspector() {
     );
   if (d.recipe) updateLogistics(b);
   if(b.kind==="hunter"&&!b.construction){
-    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Hunting area · ${HUNT_RADIUS}-tile reach</h4><div class="detail-row"><span>Reachable wildlife</span><b>${huntTargets(simulation,b).length}</b></div><p class="muted">Hunters track wildlife in woodland and carry meat back. Animals avoid buildings and roads; preserve forest around the lodge.</p>${(b.hunting??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Hunter")}</span><b>${t.phase==="aiming"?"Aiming":t.phase==="returning"?`Carrying ${t.cargo} meat`:"Tracking wildlife"}</b></div>`).join("")}`);
+    const area=huntingArea(simulation,b);
+    $("#building-detail").insertAdjacentHTML("beforeend",`<h4>Hunting area · ${HUNT_RADIUS}-tile reach</h4><div class="detail-row"><span>Ready to track</span><b>${huntTargets(simulation,b).length}</b></div>${area.recovering?`<div class="detail-row"><span>Wildlife recovering</span><b>${area.recovering} · next in ${Math.floor(area.nextReturn/60)}m ${area.nextReturn%60}s</b></div>`:''}<p class="muted">Each hunt brings back 6 meat. Wildlife replenishes after one game day (4 min at normal speed). Preserve natural woodland; nearby lodges share the same animals.</p>${(b.hunting??[]).map(t=>`<div class="detail-row"><span>${escapeHtml(simulation.state.residents.find(r=>r.id===t.resident)?.name??"Hunter")}</span><b>${t.phase==="aiming"?"Aiming":t.phase==="returning"?`Carrying ${t.cargo} meat`:"Tracking wildlife"}</b></div>`).join("")}`);
   }
   if(isExtractor(b.kind)&&!b.construction) {
     const targets=miningTargets(simulation,b);
