@@ -75,5 +75,6 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
     rows.push({label:"Leisure",have:`${leisure}%`,need:"Nearby visits",ok:leisure>=60});
   }
   if(d.recipe)for(const [resource,count] of recipeProducts(d.recipe))rows.push({label:RESOURCE_NAMES[resource],have:String(b.inventory[resource]??0),need:`${outputCapacity(b)} storage`,ok:d.recipe.outputs?(b.inventory[resource]??0)+count<=outputCapacity(b):(b.inventory[resource]??0)<outputCapacity(b)});
+  if(isLivestock(b.kind)&&b.kind!=='pigs')rows.push({label:'Meat',have:String(b.inventory.meat??0),need:`${outputCapacity(b)} storage`,ok:(b.inventory.meat??0)+4<=outputCapacity(b)});
   return rows;
 }

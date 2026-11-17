@@ -1,4 +1,7 @@
 const paths: Record<string, string> = {
+  milk: 'M9 2h6v5l3 4v10H6V11l3-4V2Zm0 4h6M6 12h12M6 18h12',
+  eggs: 'M14 14c0 4-2 6-5 6s-5-2-5-6S7 4 9 4s5 6 5 10Zm-1-7c1-3 2-5 4-5s5 6 5 10-2 6-5 6',
+  meat: 'M5 8c3-5 8-6 12-3s5 7 2 11-8 6-12 3S2 12 5 8Zm5 1c2-2 5-1 5 1s-2 3-4 2-2-2-1-3Z',
   berries: 'M12 8c-1-4 2-6 6-5-1 4-3 5-6 5Zm-1-1L8 3M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8Zm-5 5a4 4 0 1 0 3 7m4 0a4 4 0 1 0 3-7',
   log: "M5 3h14v18H5V3Zm4 5h6m-6 4h6m-6 4h4",
   demolition: "m3 11 9-8 9 8M5 10v11h14V10M9 12l6 6m0-6-6 6",
