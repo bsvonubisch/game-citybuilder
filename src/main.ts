@@ -1,5 +1,6 @@
 import {roadWorkSites,roadWorkCrew,type RoadWorkSite} from './roadwork-sites.js';
 import {worldDetails,roadName,type WorldSelection,type WorldAction} from './world-inspection.js';
+import {planRemoval,type RemovalKind} from './removal.js';
 import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
@@ -349,7 +350,7 @@ function setTool(next: Tool, preservePlot=false) {
         : next === "bridge"
           ? `${icon("bridge")} Build over water · 35 gold per tile · Connect both ends to roads <kbd>Esc</kbd>`
           : next === "bulldoze"
-            ? `${icon("hammer")} Click or drag to remove a stretch · Release to apply · Half the gold returned <kbd>Esc</kbd>`
+            ? `${icon("hammer")} Drag from trees, roads or buildings to remove that kind only · Review buildings before demolition <kbd>Esc</kbd>`
             : `${icon("inspect")} Tap buildings, people or cars · Drag to pan · Pinch or scroll to zoom`;
   if (isBuilding(next)) $("#rotate-placement").onclick = rotatePlacement;
   if(next==="market"){
@@ -634,7 +635,23 @@ scene.onSelectWorld=(selection)=>{
   renderWorldInspector();scene.drawOverlay();
 };
 scene.onDecorationRemove=async(id)=>{const result=await sendCommand({type:"removeDecoration",id});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
-scene.onRemoveApply=async(from,to)=>{const result=await sendCommand({type:"removeStroke",from,to});toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
+scene.onRemoveApply=async(from,to,kind?:RemovalKind)=>{
+  // Capture world coordinates now; the reviewed targets must not change with camera rotation.
+  const command=scene.view.command({type:'removeStroke',from,to,kind}) as Extract<Command,{type:'removeStroke'}>;
+  const plan=planRemoval(simulation,command.from,command.to,kind);
+  if(plan.error){toast(plan.error);return;}
+  const apply=async()=>{const result=await gateway.command(command);toast(result.message);if(result.ok){scene.redraw();save(false);updateUI();}};
+  if(!plan.buildings.size){await apply();return;}
+  const targets=simulation.state.buildings.filter(b=>plan.buildings.has(b.id));
+  openModal(`<span class="eyebrow">DEMOLITION</span><h2>${targets.length===1?`Remove ${escapeHtml(buildingName(targets[0]))}?`:`Remove ${targets.length} buildings?`}</h2><div>${targets.map(b=>`<div class="detail-row"><span>${escapeHtml(buildingName(b))}</span><b>${b.x}, ${b.y}</b></div>`).join('')}</div><p>Workers will demolish these buildings. Stored goods and half the gold cost will be recovered.</p><div class="modal-actions"><button id="cancel-demolition" autofocus>Keep buildings</button><button id="confirm-demolition" class="danger">${icon('demolition')} Demolish ${targets.length===1?'building':'buildings'}</button></div>`);
+  $('#cancel-demolition').onclick=closeModal;
+  $('#confirm-demolition').onclick=async()=>{
+    const current=planRemoval(simulation,command.from,command.to,kind);
+    closeModal();
+    if(current.error||current.buildings.size!==plan.buildings.size||[...current.buildings].some(id=>!plan.buildings.has(id))){toast('The selected buildings changed. Select them again to review demolition.');return;}
+    await apply();
+  };
+};
 scene.onTile = async (p: Point) => {
   const simulation=scene.simulation,deposit=depositAt(scene.view.from(p));
   if (tool === "terrain") {
@@ -653,6 +670,7 @@ scene.onTile = async (p: Point) => {
     else closeInspection();
     return;
   }
+  if(tool==='bulldoze'){scene.onRemoveApply(p,p);return;}
   const result = await sendCommand(
     tool === "move"
       ? {
@@ -661,13 +679,11 @@ scene.onTile = async (p: Point) => {
           ...p,
           rotation: scene.rotation,
         }
-      : tool === "bulldoze"
-        ? { type: "demolish", ...p }
-        : { type: "place", kind: tool, rotation: scene.rotation, ...(isLivestock(tool)?{plot:scene.penPlot}:tool==='farm'?{plot:scene.farmPlot}:tool==="market"?{plot:scene.marketPlot}:{}), ...p },
+      : { type: "place", kind: tool, rotation: scene.rotation, ...(isLivestock(tool)?{plot:scene.penPlot}:tool==='farm'?{plot:scene.farmPlot}:tool==="market"?{plot:scene.marketPlot}:{}), ...p },
   );
   toast(result.message);
   if (result.ok) {
-    if(tool!=="bulldoze")townAudio.place();
+    townAudio.place();
     if (tool === "move") {
       const id = scene.movingBuilding!;
       setTool("inspect");

@@ -28,7 +28,7 @@ import {PlazaArt} from "./plaza-art.js";
 import {parkVisitor} from "./park-visitors.js";
 import {FOUNDATION_HEIGHT} from "./foundation.js";
 import Phaser from "phaser";
-import {planRemoval} from "./removal.js";
+import {planRemoval,removalKindAt,type RemovalKind} from "./removal.js";
 import {nearestFenceSide,fenceCenter} from "./fences.js";
 import {lampPoint,lampPlacement,nearestRoadEdge} from "./streetlights.js";
 import { NightArt } from "./night-art.js";
@@ -217,7 +217,7 @@ export class TownScene extends Phaser.Scene {
     this.drawOverlay();
   }
   onCancel: () => void = () => {};
-  onRemoveApply:(from:Point,to:Point)=>void=()=>{};
+  onRemoveApply:(from:Point,to:Point,kind?:RemovalKind)=>void=()=>{};
   onSelectDecoration:(id:number)=>void=()=>{};
   onDecorationRemove:(id:number)=>void=()=>{};
   onEyedropper:(kind:Tool,rotation:0|1|2|3,plot?:readonly[number,number])=>void=()=>{};
@@ -248,7 +248,7 @@ export class TownScene extends Phaser.Scene {
   roadType: RoadType = "stone";
   private marketDrag:{from:Point;to:Point;pointer:number}|null=null;
   onMarketPreview:()=>void=()=>{};
-  private roadDrag: { from: Point; to: Point; pointer: number; decoration?:number } | null = null;
+  private roadDrag: { from: Point; to: Point; pointer: number; decoration?:number; removalKind?:RemovalKind; startScreen?:Point; dragged?:boolean } | null = null;
   onRoadPreview: (plan: RoadPlan | null) => void = () => {};
   onRoadApply: (from: Point, to: Point) => void = () => {};
   cancelRoad(resetPlots=true) {
@@ -474,7 +474,7 @@ export class TownScene extends Phaser.Scene {
         const hit=this.tool==="bulldoze"?over.find(o=>o.getData("buildingId")||o.getData("decoration")):undefined;
         const b=hit?.getData("buildingId")?this.simulation.building(hit.getData("buildingId")):undefined;
         const tile = b?{x:b.x,y:b.y}:hit?.getData("decoration")??this.pickTile(world.x,world.y);
-        if (inside(tile.x,tile.y)) { this.roadDrag = { from: tile, to: tile, pointer: p.id,decoration:(hit?.getData("decoration")?.edge!==undefined||hit?.getData("decoration")?.side!==undefined)?hit?.getData("decoration")?.id:undefined }; this.drawOverlay(); }
+        if (inside(tile.x,tile.y)) { this.roadDrag = { from: tile, to: tile, pointer: p.id,decoration:hit?.getData('decoration')?.id,...(this.tool==='bulldoze'?{removalKind:hit?.getData('decoration')?'decorations':removalKindAt(this.simulation,tile),startScreen:{x:p.x,y:p.y}}:{}) }; this.drawOverlay(); }
         return;
       }
       if (p.wasTouch) return;
@@ -518,6 +518,10 @@ export class TownScene extends Phaser.Scene {
       if(!p.wasTouch&&!p.isDown)this.buildingHover(over.find(o=>o.getData("buildingId"))?.getData("buildingId")??null,p.x,p.y);
       if (p.isDown && this.roadDrag?.pointer === p.id && (this.tool === "road"||this.tool === "bulldoze")) {
         if (p.wasTouch) this.touches.move(p.id, {x:p.x,y:p.y});
+        if(this.roadDrag.startScreen&&!this.roadDrag.dragged){
+          if(Math.hypot(p.x-this.roadDrag.startScreen.x,p.y-this.roadDrag.startScreen.y)<6)return;
+          this.roadDrag.dragged=true;
+        }
         const world = this.cameras.main.getWorldPoint(p.x,p.y), tile = this.pickTile(world.x,world.y);
         if (tile.x !== this.roadDrag.to.x || tile.y !== this.roadDrag.to.y) {
           this.roadDrag.to = tile; this.hover = tile; this.drawOverlay();
@@ -603,8 +607,8 @@ export class TownScene extends Phaser.Scene {
           if (p.event.type !== "touchcancel") {
             const world = this.cameras.main.getWorldPoint(p.x, p.y);
             if(this.tool==="bulldoze"){
-              if(draft.decoration&&key(draft.from)===key(draft.to))this.onDecorationRemove(draft.decoration);
-              else this.onRemoveApply(draft.from,draft.to);
+              if(draft.decoration&&!draft.dragged)this.onDecorationRemove(draft.decoration);
+              else this.onRemoveApply(draft.from,draft.to,draft.removalKind);
             }
             else this.onRoadApply(draft.from, this.pickTile(world.x, world.y));
           }
@@ -1070,7 +1074,7 @@ export class TownScene extends Phaser.Scene {
       }
     }
     if(this.tool==="bulldoze"&&this.roadDrag){
-      const plan=planRemoval(this.simulation,this.roadDrag.from,this.roadDrag.to);
+      const plan=planRemoval(this.simulation,this.roadDrag.from,this.roadDrag.to,this.roadDrag.removalKind);
       for(const p of plan.tiles)this.diamond(p,plan.error?0xb65c45:0xef9b82,.4);
       return;
     }

@@ -4,14 +4,19 @@ import {warehouseReady,LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
 import {footprint} from "./catalog.js";
 import type {Point,Simulation} from "./simulation.js";
 import {sourceObject,sourcePoint,turnPoint,viewTurn} from './view-space.js';
-export function planRemoval(sim:Simulation,from:Point,to:Point):{buildings:Set<number>;decorations:Set<number>;roads:Set<string>;tiles:Point[];error?:string} {
-  const source=sourceObject(sim);if(source!==sim){const plan=planRemoval(source,sourcePoint(sim,from),sourcePoint(sim,to)),map=(p:Point)=>turnPoint(p,viewTurn(sim));return{...plan,tiles:plan.tiles.map(map),roads:new Set([...plan.roads].map(k=>{const[x,y]=k.split(',').map(Number),p=map({x,y});return`${p.x},${p.y}`;}))};}
+export type RemovalKind='buildings'|'roads'|'decorations';
+export function removalKindAt(sim:Simulation,p:Point):RemovalKind {
+  return sim.buildingAt(p.x,p.y)?'buildings':sim.roads.has(`${p.x},${p.y}`)||roadWorkAt(sim.state,p)?'roads':'decorations';
+}
+/** A clearing stroke keeps the kind first selected: trees cannot sweep up a hut. */
+export function planRemoval(sim:Simulation,from:Point,to:Point,kind:RemovalKind=removalKindAt(sim,from)):{buildings:Set<number>;decorations:Set<number>;roads:Set<string>;tiles:Point[];error?:string} {
+  const source=sourceObject(sim);if(source!==sim){const plan=planRemoval(source,sourcePoint(sim,from),sourcePoint(sim,to),kind),map=(p:Point)=>turnPoint(p,viewTurn(sim));return{...plan,tiles:plan.tiles.map(map),roads:new Set([...plan.roads].map(k=>{const[x,y]=k.split(',').map(Number),p=map({x,y});return`${p.x},${p.y}`;}))};}
   const tiles=roadStroke(from,to),buildings=new Set<number>(),decorations=new Set<number>(),roads=new Set<string>(),outline=new Map<string,Point>();
   for(const p of tiles) {
     const b=sim.buildingAt(p.x,p.y),k=`${p.x},${p.y}`;
-    if(b){buildings.add(b.id);for(const q of footprint(b.kind,b.x,b.y,b.rotation,b.plot))outline.set(`${q.x},${q.y}`,q);}
-    else if(sim.roads.has(k)||roadWorkAt(sim.state,p)){roads.add(k);outline.set(k,p);}
-    else {for(const d of sim.state.decorations.filter(d=>d.x===p.x&&d.y===p.y))decorations.add(d.id);if(sim.decorationAt(p.x,p.y))outline.set(k,p);}
+    if(kind==='buildings'&&b){buildings.add(b.id);for(const q of footprint(b.kind,b.x,b.y,b.rotation,b.plot))outline.set(`${q.x},${q.y}`,q);}
+    else if(kind==='roads'&&(sim.roads.has(k)||roadWorkAt(sim.state,p))){roads.add(k);outline.set(k,p);}
+    else if(kind==='decorations'){for(const d of sim.state.decorations.filter(d=>d.x===p.x&&d.y===p.y))decorations.add(d.id);if(sim.decorationAt(p.x,p.y))outline.set(k,p);}
   }
   const removesLastDepot = !sim.state.buildings.some(b => b.kind === "warehouse" && !buildings.has(b.id));
   const removesLastWorkingDepot = sim.state.buildings.some(b => warehouseReady(b) && buildings.has(b.id)) && !sim.state.buildings.some(b => warehouseReady(b) && !buildings.has(b.id));

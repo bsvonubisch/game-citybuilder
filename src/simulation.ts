@@ -204,7 +204,7 @@ export type Command =
   | {type:'butcherCut';id:number;cut:ButcherCut}
   | {type:'crop';id:number;crop:Crop}
   | {type:"removeDecoration";id:number}
-  | {type:"removeStroke";from:Point;to:Point}
+  | {type:"removeStroke";from:Point;to:Point;kind?:import('./removal.js').RemovalKind}
   | { type: "roadStroke"; from: Point; to: Point; roadType?: RoadType }
   | TerrainCommand
   | { type: "undoTerrain" }
@@ -1004,7 +1004,7 @@ export class Simulation {
       this.state.money+=d.natural?0:Math.floor(DECORATIONS[d.kind].cost/2);
       networkChanged=false;message="Decoration removed.";
     } else if(c.type==="removeStroke") {
-      const plan=planRemoval(this,c.from,c.to);
+      const plan=planRemoval(this,c.from,c.to,c.kind);
       if(plan.error)return {ok:false,message:plan.error,revision:this.state.revision};
       networkChanged=plan.buildings.size>0||plan.roads.size>0;
       for(const b of this.state.buildings.filter(b=>plan.buildings.has(b.id))) this.startDemolition(b);
@@ -1017,7 +1017,8 @@ export class Simulation {
         if(!plan.decorations.has(d.id))return true;
         this.state.money+=d.natural?0:Math.floor(DECORATIONS[d.kind].cost/2);return false;
       });
-      message=`${plan.buildings.size} buildings marked for demolition. ${plan.roads.size} road tiles queued for removal; ${plan.decorations.size} decorations removed. Keep roads connected until crews finish.`;
+      const names=this.state.buildings.filter(b=>plan.buildings.has(b.id)).map(buildingName);
+      message=names.length?`${names.join(', ')} marked for demolition. Keep roads connected until crews finish.`:plan.roads.size?`${plan.roads.size} road tiles queued for removal. Keep roads connected until crews finish.`:`${plan.decorations.size} decorations removed.`;
     } else if (c.type === "roadStroke") {
       const roadType = c.roadType ?? "stone";
       const plan = planRoad(this, c.from, c.to, roadType);

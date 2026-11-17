@@ -37,6 +37,19 @@ test('starter residents commute to the hut, work on site and supply local stores
  assert.ok(sawPicking&&sawCargo&&sawDelivery);assert.ok(hut.produced>=6);
  assert.equal(hut.workers,2);assert.ok(sawOnsite);
 });
+
+test('a newly built gatherer hut completes, stays on its plot and survives reloading',()=>{
+ let sim=new Simulation();const original=sim.state.buildings.find(b=>b.kind==='gatherer');
+ sim.state.buildings=sim.state.buildings.filter(b=>b.id!==original.id);sim.reconnect(true);
+ const result=sim.execute({id:'build-hut',expectedRevision:sim.state.revision,command:{type:'place',kind:'gatherer',x:original.x,y:original.y,rotation:original.rotation}});
+ assert.ok(result.ok,result.message);const hut=sim.buildingAt(original.x,original.y),id=hut.id;
+ assert.ok(hut.construction&&!hut.construction.demolition);
+ for(let i=0;i<4000&&hut.construction;i++)sim.step();
+ assert.equal(hut.construction,undefined,'builders finish the hut');assert.equal(sim.building(id),hut);
+ sim=new Simulation(parseSave(JSON.stringify(sim.snapshot())));const restored=sim.building(id);
+ assert.equal(restored.kind,'gatherer');assert.equal(restored.construction,undefined);assert.equal(sim.buildingAt(original.x,original.y),restored);
+ for(let i=0;i<960;i++)sim.step();assert.equal(sim.building(id),restored);assert.ok(restored.produced>0);
+});
 test('gatherers reserve bushes, visibly travel and pick, then land food exactly once',()=>{
  const {sim,b}=crew(),seen=new Set();assert.ok(forestTargets(sim,b).length>=6);
  let landed=0;
