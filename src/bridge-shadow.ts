@@ -4,9 +4,10 @@ import {isBridge} from './bridges.js';
 import {terrainCell} from './terrain.js';
 import {WATER_DROP} from './water-level.js';
 import {SIZE} from './catalog.js';
+import {fisheryCells} from './shoreline.js';
 import type {Simulation} from './simulation.js';
 
-/** Static ambient occlusion on the water. Connected spans share one path,
+/** Static ambient occlusion on the water. Bridges and fishery piers share one path,
  * avoiding a dark seam per tile. Cached 256px chunks keep GPU uploads bounded. */
 export class BridgeShadow {
  private images:Phaser.GameObjects.Image[]=[];
@@ -14,7 +15,11 @@ export class BridgeShadow {
  constructor(private scene:Phaser.Scene){}
  redraw(sim:Simulation){
   this.images.forEach(i=>i.destroy());this.images=[];this.keys.forEach(k=>this.scene.textures.remove(k));this.keys=[];
-  const cells=[...sim.roads].map(k=>k.split(',').map(Number)).filter(([x,y])=>isBridge(sim.roads,x,y,sim.state.terrain)).map(([x,y])=>iso(x,y));
+  const covered=new Set([...sim.roads].filter(k=>{const [x,y]=k.split(',').map(Number);return isBridge(sim.roads,x,y,sim.state.terrain);}));
+  // Construction sites already have a pier. Follow its actual water rectangle,
+  // including after moves, removals and quarter-turn camera rotations.
+  for(const b of sim.state.buildings)if(b.kind==='fishery')for(const p of fisheryCells(b.x,b.y,b.rotation))if(p.kind==='water')covered.add(`${p.x},${p.y}`);
+  const cells=[...covered].map(k=>{const [x,y]=k.split(',').map(Number);return iso(x,y);});
   const chunks=new Map<string,{x:number;y:number}>();
   for(const p of cells)for(let x=Math.floor((p.x-38)/256);x<=Math.floor((p.x+38)/256);x++)for(let y=Math.floor((p.y-22+WATER_DROP)/256);y<=Math.floor((p.y+22+WATER_DROP)/256);y++)chunks.set(`${x},${y}`,{x:x*256,y:y*256});
   for(const [id,origin] of chunks){

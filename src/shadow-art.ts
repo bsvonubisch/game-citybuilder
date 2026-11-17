@@ -7,6 +7,7 @@ import { castShadow, type Lamp } from "./lighting.js";
 import { daylight } from "./daylight.js";
 import { iso, cameraViewport } from "./rendering.js";
 import { groundHeight } from "./terrain.js";
+import {fisheryLayout} from './shoreline.js';
 import type { Simulation } from "./simulation.js";
 
 /** Ground-only soft silhouettes: cached by plot size and light direction. */
@@ -49,15 +50,18 @@ export class ShadowArt {
       // The ground-shadow pass cannot clip to a narrow elevated deck.
       const pole = d?.kind === "streetlight" ? lampPlacement(sim, d) : undefined;
       if(pole?.bridge)continue;
+      // Only the hut casts a land shadow; its pier shades the lower water in
+      // the shared bridge/pier pass, beneath pilings, boats and decks.
+      const land=b?.kind==='fishery'?fisheryLayout(b.rotation).land:undefined;
       const [w, h] = b
-        ? dimensions(b.kind, b.rotation, b.plot)
+        ? land?[land.width,land.height]:dimensions(b.kind, b.rotation, b.plot)
         : pole
           ? [0.055, 0.055]
           : d.kind === "bench"
           ? [0.7, 0.4]
           : [0.45, 0.45];
-      const gx = b ? b.x + (w - 1) / 2 : pole?.point.x ?? d.x,
-        gy = b ? b.y + (h - 1) / 2 : pole?.point.y ?? d.y;
+      const gx = b ? b.x + (land?.x??0) + (w - 1) / 2 : pole?.point.x ?? d.x,
+        gy = b ? b.y + (land?.y??0) + (h - 1) / 2 : pole?.point.y ?? d.y;
       const z = pole?.elevation ?? groundHeight(b?.x ?? d.x, b?.y ?? d.y, sim.state.terrain);
       const p = pole ? {...pole.screen} : iso(gx, gy);
       if (!pole) p.y -= z;
