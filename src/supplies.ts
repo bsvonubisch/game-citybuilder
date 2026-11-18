@@ -8,6 +8,7 @@ import type {Building,Simulation} from './simulation.js';
 export const TOOL_LIFE_TICKS=DAY_TICKS*4;
 const householdGoods:Resource[]=[...FOOD_RESOURCES.filter(r=>r!=='meat'),'meat','wood'];
 export const foodStock=(b:Building)=>FOOD_RESOURCES.reduce((n,r)=>n+(b.inventory[r]??0),0);
+export const householdStore=(b:Building)=>b.connected && b.enabled && (warehouseReady(b) || b.kind==='market' && !b.construction);
 export const toolRequirement=(b:Building)=>b.construction?builderCapacity(b):buildingRecipe(b)?buildingJobs(b):0;
 export function toolEfficiency(b:Building,needed=toolRequirement(b)){return needed ? .5+.5*Math.min(1,(b.inventory.tools??0)/needed) : 1;}
 /** One tool lasts four full working days. Walking and paused work cause no wear. */
@@ -72,7 +73,7 @@ export function supplyRoom(sim:Simulation,b:Building,resource:Resource){
 /** Household stock is collected locally from a connected store. It does not
  * create a truck for every food/firewood refill. Actual stock is transferred. */
 export function collectHouseholdSupplies(sim:Simulation){
- const stores=sim.state.buildings.filter(b=>b.connected&&b.enabled&&(warehouseReady(b)||b.kind==='market'&&!b.construction));
+ const stores=sim.state.buildings.filter(householdStore);
  const households=sim.state.buildings.filter(b=>isHome(b.kind)&&b.connected&&b.enabled)
    .map(home=>({home,residents:homeResidents(sim,home).length})).filter(h=>h.residents>0);
  households.sort((a,b)=>foodStock(a.home)/a.residents-foodStock(b.home)/b.residents);

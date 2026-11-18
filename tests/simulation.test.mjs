@@ -128,7 +128,14 @@ test("needs distinguish ready meals, staffed workplaces and reachable leisure fr
   const bakery=sim.state.buildings.find(b=>b.kind==="bakery");
   bakery.inventory.bread=90;
   const needs=townNeeds(sim),food=needs.find(n=>n.id==="food");
-  assert.equal(food.have,90,"town inventory includes food awaiting household delivery");
+  assert.equal(food.have,0,"bakery output still needs transport to a household store");
+  assert.equal(sim.totals().bread,90,"all produced bread remains in town inventory");
+  const store=sim.state.buildings.find(b=>b.kind==="warehouse");
+  bakery.inventory.bread-=30;
+  store.inventory.bread=30;
+  assert.equal(townNeeds(sim).find(n=>n.id==="food").have,30,"residents can collect warehouse stock");
+  store.enabled=false;
+  assert.equal(townNeeds(sim).find(n=>n.id==="food").have,0,"a closed store cannot supply residents");
   assert.equal(food.need,sim.state.residents.length);
   assert.ok(!needs.some(n=>n.id==="nightlife"),'a tavern is an alternative leisure service, not a separate mandatory need');
   const jobs=sim.state.buildings.filter(b=>b.enabled&&!b.construction&&BUILDINGS[b.kind].jobs);

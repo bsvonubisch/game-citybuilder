@@ -1,7 +1,7 @@
 import {roadWorkSites,roadWorkCrew,type RoadWorkSite} from './roadwork-sites.js';
 import {worldDetails,roadName,type WorldSelection,type WorldAction} from './world-inspection.js';
 import {planRemoval,type RemovalKind} from './removal.js';
-import {roadBuildersNeeded,roadWorkAt} from './roadworks.js';
+import {roadWorkAt} from './roadworks.js';
 import {TownLog} from './town-log.js';
 import {TownAudio} from './audio.js';
 import {deliveryVehicle} from './delivery-vehicles.js';
@@ -19,8 +19,9 @@ import {incomeSummary} from "./economy.js";
 import {isHome,isPark} from "./catalog.js";
 import {parkVisitor} from "./park-visitors.js";
 import Phaser from "phaser";
-import {townNeeds,buildingNeeds} from "./needs.js";
-import {foodStock,toolRequirement,firewoodNeed} from './supplies.js';
+import {needCards,stockRows,ledgerLayout,setLedgerContent} from './town-ledger.js';
+import {townNeeds,buildingNeeds,townBuilderDemand} from "./needs.js";
+import {toolRequirement,firewoodNeed} from './supplies.js';
 import "./style.css";
 import { ROAD_TYPES, roadTypeAt, type RoadType } from "./roads.js";
 import { FOREST_RADIUS, REGROW_TICKS, forestTargets, forestInside, harvestable, treeStage } from "./forestry.js";
@@ -133,8 +134,10 @@ const gateway = new LocalGateway(simulation);
 const scene = new TownScene(simulation);
 function sendCommand(command:Command){return gateway.command(scene.view.command(command));}
 const cloud = new CloudSaves();
-const catalogGroups={homes:"Homes",food:"Food & farms",gather:"Gathering",industry:"Workshops",town:"Services",parks:"Parks",trees:"Trees",decorations:"Street furniture"};
-const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["gatherer","farm","cattle","chickens","pigs","fishery","mill","bakery","hunter","butcher"],gather:["forester","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","chapel","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom","maple","willow"],decorations:["bench","streetlight","planter","fence"]};
+const catalogGroups={homes:"Homes",food:"Farms",livestock:"Livestock",kitchen:"Food processing",gather:"Gathering",industry:"Workshops",town:"Services",parks:"Parks",trees:"Trees",decorations:"Street furniture"};
+const catalogKinds:Record<keyof typeof catalogGroups,string[]>={homes:["cottage","house"],food:["farm","fishery"],livestock:["cattle","chickens","pigs"],kitchen:["mill","bakery","butcher"],gather:["forester","gatherer","hunter","quarry","mine"],industry:["sawmill","workshop","brickworks"],town:["warehouse","chapel","church","tavern","market"],parks:["park","garden"],trees:["oak","pine","birch","blossom","maple","willow"],decorations:["bench","streetlight","planter","fence"]};
+let stockPage=false;
+let ledgerResource: HTMLButtonElement | null = null;
 let category: keyof typeof catalogGroups = "homes",
   tab: "build" | "town" = "build",
   selected: number | null = null,
@@ -208,7 +211,7 @@ $("#app").innerHTML = `
  ]
    .map(
      ([i, id, title]) =>
-       `<div class="resource ${id}" title="${title}">${icon(i)}<span id="${id}">—</span><small>${id === "population" || id === "builders" ? title : title.split(" ")[0]}</small></div>`,
+       `<button class="resource ${id}" data-ledger-resource="${id}" aria-controls="build-drawer" title="${title}">${icon(i)}<span id="${id}">—</span><small>${id === "population" || id === "builders" ? title : title.split(" ")[0]}</small></button>`,
    )
    .join("")}
  </div><div class="header-actions"><button class="quiet" id="cloud-button" title="Sign in & cloud saves">${icon("cloud")}<span id="cloud-label">Connect</span></button><button class="icon-button" id="settings" aria-label="Save and settings">${icon("settings")}</button></div></header>
@@ -222,7 +225,7 @@ $("#app").innerHTML = `
    ["build", "hammer", "Build", "B"],
    ["road", "road", "Road", "R"],
    ["terrain", "terrain", "Terrain", "T"],
-   ["bulldoze", "hammer", "Remove", "X"],
+   ["bulldoze", "demolition", "Remove", "X"],
    ["town", "leaf", "Your town", "U"],
  ]
    .map(
@@ -244,7 +247,19 @@ const townLog=new TownLog($<HTMLDetailsElement>("#town-log"),event=>{
   if(building){scene.onSelect(building.id);scene.focusBuilding(building.id);}
   else if(event.tile)scene.focusTile(event.tile.x,event.tile.y);
 });
-$("#town-needs-button").onclick=()=>{setTool("inspect");closeInspection();tab="town";renderPanel();setPanelOpen(true);};
+function openTownLedger(resource:HTMLButtonElement|null=null) {
+  ledgerResource=resource;
+  stockPage=!!resource && RESOURCES.includes(resource.dataset.ledgerResource as Resource);
+  setTool("inspect");
+  closeInspection();
+  tab="town";
+  setPanelOpen(true);
+  renderPanel();
+}
+$("#town-needs-button").onclick=()=>openTownLedger();
+document.querySelectorAll<HTMLButtonElement>('[data-ledger-resource]').forEach(button=>{
+  button.onclick=()=>openTownLedger(button);
+});
 $("#panel-content").addEventListener("wheel",(event)=>{
   const target=event.target as Element;
   const scroller=target.closest<HTMLElement>(".building-grid,.category-tabs")??(tab==="build"&&tool!=="terrain"?document.querySelector<HTMLElement>(".building-grid"):null);
@@ -429,8 +444,9 @@ function togglePanel(next: typeof tab) {
   setTool("inspect");
   closeInspection();
   tab = next;
-  renderPanel();
+  ledgerResource=null;
   setPanelOpen(true);
+  renderPanel();
 }
 document.addEventListener("pointerdown", (event) => {
   if (!panelOpen || tab !== "build" || tool === "terrain") return;
@@ -507,8 +523,25 @@ function renderPanel() {
   setPanelOpen(panelOpen);
   if (tab === "town") {
     $("#panel-content").innerHTML =
-      `<div class="town-overview"><section><span class="eyebrow">GROWING TOGETHER</span><h3>Life in Pinehaven</h3><p class="muted">Have / need. Select a shortage to take the next step.</p><div id="town-needs"></div><div id="town-stats"></div></section><section><h4>Town inventory</h4><p class="muted">Ready = warehouses. Elsewhere = workplaces and deliveries.</p><div class="stock-heading"><span>Material</span><b>Ready</b><b>Elsewhere</b></div><div id="inventory"></div></section></div>`;
-    $("#town-needs").onclick=(event)=>{const button=(event.target as Element).closest<HTMLButtonElement>("[data-need]");if(!button)return;const need=townNeeds(simulation).find(n=>n.id===button.dataset.need);if(need?.action?.building){setPanelOpen(false);scene.onSelect(need.action.building);scene.focusBuilding(need.action.building);}else if(need?.action?.kind)setTool(need.action.kind);};
+      ledgerLayout(stockPage);
+    document.querySelectorAll<HTMLButtonElement>('[data-ledger]').forEach(button=>{
+      button.onclick=()=>{
+        stockPage=button.dataset.ledger==='stock';
+        ledgerResource=null;
+        renderPanel();
+        document.querySelector<HTMLButtonElement>(`[data-ledger="${stockPage?'stock':'needs'}"]`)?.focus();
+      };
+    });
+    $("#town-needs").onclick=event=>{
+      const id=(event.target as Element).closest<HTMLButtonElement>('[data-need]')?.dataset.need;
+      const action=townNeeds(simulation).find(n=>n.id===id)?.action;
+      if(action?.roadWork){
+        const site=roadWorkSites(simulation.state).find(s=>s.works.some(w=>w.id===action.roadWork));
+        if(site){scene.onSelectRoadWork(site);scene.focusTile(site.anchor.x,site.anchor.y);}
+      }else if(action?.building){
+        setPanelOpen(false);scene.onSelect(action.building);scene.focusBuilding(action.building);
+      }else if(action?.kind)setTool(action.kind);
+    };
     updateUI();
     return;
   }
@@ -559,46 +592,77 @@ function renderPanel() {
     };
     return;
   }
-  const names=catalogGroups;
-  const cards =
-    (category === "decorations" || category === "trees")
-      ? Object.entries(DECORATIONS).filter(([kind])=>catalogKinds[category].includes(kind))
-          .map(
-            ([kind, d]) =>
-              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="Place or remove ${d.name.toLowerCase()}">${kind === "fence" ? '<img class="building-icon" data-fence-preview alt="">' : kind === "streetlight" ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' : kind === "planter" ? '<img class="building-icon" data-planter-preview alt="">' : d.texture === "garden" || d.texture === "tree-variants" ? atlasIcon(d.texture === "garden" ? "/garden-sprites.png" : "/tree-variants-v1.png", 4, 4, 313.5, 313.5, d.frame) : atlasIcon("/town-props.png", 2, 2, 887, 443.5, d.frame)}<b>${d.name}</b><span class="price">${icon("coin")}${d.cost}</span></button>`,
-          )
-          .join("")
-      : (Object.entries(BUILDINGS) as [BuildingKind, typeof BUILDINGS.house][])
-          .filter(([kind]) => catalogKinds[category].includes(kind))
-          .map(([kind,d]):[BuildingKind,typeof BUILDINGS.house]=>[kind,isLivestock(kind)?{...d,...penPrice(kind,[2,2])}:kind==='farm'?{...d,...farmPrice([1,1])}:d])
-          .map(
-            ([kind, d]) =>
-              `<button class="building-card ${tool === kind ? "selected" : ""}" data-building="${kind}" title="${d.description}">${frame(kind)}<b>${d.name}</b>${isLivestock(kind)?`<span class="card-output">${buildingOutputs({kind}).map(r=>RESOURCE_NAMES[r]).join(" + ")}</span><small class="card-output-condition">Meat when the herd is full</small>`:""}<span class="price">${icon("coin")}${kind==='farm'||isLivestock(kind)?'From ':''}${d.cost}</span><span class="card-materials">${Object.entries(d.materials??{}).map(([r,n])=>`<span title="${RESOURCE_NAMES[r as Resource]}">${icon(r==="bricks"?"box":r)}${n} ${RESOURCE_NAMES[r as Resource]}</span>`).join("")}</span></button>`,
-          )
-          .join("");
-  $("#panel-content").innerHTML = `<div class="category-tabs">${Object.entries(
-    names,
-  )
-    .map(
-      ([id, name]) =>
-        `<button data-category="${id}" class="${category === id ? "active" : ""}">${name}</button>`,
-    )
-    .join(
-      "",
-    )}</div><div class="catalog-heading"><h3>${names[category]}</h3></div><div class="building-grid">${cards}</div><div class="build-note">${icon("leaf")}<div><b>${category === "decorations" ? "Make the streets your own." : "Connect the front entrance."}</b><p>${category === "decorations" ? "Place along streets and garden edges." : "The green entrance arrow shows road access."}</p></div></div><button class="chain-button" id="production-guide">See production chains ${icon("arrow")}</button>`;
-  document.querySelectorAll<HTMLElement>("[data-category]").forEach(
-    (el) =>
-      (el.onclick = () => {
-        category = el.dataset.category as typeof category;
-        renderPanel();
-      }),
-  );
-  document
-    .querySelectorAll<HTMLElement>("[data-building]")
-    .forEach((el) => (el.onclick = () => setTool(el.dataset.building as Tool)));
-  $("#production-guide").onclick = showChains;
-  if(category==="decorations")void fencePreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-fence-preview]").forEach(image=>image.src=src));
-  if(category==="decorations")void planterPreview().then(src=>document.querySelectorAll<HTMLImageElement>("[data-planter-preview]").forEach(image=>image.src=src));
+  const groups = Object.entries(catalogGroups) as [keyof typeof catalogGroups, string][];
+  const categories = groups.map(([id,name]) =>
+    `<button data-category="${id}" aria-pressed="${id === category}">${name}</button>`).join('');
+  $("#panel-content").innerHTML = `<header class="drawer-heading catalog-header">
+    <h2>Build</h2>
+    <input id="catalog-search" type="search" aria-label="Search buildings and decorations" placeholder="Search catalog">
+    <button class="quiet" id="production-guide">${icon('log')} Production guide</button>
+    </header><nav class="category-tabs" aria-label="Building categories">${categories}</nav>
+    <div class="building-grid" aria-label="Build options"></div><p id="catalog-empty" hidden>No matching buildings or decorations.</p>`;
+  const search = $<HTMLInputElement>('#catalog-search');
+  const grid = $('.building-grid');
+  const categoryButtons = document.querySelectorAll<HTMLButtonElement>('[data-category]');
+  function showOffers() {
+    const query = search.value.trim().toLowerCase();
+    const cards: string[] = [];
+    for (const [group,name] of groups) {
+      if (!query && group !== category) continue;
+      for (const id of catalogKinds[group]) {
+        if (isDecoration(id)) {
+          const kind = id;
+          const d = DECORATIONS[kind];
+          if (query && ![name,d.name,id].join(' ').toLowerCase().includes(query)) continue;
+          const art = kind === 'fence' ? '<img class="building-icon" data-fence-preview alt="">' :
+            kind === 'streetlight' ? '<img class="building-icon" src="/streetlight-copper.png" alt="">' :
+            kind === 'planter' ? '<img class="building-icon" data-planter-preview alt="">' :
+            d.texture === 'garden' || d.texture === 'tree-variants' ? atlasIcon(d.texture === 'garden' ? '/garden-sprites.png' : '/tree-variants-v1.png',4,4,313.5,313.5,d.frame) :
+            atlasIcon('/town-props.png',2,2,887,443.5,d.frame);
+          cards.push(`<button class="building-card" data-building="${kind}">${art}<b>${d.name}</b><span class="price">${icon('coin')}${d.cost}</span></button>`);
+          continue;
+        }
+        const kind = id as BuildingKind;
+        const d = BUILDINGS[kind];
+        const goods = buildingOutputs({kind}).map(r=>RESOURCE_NAMES[r]);
+        if (query && ![name,d.name,id,d.description,...goods].join(' ').toLowerCase().includes(query)) continue;
+        const price = isLivestock(kind) ? penPrice(kind,[2,2]) : kind === 'farm' ? farmPrice([1,1]) : kind === 'market' ? marketPrice([1,1]) : d;
+        const materials = Object.entries(price.materials ?? {}).map(([r,n]) =>
+          `<span>${icon(r==='bricks'?'box':r)}${n} ${RESOURCE_NAMES[r as Resource]}</span>`).join('');
+        const livestock = isLivestock(kind) ? `<span class="card-output">${goods.join(' + ')}</span><small class="card-output-condition">Meat when the herd is full</small>` : '';
+        cards.push(`<button class="building-card" data-building="${kind}" title="${d.description}">${frame(kind)}<b>${d.name}</b>${livestock}
+          <span class="price">${icon('coin')}${price!==d?'From ':''}${price.cost}</span><span class="card-materials">${materials}</span></button>`);
+      }
+    }
+    grid.innerHTML = cards.join('');
+    grid.scrollLeft = 0;
+    $('#catalog-empty').hidden = cards.length > 0;
+    categoryButtons.forEach(button=>button.setAttribute('aria-pressed',String(!query && button.dataset.category===category)));
+    const fence = grid.querySelector<HTMLImageElement>('[data-fence-preview]');
+    if (fence) void fencePreview().then(src=>{fence.src=src;});
+    const planter = grid.querySelector<HTMLImageElement>('[data-planter-preview]');
+    if (planter) void planterPreview().then(src=>{planter.src=src;});
+  }
+  search.oninput = showOffers;
+  search.onkeydown = event=>{
+    event.stopPropagation();
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    if (search.value) { search.value=''; showOffers(); }
+    else setPanelOpen(false);
+  };
+  search.onkeyup = event=>event.stopPropagation();
+  categoryButtons.forEach(button=>button.onclick=()=>{
+    category = button.dataset.category as keyof typeof catalogGroups;
+    search.value = '';
+    showOffers();
+  });
+  grid.onclick = event=>{
+    const kind=(event.target as Element).closest<HTMLElement>('[data-building]')?.dataset.building;
+    if (kind) setTool(kind as Tool);
+  };
+  $('#production-guide').onclick = showChains;
+  showOffers();
 }
 const placementCost=document.createElement("div");placementCost.className="placement-cost";placementCost.hidden=true;$(".world").append(placementCost);
 function updateMarketPreview(){
@@ -1025,7 +1089,7 @@ function runGuidance(b: Building, action: GuidanceAction) {
   } else if (action.type === "agent") {
     scene.onSelectAgent(action.id);
     scene.focusAgent(action.id);
-  } else if (action.type === "workforce") togglePanel("town");
+  } else if (action.type === "workforce") openTownLedger();
   else {
     scene.focusBuilding(b.id);
     if (action.type === "water") {
@@ -1643,14 +1707,8 @@ $("#minimap").onclick = (event) => {
 function updateUI() {
   const s = simulation.state;
   townLog.update(s);
-  const roadCrew=s.agents.filter(a=>a.roadWork!==undefined).length;
-  const employed = s.residents.filter((r) => r.job !== null).length+roadCrew;
-  const sites = s.buildings.filter((b) => b.construction && b.enabled);
-  const buildersNeeded = sites.reduce(
-    (total, b) => total + builderCapacity(b),
-    roadBuildersNeeded(s),
-  );
-  const buildersAssigned = sites.reduce((total, b) => total + b.workers, roadCrew);
+  const {sites,roadCrew,needed:buildersNeeded,assigned:buildersAssigned}=townBuilderDemand(simulation);
+  const employed=s.residents.filter(r=>r.job!==null).length+roadCrew;
   $("#builders").textContent = `${buildersAssigned} / ${buildersNeeded}`;
   const builderSummary = `${buildersAssigned} builders assigned of ${buildersNeeded} needed at ${sites.length} building sites and ${s.roadWorks?.length??0} road tiles · ${Math.max(0, buildersNeeded - buildersAssigned)} more builders needed. Paused sites excluded; sites awaiting road access included.`;
   $(".resource.builders").title = builderSummary;
@@ -1664,11 +1722,11 @@ function updateUI() {
   $(".resource.gold small").textContent=`+${income.total.toLocaleString()} / day`;
   $(".resource.gold").title=`Income over the last game day: ${income.total} gold · taxes ${income.tax} · market sales ${income.market}. Building refunds are excluded.`;
   updatePlacementCost();
-  const bread = simulation.stored("bread"),
-    fish = simulation.stored("fish"),meat=simulation.stored("meat"),sausages=simulation.stored("sausages");
-  $("#food-stock").textContent = String(s.buildings.reduce((n,b)=>n+foodStock(b),0));
+  const needs=townNeeds(simulation);
+  const food=needs.find(n=>n.id==='food')!;
+  $("#food-stock").textContent = food.have.toLocaleString();
   $(".resource.food-stock").title =
-    `Food in homes, markets, workplaces and warehouses · ${s.residents.length} food consumed per game day · ${s.food}% of residents fed. Homes store two days of meals.`;
+    `${food.have} meals in homes and open stores · ${food.need} needed each day · ${s.food}% of residents fed.`;
   $(".resource.food-stock").setAttribute(
     "aria-label",
     $(".resource.food-stock").title,
@@ -1702,18 +1760,24 @@ function updateUI() {
     s.delivered < 30
       ? "Let your first deliveries find their way home."
       : "Your little industries are finding their rhythm.";
-  const needs=townNeeds(simulation),shortages=needs.filter(n=>n.have<n.need);
-  $("#town-needs-button").textContent=shortages.length?`${shortages.length} town needs`:"Town needs met";
+  const shortages=needs.filter(n=>n.have<n.need);
+  $("#town-needs-button").textContent=shortages.length?`${shortages.length} shortage${shortages.length===1?'':'s'}`:"Town needs met";
   $("#town-needs-button").classList.toggle("shortage",shortages.length>0);
-  if (tab === "town") {
-    $("#town-needs").innerHTML=needs.map(n=>`<div class="town-need ${n.have<n.need?"short":"met"}"><div><b>${n.label}</b><small>${n.have<n.need?`${n.need-n.have} more ${n.unit} needed`:n.id==="food"?`${n.need?Math.floor(n.have/n.need):0} days in reserve`:"Need met"}</small></div><strong>${n.have} <span>/ ${n.need}</span></strong>${n.have<n.need&&n.action?`<button class="quiet" data-need="${n.id}">${n.action.label}</button>`:""}</div>`).join("");
-    $("#town-stats").innerHTML =
-      `<div class="detail-row"><span>Employed residents</span><b>${employed} / ${s.residents.length}</b></div><div class="detail-row"><span>Deliveries on the road</span><b>${s.agents.filter((a) => a.kind === "truck").length}</b></div><div class="detail-row"><span>Food needs met</span><b>${s.food}%</b></div>`;
-    const totals = simulation.totals();
-    $("#inventory").innerHTML = RESOURCES.map(
-      (r) =>
-        `<div class="inventory-row">${icon(r === "bread" || r === "fish" || r === "wood" || r === "stone" || r === "metal" ? r : "box")}<span>${RESOURCE_NAMES[r]}</span><b>${simulation.stored(r)}</b><b>${totals[r]-simulation.stored(r)}</b></div>`,
-    ).join("");
+  if (panelOpen && tab === "town" && document.querySelector('#ledger-needs')) {
+    const detail=$('#ledger-detail');
+    detail.hidden=!ledgerResource;
+    if(ledgerResource)detail.textContent=ledgerResource.title;
+    if(stockPage)setLedgerContent($('#inventory'),stockRows(simulation,ledgerResource?.dataset.ledgerResource));
+    else {
+      const metric=(label:string,value:string)=>`<div><small>${label}</small><strong>${value}</strong></div>`;
+      setLedgerContent($('#town-stats'),[
+        metric('Daily income','+'+income.total.toLocaleString()),
+        metric('Residents fed',s.food+'%'),
+        metric('Available workers',String(s.residents.length-employed)),
+        metric('Loaded trucks',String(s.agents.filter(a=>a.kind==='truck'&&a.cargo).length)),
+      ].join(''));
+      setLedgerContent($('#town-needs'),needCards(needs));
+    }
   }
   updateInspector();
   drawMinimap();
@@ -1753,9 +1817,14 @@ function closeModal() {
   scene.speed = modalPreviousSpeed;
 }
 function showChains() {
-  openModal(
-    `<span class="eyebrow">EVERY LITTLE THING CONNECTS</span><h2>Made in Pinehaven.</h2><p>Factories need people, roads, and the right ingredients. Trucks move real inventory between connected buildings.</p><div class="chain"><b>Daily bread</b><span>Wheat field → Flour mill → Bakery → Warehouse</span><small>Grain becomes flour, then bread. Bread feeds citizens each day.</small></div><div class="chain"><b>Fresh from the shore</b><span>Shoreline fishery → Warehouse → Citizens</span><small>Two land tiles for the hut, two water tiles for the dock. Fish and bread both satisfy food needs: one food per resident each day, delivered to homes.</small></div><div class="chain"><b>From woodland to table</b><span>Hunter → Butcher → Market / Warehouse</span><small>Hunters bring meat home. Butchers turn two meat into four sausages, feeding more citizens; markets sell sausages for 8 gold.</small></div><div class="chain"><b>A useful little industry</b><span>Forester → Sawmill → Warehouse · Metal mine → Workshop → Warehouse</span><small>Wood becomes construction planks. Two metal become one tool. Tools stay in town and equip workers; wood also heats homes.</small></div><div class="chain"><b>Brickmaking</b><span>Stone quarry → Brickworks → Warehouse → Brick roads and bridges</span><small>Two stone become four bricks. New brick road tiles use one brick; bridge tiles use four.</small></div><div class="chain"><b>Room to grow</b><span>Quarry / Metal mine → Warehouse → Construction</span><small>Mines use finite deposits. Building costs use materials already delivered to warehouses.</small></div><p class="muted">Homes pay 6 gold per resident each day. Disconnected or understaffed buildings stop producing.</p>`,
-  );
+  const workshops = ['mill','bakery','butcher','sawmill','workshop','brickworks'] as const;
+  const recipes = workshops.map(kind=>{
+    const recipe = buildingRecipe({kind})!;
+    const products = recipeProducts(recipe).map(([item,count])=>`${count} ${RESOURCE_NAMES[item].toLowerCase()}`).join(' + ');
+    return `<div class="chain"><b>${BUILDINGS[kind].name}</b><span>${recipe.amount} ${RESOURCE_NAMES[recipe.input!].toLowerCase()} → ${products}</span></div>`;
+  }).join('');
+  openModal(`<h2>Production guide</h2><p>Grow wheat to harvest grain. Mills and livestock pens both use it. Fisheries, farms, gatherers and hunters also supply food.</p>
+    <div class="guide-recipes">${recipes}</div><p>Trucks take goods between connected workplaces, markets and warehouses. Residents collect food and firewood from a warehouse or market. Workplaces use tools to produce at full speed.</p>`);
 }
 function showSettings() {
   openModal(

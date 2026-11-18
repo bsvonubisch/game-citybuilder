@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {Simulation,parseSave,key} from '../.test-dist/simulation.js';
 import {footprint,SIZE} from '../.test-dist/catalog.js';
 import {roadTypeAt} from '../.test-dist/roads.js';
+import {townNeeds} from '../.test-dist/needs.js';
 import {roadVisualState,stepRoadWorks,queueRoadWork} from '../.test-dist/roadworks.js';
 import {roadWorkSites,roadWorkCrew} from '../.test-dist/roadwork-sites.js';
 
@@ -23,6 +24,9 @@ test('roads reserve materials and plots, need arriving workers, then open for tr
  const sim=town(),p={x:9,y:7},money=sim.state.money;
  assert.equal(execute(sim,{type:'roadStroke',from:p,to:{x:11,y:7},roadType:'brick'}).ok,true);
  assert.equal(sim.state.money,money-72);assert.equal(sim.roads.has(key(p)),false);assert.equal(sim.state.roadWorks.length,3);
+ const demand=townNeeds(sim).find(n=>n.id==='builders');
+ assert.equal(demand.have,0);assert.equal(demand.need,3);
+ assert.ok(sim.state.roadWorks.some(w=>w.id===demand.action.roadWork),'the shortage opens a current road site');
  assert.equal(roadVisualState(sim).roads.has(key(p)),true);assert.equal(roadTypeAt(roadVisualState(sim).state.roadTypes,p),'brick');
  assert.match(sim.canPlace('cottage',p.x,p.y),/workers/);
  assert.equal(execute(sim,{type:'terrain',mode:'raise',x:p.x,y:p.y,size:1,steps:1}).ok,false);

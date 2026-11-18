@@ -1,12 +1,14 @@
 import {buildingRecipe,recipeProducts,FOOD_RESOURCES} from './catalog.js';
 import {huntingArea} from './hunting.js';
 import {gatheringArea,gatheringSummary} from './gathering-area.js';
-import {foodStock,toolRequirement,toolEfficiency,firewoodNeed,homeResidents} from './supplies.js';
+import {foodStock,householdStore,toolRequirement,toolEfficiency,firewoodNeed,homeResidents} from './supplies.js';
 import {buildingJobs} from "./catalog.js";
 import {isHome} from "./catalog.js";
 import {marketStock,marketVendors} from "./market.js";
 import { BUILDINGS, RESOURCE_NAMES, houseCapacity, type BuildingKind } from "./catalog.js";
 import { builderCapacity } from "./construction.js";
+import { roadBuildersNeeded } from './roadworks.js';
+
 import { serviceCoverage } from "./proximity.js";
 import { outputCapacity } from "./upgrades.js";
 import { buildingDeposit,isExtractor } from "./deposits.js";
@@ -15,12 +17,25 @@ import {isLivestock,ensureHerd,herdFeed,livestockCrew,livestockCapacity} from '.
 
 export interface Need {
   id:string; label:string; have:number; need:number; unit:string;
-  action?:{label:string;building?:number;kind?:BuildingKind};
+  action?:{label:string;building?:number;kind?:BuildingKind;roadWork?:number};
+}
+export function townBuilderDemand(sim:Simulation) {
+  const sites=sim.state.buildings.filter(b=>b.construction&&b.enabled);
+  const roadCrew=sim.state.agents.filter(a=>a.roadWork!==undefined).length;
+  return {
+    sites, roadCrew,
+    assigned:sites.reduce((total,b)=>total+b.workers,roadCrew),
+    needed:sites.reduce((total,b)=>total+builderCapacity(b),roadBuildersNeeded(sim.state)),
+  };
 }
 export function townNeeds(sim:Simulation):Need[] {
   const {buildings,residents}=sim.state,population=residents.length;
   const jobs=buildings.filter(b=>!b.construction&&b.enabled&&buildingJobs(b));
-  const sites=buildings.filter(b=>b.construction&&b.enabled);
+  const crew=townBuilderDemand(sim),sites=crew.sites;
+  const occupiedHomes=new Set(residents.map(resident=>resident.home));
+  const availableStores=buildings.filter(b=>occupiedHomes.has(b.id)&&isHome(b.kind)||householdStore(b));
+  const foodWaiting=buildings.find(b=>!isHome(b.kind)&&!householdStore(b)&&foodStock(b)>0);
+  const road=sim.state.roadWorks?.find(w=>w.completed<w.required);
   const suggest=(kind:BuildingKind,label:string)=>{
     const existing=buildings.find(b=>b.kind===kind&&(b.construction||sim.alert(b)));
     return existing?{label:`Check ${BUILDINGS[kind].name.toLowerCase()}`,building:existing.id}:{label,kind};
@@ -34,11 +49,11 @@ export function townNeeds(sim:Simulation):Need[] {
   };
   const unfilled=jobs.find(b=>b.workers<buildingJobs(b)),site=sites.find(b=>b.workers<builderCapacity(b));
   return [
-    {id:"food",label:"Food for the next day",have:buildings.reduce((n,b)=>n+foodStock(b),0),need:population,unit:"meals",action:suggest("fishery","Build fishery")},
-    {id:'firewood',label:'Firewood for the next day',have:buildings.filter(b=>isHome(b.kind)||b.kind==='warehouse').reduce((n,b)=>n+(b.inventory.wood??0),0),need:firewoodNeed(sim),unit:'wood',action:suggest('forester','Build forester lodge')},
+    {id:"food",label:"Food for the next day",have:availableStores.reduce((n,b)=>n+foodStock(b),0),need:population,unit:"meals",action:foodWaiting?{label:`Check ${BUILDINGS[foodWaiting.kind].name.toLowerCase()} stock`,building:foodWaiting.id}:suggest("fishery","Build fishery")},
+    {id:'firewood',label:'Firewood for the next day',have:availableStores.reduce((n,b)=>n+(b.inventory.wood??0),0),need:firewoodNeed(sim),unit:'wood',action:suggest('forester','Build forester lodge')},
     {id:'tools',label:'Workers equipped',have:buildings.reduce((n,b)=>n+Math.min(toolRequirement(b),b.inventory.tools??0),0),need:buildings.reduce((n,b)=>n+toolRequirement(b),0),unit:'tools',action:suggest('workshop','Build copper workshop')},
     {id:"workers",label:"Workplaces staffed",have:jobs.reduce((n,b)=>n+b.workers,0),need:jobs.reduce((n,b)=>n+buildingJobs(b),0),unit:"workers",action:unfilled?{label:"Check unfilled workplace",building:unfilled.id}:suggest("house","Build homes")},
-    {id:"builders",label:"Construction crew",have:sites.reduce((n,b)=>n+b.workers,0),need:sites.reduce((n,b)=>n+builderCapacity(b),0),unit:"builders",action:site?{label:"Check construction site",building:site.id}:undefined},
+    {id:"builders",label:"Construction crew",have:crew.assigned,need:crew.needed,unit:"builders",action:site?{label:"Check construction site",building:site.id}:road?{label:"Inspect road work",roadWork:road.id}:undefined},
     {id:"homes",label:"Housing",have:buildings.filter(b=>isHome(b.kind)&&(!b.construction||b.construction.upgradeTo||b.construction.upgradeLevel)&&b.connected).reduce((n,b)=>n+houseCapacity(b),0),need:population,unit:"places",action:suggest("house","Build homes")},
     {id:"parks",label:"Leisure nearby",have:coverage("park","garden","tavern"),need:population,unit:"residents served",action:suggest("park","Add fountain square")},
     {id:"religion",label:"Religion nearby",have:coverage("church","chapel"),need:population,unit:"residents served",action:suggest("chapel","Build chapel")},
