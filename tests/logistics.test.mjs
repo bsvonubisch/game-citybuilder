@@ -32,6 +32,33 @@ test('delivery loads respect source level, stock and goods already en route',()=
   sim.state.agents=[];for(const b of sim.state.buildings){b.enabled=b===source||b===target;b.inventory={};}
   source.inventory.meat=40;target.inventory.meat=21;sim.dispatch();assert.equal(sim.state.agents.find(a=>a.cargo==='meat')?.amount,3,'Do not overfill a nearly stocked destination');
 });
+test('food orders respect reserves, arriving trucks, other cuts and renewed demand',()=>{
+  const sim=new StarterSimulation();
+  const depot=building(sim,'warehouse'), bakery=building(sim,'bakery'), butcher=building(sim,'butcher');
+  sim.state.agents=[];
+  for(const b of sim.state.buildings){b.enabled=[depot,bakery,butcher].includes(b);b.inventory={};}
+  depot.inventory={fish:50000,bread:12,sausages:12};
+  bakery.inventory={bread:24};
+  butcher.inventory={sausages:20,steaks:8};
+  sim.dispatch();
+  assert.equal(sim.state.agents.some(a=>a.source===bakery.id),false);
+  assert.equal(depot.inventory.fish,50000,'existing stock is preserved');
+  assert.match(sim.status(bakery),/reserve stocked/i);
+  assert.equal(sim.state.agents.find(a=>a.source===butcher.id)?.cargo,'steaks','one stocked cut cannot block the others');
+
+  depot.inventory.bread=0;
+  sim.dispatch();
+  const shipment=sim.state.agents.find(a=>a.source===bakery.id);
+  assert.equal(shipment.amount,12,'one missing variety gets a full load even during a glut');
+  shipment.source=butcher.id;
+  sim.dispatch();
+  assert.ok(!sim.state.agents.some(a=>a.source===bakery.id),'the next order accounts for meals in transit');
+
+  depot.inventory.fish=0;
+  sim.dispatch();
+  assert.equal(sim.state.agents.find(a=>a.source===bakery.id)?.amount,12,'bulk orders restart when overall stocks fall');
+});
+
 const execute = (sim, command) => {
   const result = sim.execute({
     id: `logistics-${sim.state.revision}`,

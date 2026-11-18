@@ -1,5 +1,5 @@
 import {MARKET_GOODS} from "./market.js";
-import {isLivestock} from './livestock.js';
+import {warehouseReady} from './warehouses.js';
 import { BUILDINGS, buildingRecipe,buildingOutputs,isHome,FOOD_RESOURCES,RESOURCES, type Resource } from "./catalog.js";
 import {toolRequirement} from './supplies.js';
 import type {
@@ -32,9 +32,9 @@ export interface ProductionConnections {
 export function canSupply(source: Building, target: Building,resource?:Resource) {
   const output = resource?[resource]:source.kind === "warehouse" ? RESOURCES : source.kind==='market'?FOOD_RESOURCES:buildingOutputs(source);
   return (
-    !source.construction &&
+    (!source.construction || warehouseReady(source)) &&
     !target.construction?.demolition &&
-    (!target.construction || output.includes('tools')) &&
+    (!target.construction || warehouseReady(target) || output.includes('tools')) &&
     !!output.length &&
     source.id !== target.id &&
     output.some(output=>((!target.construction&&buildingRecipe(target)?.input === output) || (target.kind==="market"&&MARKET_GOODS.includes(output)) ||

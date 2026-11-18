@@ -17,7 +17,7 @@ import {marketDestination,marketOpen,buyAtMarket,marketStock,marketVendors,MARKE
 import {validMarketPlot,marketStalls} from "./market-layout.js";
 import {buildingJobs,buildingPrice} from "./catalog.js";
 import {isHome,isPark} from "./catalog.js";
-import {deliveryCapacity,warehouseReady, LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
+import {deliveryCapacity,foodOrderRoom,warehouseReady, LAST_WAREHOUSE_MESSAGE} from "./warehouses.js";
 import {parkVisitDuration,parkVisitorLimit} from "./park-visitors.js";
 import {fenceKey,fenceNeighbour,canonicalFence} from "./fences.js";
 import { planRoad } from "./road-stroke.js";
@@ -1635,85 +1635,55 @@ export class Simulation {
       }
     }
     for (const b of this.state.buildings) {
-      const definition=buildingRecipe(b),r=definition?{...definition}:undefined;
-      const output=buildingOutputs(b).filter(resource=>(b.inventory[resource]??0)>0).sort((a,c)=>(b.inventory[c]??0)-(b.inventory[a]??0))[0];
-      if(r&&output&&(isLivestock(b.kind)||b.kind==='butcher')){r.output=output;r.count=1;}
-      if (
-        b.construction ||
-        !r ||
-        !b.connected ||
-        !b.enabled ||
-        availableSupply(b,r.output) < r.count
-      )
-        continue;
-      if (
-        this.state.agents.some((a) => a.kind === "truck" && a.source === b.id)
-      )
-        continue;
-      const destinations = this.state.buildings
-        .filter((t) => t.connected && t.enabled && !isHome(t.kind) && !(r.output==='tools'&&toolRequirement(t)>0) && canSupply(b, t,r.output))
-        .sort((a, c) => {
-          // Reserve one grand-house upgrade's planks before feeding continuous
-          // factory demand; faster traffic must not consume every new plank.
-          const priority = (target: Building) =>
-            r.output === "planks" &&
-            target.kind === "warehouse" &&
-            this.stored("planks") <
-              Math.max(
-                16,
-                ...this.state.buildings
-                  .filter((b) => isExtractor(b.kind))
-                  .map(
-                    (b) =>
-                      deeperLayer(this.state.depositDepths?.[buildingDeposit(b)!] ?? 0)
-                        .materials.planks ?? 0,
-                  ),
-              )
-              ? -1
-              : (target.inventory[r.output] ?? 0);
-          return priority(a) - priority(c);
-        });
-      for (const dest of destinations) {
-        const incoming = this.state.agents
-          .filter(
-            (a) =>
-              a.kind === "truck" &&
-              a.target === dest.id &&
-              a.cargo === r.output,
-          )
-          .reduce((n, a) => n + a.amount, 0);
-        if (
-          (dest.inventory[r.output] ?? 0) + incoming >=
-            (dest.kind==="market"?marketStalls(dest)*4:outputCapacity(dest)+4) &&
-          dest.kind !== "warehouse"
-        )
-          continue;
-        const p = this.route(b, dest,"truck");
-        if (!p) continue;
-        const room=dest.kind==='warehouse'?Infinity:(dest.kind==='market'?marketStalls(dest)*4:outputCapacity(dest)+4)-(dest.inventory[r.output]??0)-incoming;
-        const amount = Math.min(DELIVERY_CAPACITY, room, availableSupply(b,r.output));
-        // Combine routine warehouse trips while there is already a load in reserve.
-        // Periodically clear small surpluses, including seasonal harvests.
-        if(dest.kind==='warehouse' && (dest.inventory[r.output]??0)+incoming>=DELIVERY_CAPACITY &&
-           amount<DELIVERY_CAPACITY && this.state.tick%96!==0)continue;
-        b.inventory[r.output]! -= amount;
-        this.state.agents.push({
-          id: this.state.nextId++,
-          kind: "truck",
-          path: p,
-          segment: 0,
-          progress: 0,
-          resident: null,
-          source: b.id,
-          target: dest.id,
-          cargo: r.output,
-          amount,
-          returning: false,
-          wait: 0,
-        });
-        break;
-      }
+      const recipe=buildingRecipe(b);
+      if (!recipe || b.construction || !b.connected || !b.enabled) continue;
+      if (this.state.agents.some(a=>a.kind==='truck' && a.source===b.id)) continue;
+      const minimum=isLivestock(b.kind)||b.kind==='butcher'?1:recipe.count;
+      const outputs=buildingOutputs(b).filter(r=>availableSupply(b,r)>=minimum)
+        .sort((a,c)=>(b.inventory[c]??0)-(b.inventory[a]??0));
+      for(const product of outputs)if(this.shipProduct(b,product))break;
     }
+  }
+  private intakeRoom(dest:Building, product:Resource) {
+    if(warehouseReady(dest))return FOOD_RESOURCES.includes(product)?foodOrderRoom(this.state,dest,product):Infinity;
+    const incoming=this.state.agents.reduce((n,a)=>n+(a.target===dest.id && a.cargo===product?a.amount:0),0);
+    const maximum=dest.kind==='market'?marketStalls(dest)*4:outputCapacity(dest)+4;
+    return Math.max(0,maximum-(dest.inventory[product]??0)-incoming);
+  }
+  private buyers(source:Building, product:Resource) {
+    return this.state.buildings.filter(dest=>dest.connected && dest.enabled && !isHome(dest.kind) &&
+      !(product==='tools'&&toolRequirement(dest)>0) && canSupply(source,dest,product));
+  }
+  private shipProduct(source:Building, product:Resource) {
+    const buyers=this.buyers(source,product);
+    // Put aside the planks needed for an upgrade before filling other continuous demand.
+    const reservePlanks=product==='planks' && this.stored('planks')<Math.max(16,...this.state.buildings
+      .filter(b=>isExtractor(b.kind)).map(b=>deeperLayer(this.state.depositDepths?.[buildingDeposit(b)!]??0).materials.planks??0));
+    const priority=(b:Building)=>reservePlanks&&b.kind==='warehouse'?-1:(b.inventory[product]??0);
+    buyers.sort((a,b)=>priority(a)-priority(b));
+    for(const dest of buyers) {
+      const amount=Math.min(DELIVERY_CAPACITY,this.intakeRoom(dest,product),availableSupply(source,product));
+      if(amount<=0)continue;
+      // Batch small warehouse orders. A nearly empty store can take a partial load immediately.
+      if((dest.kind==='warehouse'||dest.kind==='market') && amount<DELIVERY_CAPACITY) {
+        const inbound=this.state.agents.reduce((n,a)=>n+(a.target===dest.id&&a.cargo===product?a.amount:0),0);
+        const stocked=(dest.inventory[product]??0)+inbound;
+        const edible=FOOD_RESOURCES.includes(product);
+        if(stocked>=(edible?3:DELIVERY_CAPACITY) && this.state.tick%(edible?192:96)!==0)continue;
+      }
+      const path=this.route(source,dest,'truck');
+      if(!path)continue;
+      source.inventory[product]!-=amount;
+      this.state.agents.push({id:this.state.nextId++,kind:'truck',path,segment:0,progress:0,
+        resident:null,source:source.id,target:dest.id,cargo:product,amount,returning:false,wait:0});
+      return true;
+    }
+    return false;
+  }
+  private foodReserveMet(source:Building, product:Resource) {
+    if(!FOOD_RESOURCES.includes(product))return false;
+    const reachable=this.buyers(source,product).filter(dest=>this.route(source,dest,'truck'));
+    return reachable.some(warehouseReady) && reachable.every(dest=>this.intakeRoom(dest,product)===0);
   }
   totals() {
     return Object.fromEntries(
@@ -1793,6 +1763,7 @@ export class Simulation {
       };
     if(d.recipe&&!this.state.buildings.some(w=>w.kind==="warehouse"&&!!this.route(b,w,"truck")))return{kind:"road",title:"No delivery road",message:"People can use pavements, but goods need a dirt, stone or brick road from this entrance to a warehouse."};
     const fullOutput=fullProductionOutput(b,outputCapacity(b));
+    if (fullOutput && this.foodReserveMet(b,fullOutput))return null;
     if (fullOutput)
       return {
         kind: "output",
@@ -1851,6 +1822,8 @@ export class Simulation {
   status(b: Building) {
     const alert = this.alert(b);
     if (alert) return alert.title;
+    const full=fullProductionOutput(b,outputCapacity(b));
+    if(full && this.foodReserveMet(b,full))return 'Food reserve stocked · waiting for demand';
     if(isLivestock(b.kind))return daylight(this.state.tick).night?'Animals resting · farmers return in the morning':this.state.agents.some(a=>a.onsite===b.id)?'Tending animals':'Farmers travelling to the pen';
     if(b.kind==='farm'){const fields=farmSummary(b,this.state.tick);return daylight(this.state.tick).night?'Farmers resting · crops growing':b.field?.phase==='sowing'?`Sowing · ${b.field.cells.length-fields.soil} / ${b.field.cells.length} planted`:`${fields.ripe} ready to harvest · ${fields.growing+fields.seeded} growing`;}
     if(b.kind==="market")return marketOpen(this.state.tick)?`${marketVendors(this,b).length} vendors serving · ${b.produced} sales`:"Opens at 07:00";

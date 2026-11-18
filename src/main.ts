@@ -16,6 +16,7 @@ import {marketPrice,marketStalls} from "./market-layout.js";
 import {marketVendors,MARKET_GOODS,marketOpen} from "./market.js";
 import {buildingJobs} from "./catalog.js";
 import {incomeSummary} from "./economy.js";
+import {foodReserveTarget} from './warehouses.js';
 import {isHome,isPark} from "./catalog.js";
 import {parkVisitor} from "./park-visitors.js";
 import Phaser from "phaser";
@@ -1345,7 +1346,7 @@ function updateInspector() {
               )
               .join("")}</div>`
           : b.kind === "warehouse"
-            ? Object.entries(b.inventory)
+            ? `<div class="detail-row"><span>Meal reserve target</span><b>${foodReserveTarget(simulation.state.residents.length)} meals</b></div><p class="muted">Incoming trucks count toward this target. A stocked warehouse can still order a missing food.</p>` + Object.entries(b.inventory)
                 .map(
                   ([r, n]) =>
                     `<div class="detail-row"><span>${r}</span><b>${n}</b></div>`,
