@@ -36,6 +36,7 @@ import { ShadowArt } from "./shadow-art.js";
 import { planRoad, type RoadPlan } from "./road-stroke.js";
 import { prepareRoadSurfaces } from "./road-art.js";
 import { ForestryArt, prepareForestryFrames } from "./forestry-art.js";
+import { GatheringOverlay } from './gathering-overlay.js';
 import {PlanterArt,planterMask} from "./planter-art.js";
 import { forestCenter, forestTargets, FOREST_RADIUS } from "./forestry.js";
 import { depositAt, exposedDeposit, depositTiles, nearbyDeposits, MINING_RADIUS, isExtractor } from "./deposits.js";
@@ -275,6 +276,7 @@ export class TownScene extends Phaser.Scene {
   marketPlot: [number,number]=[1,1];
   private constructionArt!: ConstructionArt;
   private forestryArt!: ForestryArt;
+  private gatheringOverlay!: GatheringOverlay;
   private huntingArt!:HuntingArt;
   private planterArt!: PlanterArt;
   private buildingAlerts!: BuildingAlerts;
@@ -440,6 +442,8 @@ export class TownScene extends Phaser.Scene {
     this.gridCache = this.add.container(0, 0).setDepth(-999).setVisible(false);
 
     this.overlay = this.add.graphics().setDepth(5000);
+    this.gatheringOverlay = new GatheringOverlay(this);
+    this.events.once('shutdown',()=>this.gatheringOverlay.hide());
     this.frontOverlay = this.add.graphics().setDepth(5004);
     this.routeOverlay = this.add.graphics().setDepth(4999);
     this.logisticsRoutes = this.add.graphics().setDepth(4998);
@@ -1002,6 +1006,7 @@ export class TownScene extends Phaser.Scene {
   drawOverlay() {
     if (!this.overlay) return;
     this.overlay.clear();
+    this.gatheringOverlay.hide();
     this.frontOverlay.clear();
     this.ghost?.setVisible(false);
     this.decorationGhost?.setVisible(false);
@@ -1694,6 +1699,7 @@ export class TownScene extends Phaser.Scene {
         );
     }
     const time = this.simulation.state.tick * STEP + this.acc;
+    this.gatheringOverlay.update(this.simulation);
     this.forestryArt.update(this.simulation,this.acc,this.people,this.trees,this.occludingPlots);
     this.huntingArt.update(this.simulation,this.acc,this.people,this.occludingPlots,this.selectedWorld?.kind==='wildlife'?this.selectedWorld.id:null);
     this.farmArt.update(this.simulation,this.acc,this.people,this.occludingPlots);
@@ -1777,7 +1783,8 @@ export class TownScene extends Phaser.Scene {
       points.push({x:p.x,y:p.y-groundHeight(b.x,b.y,this.simulation.state.terrain)});
     }
     this.overlay.lineStyle(1.4,0x98d7a0,.9).strokePoints(points,false);
-    for(const target of forestTargets(this.simulation,b)) this.diamond(target.tree,0x93d993,.25);
+    if(b.kind==='gatherer')this.gatheringOverlay.show(this.simulation,b);
+    else for(const target of forestTargets(this.simulation,b)) this.diamond(target.tree,0x93d993,.25);
   }
   private drawMiningRange(b:Building) {
     const center=forestCenter(b),points=[];

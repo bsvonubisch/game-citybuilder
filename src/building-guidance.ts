@@ -175,7 +175,9 @@ export function buildingGuidance(
           "Place an evening tavern within 14 road tiles of this home. Its preview highlights the homes it can serve; visits improve leisure after residents arrive.",
         );
   }
-  if(b.kind==='gatherer'&&alert.kind==='input')return{message:'Place this hut near wild berry bushes within 10 tiles and keep a clear walking route. Picked bushes replenish in two game days. The green markers show reachable ripe bushes.',label:'Move near berry bushes',action:{type:'move'}};
+  if(b.kind==='gatherer'&&alert.kind==='input')return alert.title==='No berry bushes in reach'
+    ?{message:alert.message,label:'Move near berry bushes',action:{type:'move'}}
+    :{message:alert.message,label:'Show gathering area',action:{type:'inspect',id:b.id}};
   if (b.kind === "forester" && alert.kind === "input")
     return {message:"Stumps regrow into mature trees after ten minutes at normal speed. Keep a clear land route to natural woodland within the highlighted area, or move the lodge closer. Planted garden trees stay protected.",label:"Move near woodland",action:{type:"move"}};
   if(b.kind==='hunter'&&alert.kind==='input')return huntingArea(sim,b).recovering

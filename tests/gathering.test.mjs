@@ -9,6 +9,12 @@ import {worldDetails} from '../.test-dist/world-inspection.js';
 import {canSupply} from '../.test-dist/logistics.js';
 import {collectHouseholdSupplies,foodStock,stepHouseholds} from '../.test-dist/supplies.js';
 import {DAY_TICKS} from '../.test-dist/daylight.js';
+import {gatheringArea,gatheringSummary,berryMarkerPoint} from '../.test-dist/gathering-area.js';
+import {ViewWorld} from '../.test-dist/view-world.js';
+import {turnPoint} from '../.test-dist/view-space.js';
+import {iso} from '../.test-dist/rendering.js';
+import {groundHeight} from '../.test-dist/terrain.js';
+import {buildingGuidance} from '../.test-dist/building-guidance.js';
 
 test('wild berries migrate into saved towns once, on empty land, without resetting town progress',()=>{
  const old=new Simulation().snapshot();delete old.berriesVersion;
@@ -91,5 +97,51 @@ test('berries are local food available from both warehouses and markets without 
 test('invalid berry timers and versions are rejected',()=>{
  for(const mutate of [s=>s.decorations.find(d=>d.kind==='berry').ripeAt=s.tick+BERRY_REGROW_TICKS+1,s=>s.decorations.find(d=>d.kind==='berry').ripeAt=-1,s=>s.decorations.find(d=>d.kind==='pine').ripeAt=100,s=>s.berriesVersion=99]){
   const saved=new Simulation().snapshot();mutate(saved);assert.throws(()=>parseSave(JSON.stringify(saved)));
+ }
+});
+
+test('berry markers track reservation, picking and regrowth without a town revision',()=>{
+ const {sim,b}=crew(),revision=sim.state.revision,bush=forestTargets(sim,b)[0].tree;
+ const marker=()=>gatheringArea(sim,b).find(m=>m.bush.id===bush.id);
+ assert.equal(marker().state,'ripe');
+ b.forestry=[{tree:bush.id,phase:'outbound'}];assert.equal(marker().state,'gathering');
+ b.forestry[0].phase='chopping';assert.equal(marker().state,'gathering');
+ bush.ripeAt=sim.state.tick+BERRY_REGROW_TICKS;b.forestry[0].phase='returning';
+ assert.equal(marker().state,'regrowing');assert.equal(marker().remaining,480);
+ assert.ok(!forestTargets(sim,b).some(t=>t.tree.id===bush.id),'regrowing berries cannot be harvested');
+ assert.ok(forestTargets(sim,b,true).some(t=>t.tree.id===bush.id),'the same reachable bush stays on the map');
+ sim.state.tick=bush.ripeAt-1;assert.equal(marker().state,'regrowing');assert.equal(marker().remaining,1);
+ sim.state.tick=bush.ripeAt;assert.equal(marker().state,'ripe');assert.equal(sim.state.revision,revision);
+});
+
+test('blocked bushes stay visible and separate from reachable regrowth',()=>{
+ const {sim,b}=crew(),reachable=forestTargets(sim,b),bush=reachable[0].tree;
+ for(const t of reachable)t.tree.ripeAt=sim.state.tick+BERRY_REGROW_TICKS;
+ const area=gatheringSummary(gatheringArea(sim,b));assert.equal(area.regrowing,reachable.length);assert.equal(area.nextRipe,480);
+ assert.equal(sim.alert(b).title,'Berries regrowing');
+ assert.equal(buildingGuidance(sim,b).action.type,'inspect');
+ sim.state.terrain??={};
+ for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]])sim.state.terrain[`${bush.x+dx},${bush.y+dy}`]={kind:'water',height:0};
+ sim.state.revision++;
+ assert.equal(gatheringArea(sim,b).find(m=>m.bush.id===bush.id).state,'blocked');
+ assert.ok(!forestTargets(sim,b,true).some(t=>t.tree.id===bush.id));
+ assert.ok(gatheringArea(sim,b).every(m=>m.bush.kind==='berry'));
+});
+
+test('all four views keep berry markers on actual bush anchors, including placement and raised terrain',()=>{
+ const {sim,b}=crew(),bush=forestTargets(sim,b)[0].tree;
+ sim.state.terrain??={};sim.state.terrain[`${bush.x},${bush.y}`]={kind:'land',height:1};sim.state.revision++;
+ const original=gatheringArea(sim,b),view=new ViewWorld(sim);
+ for(let turn=0;turn<4;turn++){
+  view.setTurn(turn);const projected=view.simulation.building(b.id);
+  const markers=gatheringArea(view.simulation,projected);
+  assert.deepEqual(markers.map(m=>[m.bush.id,m.state]),original.map(m=>[m.bush.id,m.state]));
+  for(const m of markers){
+   const canonical=original.find(o=>o.bush.id===m.bush.id).bush,p=turnPoint(canonical,turn);
+   assert.deepEqual({x:m.bush.x,y:m.bush.y},p);
+   const foot=iso(p.x,p.y);foot.y+=3-groundHeight(canonical.x,canonical.y,sim.state.terrain);
+   assert.deepEqual(berryMarkerPoint(view.simulation,m.bush),foot);
+  }
+  assert.deepEqual(gatheringArea(view.simulation,{...projected,id:-1}),markers,'placement uses the same bushes and access as selection');
  }
 });

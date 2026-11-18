@@ -7,6 +7,7 @@ import {TownAudio} from './audio.js';
 import {deliveryVehicle} from './delivery-vehicles.js';
 import {civilianCar} from './civilian-vehicles.js';
 import {HUNT_RADIUS,huntTargets,huntingArea} from "./hunting.js";
+import {BERRY_STATES,gatheringArea,gatheringSummary} from './gathering-area.js';
 import {CROPS,farmPrice,farmJobs,type Crop} from './farm-layout.js';
 import {farmSummary} from './farming.js';
 import {isLivestock,penPrice,livestockJobs,livestockCapacity,LIVESTOCK,ensureHerd} from './livestock.js';
@@ -369,7 +370,7 @@ function setTool(next: Tool, preservePlot=false) {
   if(next==="fence")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at a tile edge · Fences join at shared corners · The tile stays usable</span>');
   if(next==="streetlight")$("#placement-hint").insertAdjacentHTML("beforeend",'<span class="shore-hint">Point at either road edge to choose the curb · One post per click · 20 gold</span>');
   if(next==="hunter")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${HUNT_RADIUS}-tile hunting area · Green markers show reachable wildlife · Meat arrives when hunters return</span>`);
-  if(next==='gatherer')$('#placement-hint').insertAdjacentHTML('beforeend',`<span class="shore-hint">10-tile gathering area · Green markers show ripe bushes · Berries arrive when gatherers return</span>`);
+  if(next==='gatherer')$('#placement-hint').insertAdjacentHTML('beforeend',`<span class="shore-hint">10-tile reach · Green: ripe · Blue: being gathered · Amber: regrowing · Red: no route</span>`);
   if(next==="forester")$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">${FOREST_RADIUS}-tile woodland area · Green trees are reachable · Keep a clear walking route</span>`);
   if(isExtractor(next))$("#placement-hint").insertAdjacentHTML("beforeend",`<span class="shore-hint">Build beside the deposit · ${MINING_RADIUS}-tile reach · Green rocks are reachable from the entrance</span>`);
   if (next === "road") document.querySelectorAll<HTMLButtonElement>("[data-road-type]").forEach((button) => {
@@ -796,6 +797,7 @@ function renderInspector() {
     $('#farm-crop').onclick=async event=>{const choice=(event.target as Element).closest<HTMLButtonElement>('[data-farm-crop]');if(!choice)return;const result=await sendCommand({type:'crop',id:b.id,crop:choice.dataset.farmCrop as Crop});toast(result.message);if(result.ok){scene.redraw();save(false);renderInspector();updateUI();}};
   }
   if(isLivestock(b.kind)&&!b.construction)$('#building-status').insertAdjacentHTML('afterend','<section id="livestock-output" class="livestock-output" aria-label="Livestock products"></section>');
+  if(b.kind==='gatherer')$('#building-status').insertAdjacentHTML('afterend','<section id="gathering-area" class="gathering-area" aria-label="Berry bushes in gathering area"></section>');
   if (d.recipe)
     $("#production-logistics").onclick = (event) => {
       const link = (event.target as Element).closest<HTMLButtonElement>(
@@ -1253,6 +1255,10 @@ function updateInspector() {
   $("#building-status").classList.toggle("warning", !!alert);
   $("#building-status").dataset.kind = alert?.kind ?? "ready";
   $("#building-status").dataset.operation = b.construction?.demolition ? "demolition" : "";
+  if(b.kind==='gatherer'){
+    const area=gatheringSummary(gatheringArea(simulation,b));
+    $('#gathering-area').innerHTML=`<b>Berry bushes · 10-tile reach</b><div class="berry-legend">${(Object.keys(BERRY_STATES) as (keyof typeof BERRY_STATES)[]).map(state=>`<span style="--berry-color:#${BERRY_STATES[state].color.toString(16)}"><i></i><strong>${area[state]}</strong> ${BERRY_STATES[state].label}</span>`).join('')}</div><small>${area.regrowing?`Next ripe in ${Math.floor(area.nextRipe/60)}m ${area.nextRipe%60}s · game time<br>`:''}Tap a map marker to inspect its bush.</small>`;
+  }
   $("#building-detail").innerHTML =
     `<div class="detail-row"><span>Front entrance</span><b>${b.connected ? "Connected" : "Disconnected"}</b></div>${d.jobs ? `<div class="detail-row"><span>Workers</span><b>${b.workers} / ${buildingJobs(b)}</b></div>` : ""}${
       d.recipe

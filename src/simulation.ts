@@ -4,6 +4,7 @@ import {isLivestock,stepLivestock,ensureHerd,validPenPlot,livestockCapacity,LIVE
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown} from './starter-town.js';
 import {seedBerryBushes,BERRY_REGROW_TICKS} from './gathering.js';
+import {gatheringArea,gatheringSummary} from './gathering-area.js';
 import {diversifyWoodland} from "./trees.js";
 import {initializeSupplies,stepHouseholds,dispatchSupplies,dispatchIndustry,collectHouseholdSupplies,toolEfficiency,toolRequirement,wearTools,availableSupply,foodStock,homeResidents} from './supplies.js';
 import {isTree,plantTreeVariant,validTreeVariant,validateTreePlanting,type TreePlanting} from './trees.js';
@@ -1813,7 +1814,11 @@ export class Simulation {
         message:
           "Leave at least three connected open water tiles beyond the pier. Boats avoid land, bridges, other piers and occupied fishing routes.",
       };
-    if(b.kind==='gatherer'&&!b.forestry?.length&&!forestTargets(this,b).length)return{kind:'input',title:'No ripe bushes in reach',message:'Keep a walkable route to wild berry bushes within 10 tiles. Picked bushes replenish after two game days; move the hut closer to woodland if none are nearby.'};
+    if(b.kind==='gatherer'&&!b.forestry?.length&&!forestTargets(this,b).length){
+      const area=gatheringSummary(gatheringArea(this,b));
+      if(area.regrowing)return{kind:'input',title:'Berries regrowing',message:`${area.regrowing} reachable bushes are regrowing. The next ripens in ${Math.floor(area.nextRipe/60)}m ${area.nextRipe%60}s of game time. Keep the hut here; workers resume when berries are ready.`};
+      return{kind:'input',title:area.blocked?'Berry bushes unreachable':'No berry bushes in reach',message:area.blocked?'Red markers show bushes with no walking route. Clear obstacles between the hut entrance and the bushes.':'Move this hut near wild berry bushes within the highlighted 10-tile area.'};
+    }
     if (b.kind === "forester" && !b.forestry?.length && !forestTargets(this,b).length)
       return {kind:"input", title:"No reachable mature trees", message:"Wait for nearby stumps to regrow, clear a walking route, or move this lodge closer to woodland. Its highlighted area reaches 10 tiles. Planted garden trees are protected."};
     if(b.kind==='hunter'&&!b.hunting?.length){const area=huntingArea(this,b);if(!area.animals)return area.recovering

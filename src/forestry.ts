@@ -55,14 +55,15 @@ function walkable(sim: Simulation, p: Point, blocked: Set<string>) {
     terrainCell(p.x,p.y,sim.state.terrain).kind === "land" && !blocked.has(key(p));
 }
 const reachCache = new WeakMap<Simulation, {stamp:string; entries:Map<string, {tree:Decoration; path:Point[]}[]>}>();
-export function forestTargets(sim: Simulation, b: Building):{tree:Decoration;path:Point[]}[] {
-  const source=sourceObject(sim);if(source!==sim){const map=(p:Point)=>turnPoint(p,viewTurn(sim));return forestTargets(source,sourceBuilding(b,viewTurn(sim))).map(t=>({tree:{...t.tree,...map(t.tree)},path:t.path.map(map)}));}
+export function forestTargets(sim: Simulation, b: Building, includeRegrowing=false):{tree:Decoration;path:Point[]}[] {
+  const source=sourceObject(sim);if(source!==sim){const map=(p:Point)=>turnPoint(p,viewTurn(sim));return forestTargets(source,sourceBuilding(b,viewTurn(sim)),includeRegrowing).map(t=>({tree:{...t.tree,...map(t.tree)},path:t.path.map(map)}));}
   const stamp = `${sim.state.revision}:${sim.state.tick}`;
   let cache = reachCache.get(sim);
   if (!cache || cache.stamp !== stamp) { cache = {stamp, entries:new Map()}; reachCache.set(sim,cache); }
   const identity = `${b.kind}:${b.id}:${b.x}:${b.y}:${b.rotation}`;
   const cached = cache.entries.get(identity);
-  if (cached) return cached;
+  const available=(targets:{tree:Decoration;path:Point[]}[])=>b.kind==='gatherer'&&!includeRegrowing?targets.filter(t=>berryRipe(t.tree,sim.state.tick)):targets;
+  if (cached) return available(cached);
   const fences=fenceEdgeSet(sim.state.decorations);
   const blocked = new Set(sim.state.buildings.flatMap(other => footprint(other.kind,other.x,other.y,other.rotation,other.plot).map(key)));
   for (const p of footprint(b.kind,b.x,b.y,b.rotation,b.plot)) blocked.add(key(p));
@@ -80,7 +81,7 @@ export function forestTargets(sim: Simulation, b: Building):{tree:Decoration;pat
       }
     }
     for (const tree of sim.state.decorations) {
-      if (!(b.kind==='gatherer'?berryRipe(tree,sim.state.tick):harvestable(tree)&&treeStage(tree,sim.state.tick)==='mature') || !forestInside(b,tree)) continue;
+      if (!(b.kind==='gatherer'?tree.kind==='berry':harvestable(tree)&&treeStage(tree,sim.state.tick)==='mature') || !forestInside(b,tree)) continue;
       const approaches = dirs.map(d => ({x:tree.x+d.x,y:tree.y+d.y})).filter(p => parents.has(key(p))&&!crossesFence(p,tree,fences));
       let best: Point[]|undefined;
       for (const p of approaches) {
@@ -101,7 +102,7 @@ export function forestTargets(sim: Simulation, b: Building):{tree:Decoration;pat
   }
   candidates.sort((a,c)=>a.path.length-c.path.length || a.tree.id-c.tree.id);
   cache.entries.set(identity,candidates);
-  return candidates;
+  return available(candidates);
 }
 export function landTimber(b: Building) {
   if (!b.forestry) return;

@@ -1,5 +1,6 @@
 import {buildingRecipe,recipeProducts,FOOD_RESOURCES} from './catalog.js';
 import {huntingArea} from './hunting.js';
+import {gatheringArea,gatheringSummary} from './gathering-area.js';
 import {foodStock,toolRequirement,toolEfficiency,firewoodNeed,homeResidents} from './supplies.js';
 import {buildingJobs} from "./catalog.js";
 import {isHome} from "./catalog.js";
@@ -62,7 +63,7 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
     rows.push({label:'Grain feed',have:String(b.inventory.grain??0),need:`${feed} / 40s`,ok:herd.fed>0||(b.inventory.grain??0)>=feed});
   }else if(d.recipe?.input)rows.push({label:RESOURCE_NAMES[d.recipe.input],have:String(b.inventory[d.recipe.input]??0),need:`${d.recipe.amount??0} / batch`,ok:(b.inventory[d.recipe.input]??0)>=(d.recipe.amount??0)});
   if(isExtractor(b.kind)){const reserve=sim.state.deposits[buildingDeposit(b)!]??0;rows.push({label:"Deposit",have:reserve.toLocaleString(),need:"Within reach",ok:reserve>0&&sim.alert(b)?.kind!=="input"});}
-  if(b.kind==='gatherer')rows.push({label:'Berry bushes',have:sim.alert(b)?.kind==='input'?'None ripe in reach':'In reach',need:'Wild bushes within 10 tiles',ok:sim.alert(b)?.kind!=='input'});
+  if(b.kind==='gatherer'){const area=gatheringSummary(gatheringArea(sim,b));rows.push({label:'Ripe bushes',have:String(area.ripe+area.gathering),need:'Reachable within 10 tiles',ok:area.ripe+area.gathering>0});}
   if(b.kind==="forester")rows.push({label:"Trees",have:sim.alert(b)?.kind==="input"?"None reachable":"In reach",need:"Mature woodland",ok:sim.alert(b)?.kind!=="input"});
   if(b.kind==='hunter'){const area=huntingArea(sim,b);rows.push({label:'Wildlife nearby',have:`${area.animals} roaming${area.recovering?` · ${area.recovering} recovering`:''}`,need:'Woodland within 12 tiles',ok:area.animals>0});}
   if(isHome(b.kind)) {
