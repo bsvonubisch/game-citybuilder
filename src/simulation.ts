@@ -1,6 +1,6 @@
 import {queueRoadWork,roadWorkAt,stepRoadWorks,validateRoadWorks,type RoadWork} from './roadworks.js';
 import {TownStatusLog} from './town-status-log.js';
-import {isLivestock,stepLivestock,ensureHerd,validPenPlot,livestockCapacity,LIVESTOCK,isButcherCut,BUTCHER_CUTS,type Herd,type ButcherCut} from './livestock.js';
+import {isLivestock,stepLivestock,herdFeed,ensureHerd,validPenPlot,livestockCapacity,LIVESTOCK,isButcherCut,BUTCHER_CUTS,type Herd,type ButcherCut} from './livestock.js';
 import {recordTownEvent,restoreTownEvents,type TownEvent,type TownEventKind} from './town-events.js';
 import {seedStarterTown} from './starter-town.js';
 import {seedBerryBushes,BERRY_REGROW_TICKS} from './gathering.js';
@@ -1625,7 +1625,10 @@ export class Simulation {
       let sent=false;for(const target of markets){
         for(const cargo of [...MARKET_GOODS].sort((a,b)=>(target.inventory[a]??0)-(target.inventory[b]??0))){
           const incoming=this.state.agents.filter(a=>a.target===target.id&&a.cargo===cargo).reduce((n,a)=>n+a.amount,0),room=marketStalls(target)*4-(target.inventory[cargo]??0)-incoming;
-          if(room<=0||(source.inventory[cargo]??0)<=0)continue;const path=this.route(source,target,"truck");if(!path)continue;
+          if(room<=0||(source.inventory[cargo]??0)<=0)continue;
+          // A stocked stall can wait for a full refill. Empty stalls get the first available goods.
+          if((target.inventory[cargo]??0)+incoming>2 && room<Math.min(deliveryCapacity(source),marketStalls(target)*4))continue;
+          const path=this.route(source,target,"truck");if(!path)continue;
           const amount=Math.min(deliveryCapacity(source),room,source.inventory[cargo]??0);source.inventory[cargo]!-=amount;
           this.state.agents.push({id:this.state.nextId++,kind:"truck",path,segment:0,progress:0,resident:null,source:source.id,target:target.id,cargo,amount,returning:false,wait:0});sent=true;break;
         }if(sent)break;
@@ -1689,6 +1692,10 @@ export class Simulation {
         if (!p) continue;
         const room=dest.kind==='warehouse'?Infinity:(dest.kind==='market'?marketStalls(dest)*4:outputCapacity(dest)+4)-(dest.inventory[r.output]??0)-incoming;
         const amount = Math.min(DELIVERY_CAPACITY, room, availableSupply(b,r.output));
+        // Combine routine warehouse trips while there is already a load in reserve.
+        // Periodically clear small surpluses, including seasonal harvests.
+        if(dest.kind==='warehouse' && (dest.inventory[r.output]??0)+incoming>=DELIVERY_CAPACITY &&
+           amount<DELIVERY_CAPACITY && this.state.tick%96!==0)continue;
         b.inventory[r.output]! -= amount;
         this.state.agents.push({
           id: this.state.nextId++,
@@ -1800,12 +1807,12 @@ export class Simulation {
       };
     if (
       d.recipe?.input &&
-      (isLivestock(b.kind)?ensureHerd(b).fed<=0&&(b.inventory.grain??0)<Math.max(1,Math.ceil(ensureHerd(b).count/4)):(b.inventory[d.recipe.input] ?? 0) < d.recipe.amount!)
+      (isLivestock(b.kind)?ensureHerd(b).fed<=0&&(b.inventory.grain??0)<herdFeed(b):(b.inventory[d.recipe.input] ?? 0) < d.recipe.amount!)
     )
       return {
         kind: "input",
         title: `Waiting for ${d.recipe.input}`,
-        message: isLivestock(b.kind)?`Needs ${Math.max(1,Math.ceil(ensureHerd(b).count/4))} grain every 40 working seconds. Connect a wheat field or a warehouse with grain by road.`:`Needs ${d.recipe.amount} ${d.recipe.input} per cycle. Check the supplying industry and its delivery route.`,
+        message: isLivestock(b.kind)?`Needs ${herdFeed(b)} grain every 40 working seconds. Connect a wheat field or a warehouse with grain by road.`:`Needs ${d.recipe.amount} ${d.recipe.input} per cycle. Check the supplying industry and its delivery route.`,
       };
     if (b.kind === "fishery" && !b.fishing && !fishingRoute(this, b))
       return {

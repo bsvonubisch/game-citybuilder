@@ -10,11 +10,16 @@ import {sourceObject} from './view-space.js';
 export * from './livestock-layout.js';
 export const ensureHerd=(b:Building)=>b.herd??={count:2,growth:0,fed:0};
 export function livestockCrew(sim:Simulation,b:Building){return sim.state.agents.filter(a=>a.onsite===b.id&&sim.state.residents.some(r=>r.id===a.resident&&r.job===b.id));}
+/** Grain per 40 working seconds. Small birds share more of a sack than large livestock. */
+export function herdFeed(b:Building) {
+ const animalsPerGrain=b.kind==='chickens'?12:b.kind==='pigs'?6:4;
+ return Math.max(1,Math.ceil((b.herd?.count??2)/animalsPerGrain));
+}
 export function stepLivestock(sim:Simulation,b:Building){
  if(!isLivestock(b.kind))return;
  const herd=ensureHerd(b),recipe=BUILDINGS[b.kind].recipe!,capacity=livestockCapacity(b.kind,b.plot);
  if(b.construction||!b.enabled||!b.connected||daylight(sim.state.tick).night||livestockCrew(sim,b).length<buildingJobs(b))return;
- if(herd.fed<=0){const feed=Math.max(1,Math.ceil(herd.count/4));if((b.inventory.grain??0)<feed)return;b.inventory.grain!-=feed;herd.fed=40;}
+ if(herd.fed<=0){const feed=herdFeed(b);if((b.inventory.grain??0)<feed)return;b.inventory.grain!-=feed;herd.fed=40;}
  const dt=STEP*productionRate(b);herd.fed=Math.max(0,herd.fed-STEP);
  wearTools(b,b.workers);
  // Breeding advances steadily per pen, not exponentially with the number of pairs.

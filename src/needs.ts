@@ -11,7 +11,7 @@ import { serviceCoverage } from "./proximity.js";
 import { outputCapacity } from "./upgrades.js";
 import { buildingDeposit,isExtractor } from "./deposits.js";
 import type { Simulation,Building } from "./simulation.js";
-import {isLivestock,ensureHerd,livestockCrew,livestockCapacity} from './livestock.js';
+import {isLivestock,ensureHerd,herdFeed,livestockCrew,livestockCapacity} from './livestock.js';
 
 export interface Need {
   id:string; label:string; have:number; need:number; unit:string;
@@ -57,7 +57,7 @@ export function buildingNeeds(sim:Simulation,b:Building):BuildingNeed[] {
     rows.push({label:"Stock to sell",have:String(marketStock(b)),need:"Food, firewood or tools",ok:marketStock(b)>0});
   }
   if(isLivestock(b.kind)){
-    const herd=ensureHerd(b),feed=Math.max(1,Math.ceil(herd.count/4));
+    const herd=ensureHerd(b),feed=herdFeed(b);
     rows.push({label:b.kind==='chickens'?'Birds':'Animals',have:String(herd.count),need:`${livestockCapacity(b.kind,b.plot)} capacity`,ok:true});
     rows.push({label:'Farmers on site',have:String(livestockCrew(sim,b).length),need:String(buildingJobs(b)),ok:livestockCrew(sim,b).length>=buildingJobs(b)});
     rows.push({label:'Grain feed',have:String(b.inventory.grain??0),need:`${feed} / 40s`,ok:herd.fed>0||(b.inventory.grain??0)>=feed});

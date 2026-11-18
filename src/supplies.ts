@@ -1,11 +1,12 @@
 import {FOOD_RESOURCES,DELIVERY_CAPACITY,buildingJobs,buildingRecipe,isHome,type Resource} from './catalog.js';
-import {isLivestock,ensureHerd} from './livestock.js';
+import {isLivestock,herdFeed} from './livestock.js';
 import {DAY_TICKS} from './daylight.js';
 import {builderCapacity} from './construction.js';
 import {warehouseReady,deliveryCapacity} from './warehouses.js';
 import type {Building,Simulation} from './simulation.js';
 
 export const TOOL_LIFE_TICKS=DAY_TICKS*4;
+const householdGoods:Resource[]=[...FOOD_RESOURCES.filter(r=>r!=='meat'),'meat','wood'];
 export const foodStock=(b:Building)=>FOOD_RESOURCES.reduce((n,r)=>n+(b.inventory[r]??0),0);
 export const toolRequirement=(b:Building)=>b.construction?builderCapacity(b):buildingRecipe(b)?buildingJobs(b):0;
 export function toolEfficiency(b:Building,needed=toolRequirement(b)){return needed ? .5+.5*Math.min(1,(b.inventory.tools??0)/needed) : 1;}
@@ -72,12 +73,20 @@ export function supplyRoom(sim:Simulation,b:Building,resource:Resource){
  * create a truck for every food/firewood refill. Actual stock is transferred. */
 export function collectHouseholdSupplies(sim:Simulation){
  const stores=sim.state.buildings.filter(b=>b.connected&&b.enabled&&(warehouseReady(b)||b.kind==='market'&&!b.construction));
- for(const home of sim.state.buildings.filter(b=>isHome(b.kind)&&b.connected&&b.enabled&&homeResidents(sim,b).length)){
+ const households=sim.state.buildings.filter(b=>isHome(b.kind)&&b.connected&&b.enabled)
+   .map(home=>({home,residents:homeResidents(sim,home).length})).filter(h=>h.residents>0);
+ households.sort((a,b)=>foodStock(a.home)/a.residents-foodStock(b.home)/b.residents);
+ const butcherReserve=sim.state.buildings.filter(b=>b.kind==='butcher'&&!b.construction&&b.enabled&&b.connected).length*14;
+ for(const {home,residents} of households){
+  if(foodStock(home)>=residents && (home.inventory.wood??0)>0)continue;
   const sources=stores.map(b=>({b,path:sim.route(home,b,'person')})).filter(s=>s.path).sort((a,b)=>a.path!.length-b.path!.length||a.b.id-b.b.id);
   for(const {b:source} of sources){
-   for(const resource of [...FOOD_RESOURCES,'wood'] as Resource[]){
-    const reserve=resource==='meat'&&warehouseReady(source)?sim.state.buildings.filter(b=>b.kind==='butcher'&&!b.construction&&b.enabled&&b.connected).length*14:0;
-    const room=supplyRoom(sim,home,resource),amount=Math.min(room,Math.max(0,(source.inventory[resource]??0)-reserve));if(!amount)continue;
+   for(const resource of householdGoods){
+    const stock=source.inventory[resource]??0;
+    const nextMeals=Math.max(0,residents-foodStock(home));
+    const available=resource==='meat'&&warehouseReady(source)
+      ? Math.min(stock,Math.max(nextMeals,stock-butcherReserve)) : stock;
+    const room=supplyRoom(sim,home,resource),amount=Math.min(room,available);if(!amount)continue;
     source.inventory[resource]!-=amount;home.inventory[resource]=(home.inventory[resource]??0)+amount;
     if(source.kind==='market'){source.produced+=amount;sim.earn(Math.round(amount*(resource==='wood'?3:resource==='sausages'?8:5)*(1+((source.level??1)-1)*.1)),'market');}
    }
@@ -91,7 +100,7 @@ export function dispatchIndustry(sim:Simulation){
   const recipe=buildingRecipe(b),cargo=isLivestock(b.kind)?'grain':recipe?.input;
   if(!cargo||b.construction||!b.connected||!b.enabled)return [];
   const stocked=(b.inventory[cargo]??0)+sim.state.agents.filter(a=>a.target===b.id&&a.cargo===cargo).reduce((n,a)=>n+a.amount,0);
-  const capacity=isLivestock(b.kind)?Math.max(DELIVERY_CAPACITY*2,Math.ceil(ensureHerd(b).count/4)*3):DELIVERY_CAPACITY*2;
+  const capacity=isLivestock(b.kind)?Math.max(DELIVERY_CAPACITY*2,herdFeed(b)*3):DELIVERY_CAPACITY*2;
   return stocked>=capacity?[]:[{b,cargo,stocked,capacity}];
  }).sort((a,b)=>a.stocked/a.capacity-b.stocked/b.capacity||a.b.id-b.b.id);
  for(const source of sim.state.buildings.filter(b=>warehouseReady(b)&&b.enabled&&b.connected)){

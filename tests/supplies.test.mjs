@@ -39,6 +39,20 @@ test('connected markets also supply homes, and unavailable or disconnected store
  const before=sim.totals();collectHouseholdSupplies(sim);assert.deepEqual(sim.totals(),before);assert.ok(foodStock(home)>0);assert.equal(home.inventory.wood,2);assert.equal(sim.state.agents.length,0);
  assert.ok(market.produced>0);home.inventory={};market.enabled=false;collectHouseholdSupplies(sim);assert.equal(foodStock(home),0);
 });
+test('hungry households may use meat reserved for a butcher, after other food',()=>{
+ const sim=new Simulation(),home=sim.state.buildings.find(b=>b.kind==='house');
+ const store=sim.state.buildings.find(b=>b.kind==='warehouse');
+ for(const b of sim.state.buildings)b.inventory={};
+ sim.state.residents=sim.state.residents.filter(r=>r.home===home.id);
+ const people=sim.state.residents.length;
+ sim.state.buildings.push({...home,id:sim.state.nextId++,kind:'butcher',enabled:true,connected:true});
+ store.inventory={meat:12,carrots:1};sim.state.agents=[];
+ collectHouseholdSupplies(sim);
+ assert.equal(home.inventory.carrots,1);
+ assert.equal(home.inventory.meat,people-1);
+ assert.equal(store.inventory.meat,12-(people-1));
+});
+
 test('arriving tools remain in storage and never generate export income',()=>{
  const sim=new Simulation(),depot=sim.state.buildings.find(b=>b.kind==='warehouse'),source=sim.state.buildings.find(b=>b.kind==='workshop');sim.dispatch=()=>{};
  const path=sim.route(source,depot,'truck');assert.ok(path);sim.state.agents=[{id:99999,kind:'truck',source:source.id,target:depot.id,path,segment:path.length-2,progress:.99,resident:null,cargo:'tools',amount:50,returning:false,wait:0}];
